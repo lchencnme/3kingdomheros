@@ -1,0 +1,16 @@
+{
+  "_comment": "道具表（设计文档 7.2，原创）。内部 ID 只追加，不重排。本表是战斗中可用的消耗品；装备、策略书、转职物尚未实现。range = 曼哈顿距离上限（0 = 只能自用）。",
+  "items": [
+    {"id": 0,  "name": "干粮",   "kind": "hp",      "power": 100, "range": 1, "price": 50},
+    {"id": 1,  "name": "军粮",   "kind": "hp",      "power": 300, "range": 1, "price": 150},
+    {"id": 2,  "name": "大军粮", "kind": "hp",      "power": 600, "range": 1, "price": 300},
+    {"id": 3,  "name": "浊酒",   "kind": "morale",  "power": 20,  "range": 1, "price": 40},
+    {"id": 4,  "name": "美酒",   "kind": "morale",  "power": 40,  "range": 1, "price": 80},
+    {"id": 5,  "name": "御酒",   "kind": "morale",  "power": 60,  "range": 1, "price": 120},
+    {"id": 6,  "name": "清茶",   "kind": "mp",      "power": 20,  "range": 1, "price": 60},
+    {"id": 7,  "name": "金疮药", "kind": "cleanse", "power": 0,   "range": 1, "price": 100},
+    {"id": 8,  "name": "火油罐", "kind": "fire",    "power": 120, "range": 2, "price": 200},
+    {"id": 9,  "name": "祈雨符", "kind": "rain",    "power": 0,   "range": 0, "price": 100},
+    {"id": 10, "name": "止雨符", "kind": "clear",   "power": 0,   "range": 0, "price": 100}
+  ]
+}

@@ -39,17 +39,22 @@ static uint8_t cell_ok(const StrategyDef *s, uint8_t x, uint8_t y, uint8_t rain)
 static uint8_t offensive(uint8_t effect) { return effect <= FX_ROCK || effect == FX_STATUS; }
 
 /* unit at (x,y) that this strategy may affect (hostile for offensive, allied otherwise), else 0xFF */
-static uint8_t target_at(const Battle *b, const ActiveUnit *c, const StrategyDef *s, uint8_t x, uint8_t y)
+static uint8_t target_at_buf(const Battle *b, const ActiveUnit *c, const StrategyDef *s, uint8_t x, uint8_t y, ActiveUnit *u)
 {
     uint8_t i;
-    ActiveUnit u;
     for (i = 0; i < b->n_units; i++) {
-        unit_load(i, &u);
-        if (!unit_alive(&u) || u.x != x || u.y != y) continue;
-        if (offensive(s->effect) != factions_hostile(c->faction, u.faction)) return 0xFF;
+        unit_load(i, u);
+        if (!unit_alive(u) || u->x != x || u->y != y) continue;
+        if (offensive(s->effect) != factions_hostile(c->faction, u->faction)) return 0xFF;
         return i;
     }
     return 0xFF;
+}
+
+static uint8_t target_at(const Battle *b, const ActiveUnit *c, const StrategyDef *s, uint8_t x, uint8_t y)
+{
+    ActiveUnit u;
+    return target_at_buf(b, c, s, x, y, &u);
 }
 
 uint8_t strategy_known(const ActiveUnit *c, uint8_t sid) CORE_API
@@ -81,6 +86,21 @@ static void apply_status(ActiveUnit *u, uint8_t st, uint8_t ttl)
     if (!(u->status_mask & m) || u->ttl[st] < ttl) u->ttl[st] = ttl;   /* max(old, new), no stacking */
     u->status_mask |= m;
     u->expiry_eligible_mask &= (uint8_t)~m;                            /* not ticked this phase (6.4) */
+}
+
+/* level-up re-derivation, keeping the deficit (5.4); own frame so strategy_cast stays small */
+static void relevel(uint8_t caster, ActiveUnit *u, uint16_t old_mhp, uint16_t old_mmp)
+{
+    StatIn si; Derived d; UnitBase base;
+    unit_base(caster, &base);
+    si.cls = u->class_id; si.level = u->level; si.str = base.str; si.intl = base.intl; si.cmd = base.cmd;
+    si.mod_hp = si.mod_mp = si.mod_atk = si.mod_def = si.mod_mag = si.mod_res = 0; si.mod_agi = 0; si.mod_move = 0;
+    rules_derive(&si, &d);
+    u->hp = rules_keep_deficit(old_mhp, u->hp, d.max_hp, 1);
+    u->mp = rules_keep_deficit(old_mmp, u->mp, d.max_mp, 0);
+    u->max_hp = d.max_hp; u->max_mp = d.max_mp; u->atk = d.atk; u->def = d.def;
+    u->mag = d.mag; u->res = d.res; u->agility = d.agi; u->move = d.move;
+    unit_store(caster, u);
 }
 
 uint8_t strategy_cast(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy, StrategyResult *r) CORE_API
@@ -171,20 +191,49 @@ uint8_t strategy_cast(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_
         u.action_flags |= (uint8_t)(AF_MOVED | AF_ACTED);
         r->levels = rules_add_xp(&u.level, &u.exp, r->xp);
         unit_store(caster, &u);
-        if (r->levels) {
-            /* re-derive through battle_spawn-like path: keep the deficit (5.4) */
-            StatIn si; Derived d; UnitBase base;
-            unit_base(caster, &base);
-            si.cls = u.class_id; si.level = u.level; si.str = base.str; si.intl = base.intl; si.cmd = base.cmd;
-            si.mod_hp = si.mod_mp = si.mod_atk = si.mod_def = si.mod_mag = si.mod_res = 0; si.mod_agi = 0; si.mod_move = 0;
-            rules_derive(&si, &d);
-            u.hp = rules_keep_deficit(old_mhp, u.hp, d.max_hp, 1);
-            u.mp = rules_keep_deficit(old_mmp, u.mp, d.max_mp, 0);
-            u.max_hp = d.max_hp; u.max_mp = d.max_mp; u.atk = d.atk; u.def = d.def;
-            u.mag = d.mag; u.res = d.res; u.agility = d.agi; u.move = d.move;
-            unit_store(caster, &u);
-        }
+        if (r->levels) relevel(caster, &u, old_mhp, old_mmp);
     }
     battle_check_outcome(b, 0);
     return SR_OK;
+}
+
+uint8_t strategy_estimate(const Battle *b, const ActiveUnit *c, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy,
+                          StratEstimate *e, ActiveUnit *tmp) CORE_API
+{
+    /* stack-lean on purpose (runs at the bottom of the AI call chain): one unit buffer, the caster
+     * record and a unit buffer come from the caller */
+    static const int8_t DX[5] = {0, 0, -1, 1, 0}, DY[5] = {0, -1, 0, 0, 1};
+    const StrategyDef *s = &strategy_defs[sid];
+#define u (*tmp)
+    UnitBase bc, bt;
+    uint8_t k, cells = s->radius ? 5u : 1u;
+    e->dmg = 0; e->kills = 0; e->ctrl = 0;
+    if (!offensive(s->effect)) return 0;
+    if (!strategy_known(c, sid) || (c->status_mask & (1u << ST_SILENCE)) || c->mp < s->mp) return 0;
+    if ((s->cond == SC_FIRE && b->weather) || (s->cond == SC_FLOOD && !b->weather)) return 0;
+    if (!cell_ok(s, cx, cy, b->weather) || target_at_buf(b, c, s, cx, cy, &u) == 0xFF) return 0;
+    unit_base(caster, &bc);
+    for (k = 0; k < cells; k++) {
+        int16_t x = (int16_t)cx + DX[k], y = (int16_t)cy + DY[k];
+        uint8_t t, pct;
+        if (x < 0 || y < 0 || x >= grid_w || y >= grid_h) continue;
+        if (!cell_ok(s, (uint8_t)x, (uint8_t)y, b->weather)) continue;
+        t = target_at_buf(b, c, s, (uint8_t)x, (uint8_t)y, &u);
+        if (t == 0xFF) continue;
+        unit_base(t, &bt);
+        pct = rules_mag_hit(bc.intl, bt.intl, c->morale);
+        if (s->effect == FX_STATUS) {
+            if (!(u.status_mask & (1u << s->status)) && pct >= 50u) e->ctrl++;
+        } else {
+            uint8_t tt = grid_terrain(u.x, u.y) & 0x0F;
+            uint16_t full = rules_mag_damage(s->power, c->mag, u.res, c->morale,
+                                             rules_element_percent(s->effect, tt, b->weather), 100, 0);
+            uint32_t ex = ((uint32_t)full * pct) / 100u;
+            if (ex > u.hp) ex = u.hp;
+            e->dmg = (uint16_t)(e->dmg + ex);
+            if (full >= u.hp && pct >= 50u) e->kills++;
+        }
+    }
+    return 1;
+#undef u
 }

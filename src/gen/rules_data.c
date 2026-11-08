@@ -58,6 +58,20 @@ const StrategyDef strategy_defs[NUM_STRATEGIES] = {
     /* 19 安抚 */ {FX_CLEANSE, 4, 1, 0, 0, ST_NONE, 0, SC_ANY, 1},
 };
 
+const ItemDef item_defs[NUM_ITEMS] = {
+    /*  0 干粮 */ {IK_HP, 1, 100, 50},
+    /*  1 军粮 */ {IK_HP, 1, 300, 150},
+    /*  2 大军粮 */ {IK_HP, 1, 600, 300},
+    /*  3 浊酒 */ {IK_MORALE, 1, 20, 40},
+    /*  4 美酒 */ {IK_MORALE, 1, 40, 80},
+    /*  5 御酒 */ {IK_MORALE, 1, 60, 120},
+    /*  6 清茶 */ {IK_MP, 1, 20, 60},
+    /*  7 金疮药 */ {IK_CLEANSE, 1, 0, 100},
+    /*  8 火油罐 */ {IK_FIRE, 2, 120, 200},
+    /*  9 祈雨符 */ {IK_RAIN, 0, 0, 100},
+    /* 10 止雨符 */ {IK_CLEAR, 0, 0, 100},
+};
+
 const uint8_t type_percent_table[NUM_FAMILIES][NUM_FAMILIES] = {
     /* infantry */ {100, 125, 80, 100, 100, 100, 100, 100},
     /* bow */ {80, 100, 125, 100, 100, 100, 100, 100},

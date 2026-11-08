@@ -1,9 +1,17 @@
 #ifdef __SDCC
-#pragma bank 4
+#pragma bank 12
 #endif
 #include "ai.h"
 #include "grid.h"
 #include "types.h"
+#include "strategy.h"
+#include "item.h"
+
+typedef char ai_strat_fits[(sizeof(AiStrat) * AI_MAX_STRAT <= 256u) ? 1 : -1];   /* GB: D500..D5FF */
+#ifndef __SDCC
+AiStrat ai_strat_host[AI_MAX_STRAT];
+ActiveUnit ai_tmp_host;
+#endif
 
 #ifdef __SDCC
 #include <gb/gb.h>
@@ -21,6 +29,9 @@ extern volatile uint16_t dbg_ai_t_range, dbg_ai_t_field, dbg_ai_t_cand;
 #define W_DANGER 40l
 #define W_APPROACH 20l
 #define W_MOVECOST 3l
+#define W_CTRL 3000l
+#define W_HEAL 80l
+#define W_PRICE 10l
 
 static uint8_t manhattan(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 {
@@ -104,7 +115,58 @@ static uint16_t attack_value(AiScratch *s, uint8_t oi, const ActiveUnit *a, uint
     return o->e_att;
 }
 
+#define SB AI_STRAT_BUF
+
+/* strategy candidates (8.3): every castable offensive strategy on every reachable opponent, valued
+ * once per decision; plus the best self-use hp item. Own frame: ai_decide sits on the deepest chain. */
+static void prepare_special(Battle *b, AiScratch *s, const ActiveUnit *ap, uint8_t actor)
+{
+#define a (*ap)
+    uint8_t i;
+    s->n_strat = 0;
+    if (class_defs[a.class_id].learn_mask && a.mp && !(a.status_mask & (1u << ST_SILENCE))) {
+        uint8_t sid;
+        for (sid = 0; sid < NUM_STRATEGIES; sid++) {
+            const StrategyDef *sd = &strategy_defs[sid];
+            if (!strategy_known(&a, sid) || a.mp < sd->mp) continue;
+            for (i = 0; i < s->n_opp && s->n_strat < AI_MAX_STRAT; i++) {
+                AiOpp *o = &s->opp[i];
+                StratEstimate se;
+                if (manhattan(a.x, a.y, o->x, o->y) > (uint8_t)(a.move + sd->range)) continue;
+                if (!strategy_estimate(b, &a, actor, sid, o->x, o->y, &se, AI_TMP_UNIT) || (!se.dmg && !se.ctrl)) continue;
+                SB[s->n_strat].sid = sid; SB[s->n_strat].cx = o->x; SB[s->n_strat].cy = o->y; SB[s->n_strat].range = sd->range;
+                SB[s->n_strat].val = W_DMG * (int32_t)(se.dmg > 9999u ? 9999u : se.dmg) + W_KILL * (int32_t)se.kills
+                                     + W_CTRL * (int32_t)se.ctrl;
+                s->n_strat++;
+            }
+        }
+    }
+    /* sort by value, best first (stable insertion sort; n <= 32): the endpoint loop can then stop at the
+     * first candidate in range + LOS, so LOS is computed about once per endpoint */
+    for (i = 1; i < s->n_strat; i++) {
+        uint8_t j = i;
+        AiStrat tmp = SB[i];
+        while (j > 0 && SB[j - 1].val < tmp.val) { SB[j] = SB[j - 1]; j--; }
+        SB[j] = tmp;
+    }
+    /* item candidate: best self-use hp item (heal value x 80 - price x 10); applies at any endpoint */
+    s->item_slot = 0xFF; s->item_sc = 0;
+    for (i = 0; i < INV_SLOTS; i++) {
+        uint8_t it = inv_get(actor, i);
+        uint16_t v;
+        int32_t sc;
+        if (it == ITEM_NONE || item_defs[it].kind != IK_HP) continue;
+        v = item_value(b, it, &a);
+        if (!v) continue;
+        sc = W_HEAL * (int32_t)v - W_PRICE * (int32_t)item_defs[it].price;
+        if (s->item_slot == 0xFF || sc > s->item_sc) { s->item_slot = i; s->item_sc = sc; }
+    }
+
+#undef a
+}
+
 static ActiveUnit ai_t;   /* static (fixed RAM) to keep the deepest call chain off the 512B stack */
+
 
 void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mode, AiCommand *out) CORE_API
 {
@@ -121,6 +183,7 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
     armax = class_defs[a.class_id].range_max;
 
     out->x = a.x; out->y = a.y; out->action = ACT_WAIT; out->target = 0xFF; out->score = 0;
+    out->param = 0xFF; out->tx = a.x; out->ty = a.y;
     if (!battle_can_act(&a)) return;
 
     pt0 = PROF_T();
@@ -155,6 +218,8 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
     while (!ai_field_pump(s, 1024)) {}             /* finish synchronously if the phase-start job is not done */
     PROF_SET(dbg_ai_t_field, PROF_T() - pt0); pt0 = PROF_T();
     here_field = fld_get((uint16_t)a.y * grid_w + a.x);
+
+    prepare_special(b, s, &a, actor);
 
     for (ly = 0; ly < MR_DIM; ly++) {
         int16_t gy = mr->by + ly;
@@ -198,7 +263,30 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
             /* WAIT candidate */
             if (!have || better(base, 0, cost, 0xFF, cell, ACT_WAIT, out, bcnt, bcost, bcell)) {
                 out->x = ex; out->y = ey; out->action = ACT_WAIT; out->target = 0xFF; out->score = base;
+                out->param = 0xFF; out->tx = ex; out->ty = ey;
                 bcnt = 0; bcost = cost; bcell = cell; have = 1;
+            }
+            /* STRATEGY candidates: range + LOS from this endpoint */
+            for (oi = 0; oi < s->n_strat; oi++) {
+                AiStrat *c = &SB[oi];
+                uint8_t d = manhattan(ex, ey, c->cx, c->cy);
+                int32_t sc;
+                if (d > c->range) continue;
+                sc = base + c->val;
+                if (!better(sc, 0, cost, 0xFF, cell, ACT_STRATEGY, out, bcnt, bcost, bcell)) break;   /* sorted: none later wins */
+                if (d > 1 && !los_clear(ex, ey, c->cx, c->cy)) continue;
+                {
+                    out->x = ex; out->y = ey; out->action = ACT_STRATEGY; out->target = 0xFF; out->score = sc;
+                    out->param = c->sid; out->tx = c->cx; out->ty = c->cy;
+                    bcnt = 0; bcost = cost; bcell = cell;
+                }
+                break;                                   /* best legal strategy at this endpoint */
+            }
+            /* ITEM candidate (self) */
+            if (s->item_slot != 0xFF && better(base + s->item_sc, 0, cost, 0xFF, cell, ACT_ITEM, out, bcnt, bcost, bcell)) {
+                out->x = ex; out->y = ey; out->action = ACT_ITEM; out->target = 0xFF; out->score = base + s->item_sc;
+                out->param = s->item_slot; out->tx = ex; out->ty = ey;
+                bcnt = 0; bcost = cost; bcell = cell;
             }
             /* ATTACK candidates: cheap range filter first, LOS only for ranged shots */
             if (armax == 0) continue;
@@ -219,6 +307,7 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
                 }
                 if (better(sc, ce, cost, o->id, cell, ACT_ATTACK, out, bcnt, bcost, bcell)) {
                     out->x = ex; out->y = ey; out->action = ACT_ATTACK; out->target = o->id; out->score = sc;
+                    out->param = 0xFF; out->tx = o->x; out->ty = o->y;
                     bcnt = ce; bcost = cost; bcell = cell;
                 }
             }

@@ -266,7 +266,12 @@ uint8_t save_battle(uint8_t slot, const Battle *b, const SaveUi *ui) CORE_API
     c_u8(&c, 43, 1); c_u32(&c, 44, ui->gold); c_u32(&c, 52, RULES_PROFILE_CRC);
     c_u8(&c, 80, b->weather);
     c_seek(&c, 512);
-    w_tlv(&w, 9, 1920); w_fill(&w, 0xFF, 1920);         /* NPC items: all empty */
+    w_tlv(&w, 9, 1920);                                 /* unit items: SRAM15 runtime block 0..1919 (7.1) */
+    {
+        uint8_t fb[32];
+        uint16_t k;
+        for (k = 0; k < 1920u; k += 32u) { sram_read(15, k, fb, 32); w_bytes(&w, fb, 32); }
+    }
     w_tlv(&w, 10, 960); w_fill(&w, 0, 960);             /* AI groups + overrides */
     crc = w.crc ^ 0xFFFFFFFFul;
     /* bytes after body_len are not written (not covered by any CRC; readers never look at them) */
@@ -394,6 +399,12 @@ uint8_t load_battle(uint8_t slot, Battle *b, SaveUi *ui) CORE_API
     ui->cam_x = get16(core + 32); ui->cam_y = get16(core + 34); ui->cur_x = core[36]; ui->cur_y = core[37];
     ui->presentation = core[39]; ui->text_speed = core[40]; ui->options = core[42]; ui->gold = get32(core + 44);
     img_read(base, (uint16_t)(off + 3u + 80u), &b->weather, 1);
+    off = (uint16_t)(off + 3u + 512u);                   /* tag 9: unit items back to SRAM15 */
+    {
+        uint8_t fb[32];
+        uint16_t k;
+        for (k = 0; k < 1920u; k += 32u) { img_read(base, (uint16_t)(off + 3u + k), fb, 32); sram_write(15, k, fb, 32); }
+    }
     return SAVE_OK;
 }
 

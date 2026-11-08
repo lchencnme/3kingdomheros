@@ -94,6 +94,9 @@ def main():
         texts[f"TX_TERRAIN_{t['id']}"] = t["name"]
     for s_ in rules["strategies"]:
         texts[f"TX_STRAT_{s_['id']}"] = s_["name"]
+    items = json.loads((ROOT / "content" / "items.json").read_text(encoding="utf-8"))["items"]
+    for it in items:
+        texts[f"TX_ITEM_{it['id']}"] = it["name"]
 
     def chars_of(s):
         return re.sub(r"\{n\}", "", s).replace("\n", "")
@@ -205,7 +208,7 @@ def main():
           "extern const uint16_t text_pool[];", "extern const uint16_t text_offset[];",
           "extern const uint8_t digit_glyph[10];",
           "extern const uint8_t class_name_tx[];", "extern const uint8_t terrain_name_tx[];",
-          "extern const uint8_t strat_name_tx[];", "#endif"]
+          "extern const uint8_t strat_name_tx[];", "extern const uint8_t item_name_tx[];", "#endif"]
     c = ["#pragma bank 2", "#include \"text_data.h\""]    # asset bank: read through rom.c gateway
     ci = ['#include "text_data.h"']
 
@@ -223,6 +226,7 @@ def main():
     ci.append("const uint8_t digit_glyph[10] = {" + ", ".join(str(reg["glyphs"][d]) for d in "0123456789") + "};")
     ci.append("const uint8_t class_name_tx[] = {" + ", ".join(str(names.index(f"TX_CLASS_{c_['id']}")) for c_ in rules["classes"]) + "};")
     ci.append("const uint8_t strat_name_tx[] = {" + ", ".join(str(names.index(f"TX_STRAT_{s_['id']}")) for s_ in rules["strategies"]) + "};")
+    ci.append("const uint8_t item_name_tx[] = {" + ", ".join(str(names.index(f"TX_ITEM_{it['id']}")) for it in items) + "};")
     ci.append("const uint8_t terrain_name_tx[] = {" + ", ".join(str(names.index(f"TX_TERRAIN_{t_['id']}")) for t_ in rules["terrain"]) + "};")
     OUT_H.write_text("\n".join(h) + "\n", encoding="utf-8")
     OUT_C.write_text("\n".join(c) + "\n", encoding="utf-8")

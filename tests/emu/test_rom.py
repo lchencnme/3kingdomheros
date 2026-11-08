@@ -23,6 +23,7 @@ for line in ROM.with_suffix(".noi").read_text().splitlines():
         SYMS[p[1]] = int(p[2], 16)
 
 G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE = range(9)
+G_SLIST, G_SAIM, G_ILIST, G_IAIM, G_XLIST, G_CAMP, G_SHOP = range(9, 16)
 N_UNITS = 8
 results = []
 
@@ -272,6 +273,7 @@ check("A on own unit -> move preview", e.state() == G_MOVE)
 e.press("right"); e.press("right")
 check("cursor moved to (6,12)", e.cur() == (6, 12))
 e.press("a")
+e.wait_state([G_MENU], 30)
 check("legal endpoint -> action menu, unit not moved yet", e.state() == G_MENU and e.unit(0) == (4, 12))
 e.press("b")
 check("B in menu -> back to move preview, nothing committed", e.state() == G_MOVE and e.unit(0) == (4, 12))
@@ -376,7 +378,10 @@ def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
     if shots:
         em.frames(10)
         em.png(ROM.parent / "shot_outcome.png")
-    em.press("a")            # restart from the outcome screen
+    em.press("a")            # restart from the outcome screen (a win goes through the camp: 出阵)
+    em.wait_state([G_IDLE, G_CAMP], 200)
+    if em.state() == G_CAMP:
+        em.press("right"); em.press("a")
     em.wait_state([G_IDLE], 200)
     res["restart_ok"] = em.state() == G_IDLE and em.r16("_dbg_round") == 1 and em.unit(0) == (4, 12)
     em.pb.stop(save=False)
@@ -593,6 +598,78 @@ if try_reach_and_menu(k, 7, 4):
 check("TALK scenario exercised", talk_done)
 check("no VM error during talk", k.r8("_dbg_vm_err") == 0)
 k.pb.stop(save=False)
+
+# ------------------------------------------------------------------ items, exchange, camp, shop (design doc 2.2, 7.1-7.3)
+def menu_to(em, item, tries=6):
+    for _ in range(tries):
+        if em.r8("_dbg_menu_item") == item:
+            return True
+        em.press("right")
+    return em.r8("_dbg_menu_item") == item
+
+def set_hp(em, i, v):
+    a = 0xD000 + 40 * i
+    em.m[1, a + 10] = v & 0xFF
+    em.m[1, a + 11] = v >> 8
+
+it = Emu()
+it.wait_state([G_IDLE], 300)
+inv0 = [it.r8("_dbg_inv") if k == 0 else it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
+check(f"刘备 starts with 军粮 + 金疮药 ({inv0[:3]})", inv0[0] == 1 and inv0[1] == 7 and inv0[2] == 0xFF)
+# 交换: 刘备 moves next to 关羽 (5,11) and hands over the first item
+it.goto(*it.unit(0)); it.press("a"); it.wait_state([G_MOVE], 20)
+it.press("up"); it.press("a"); it.wait_state([G_MENU], 30)
+check("menu offers 交换 next to an ally", menu_to(it, 5))
+it.press("a"); it.wait_state([G_XLIST], 20)
+check("exchange list opens", it.state() == G_XLIST)
+it.press("a"); it.wait_state([G_IDLE, G_SHOW], 60)
+it.wait_state([G_IDLE], 120)
+inv1 = [it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
+check(f"exchange: 军粮 handed over, move committed ({inv1[:2]}, {it.unit(0)})",
+      inv1[0] == 0xFF and inv1[1] == 7 and it.unit(0) == (4, 11))
+# 道具: 张飞 (5,13), wounded, eats his 干粮 (+100)
+set_hp(it, 2, 50)
+it.goto(*it.unit(2)); it.press("a"); it.wait_state([G_MOVE], 20)
+it.press("a"); it.wait_state([G_MENU], 30)
+check("menu offers 道具", menu_to(it, 4))
+it.press("a"); it.wait_state([G_ILIST], 20)
+it.press("a"); it.wait_state([G_IAIM], 20)
+check("item aim mode", it.state() == G_IAIM)
+it.press("a"); it.wait_state([G_IDLE, G_SHOW], 60)
+check(f"干粮 restores 100 hp ({it.hp(2)}), 0 RNG draws", it.hp(2) == 150 and it.r8("_dbg_item_uses") == 1)
+it.wait_state([G_IDLE], 120)
+# camp + shop: clear the enemies, let 简雍 use 祈雨符 (outcome check), then visit the camp
+for i in range(3, 7):
+    set_hp(it, i, 0)
+    it.m[1, 0xD000 + 40 * i + 34] = it.m[1, 0xD000 + 40 * i + 34] | 0x08
+it.goto(*it.unit(7)); it.press("a"); it.wait_state([G_MOVE], 20)
+it.press("a"); it.wait_state([G_MENU], 30)
+menu_to(it, 4)
+it.press("a"); it.wait_state([G_ILIST], 20)
+it.press("right")                                        # 火油罐 -> 祈雨符
+it.press("a"); it.wait_state([G_IAIM], 20)
+it.press("a")
+it.wait_state([G_OUTCOME], 400)
+check(f"祈雨符 -> rain, last enemies gone -> win, +500 gold ({it.r16('_dbg_gold')})",
+      it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1 and it.r16("_dbg_gold") == 500)
+it.press("a"); it.wait_state([G_CAMP], 60)
+check("win -> camp", it.state() == G_CAMP)
+it.press("a"); it.wait_state([G_SHOP], 30)
+check("camp -> shop", it.state() == G_SHOP)
+it.press("a"); it.frames(10)                             # buy 干粮 (50)
+inv2 = [it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
+check(f"shop: gold 500 -> {it.r16('_dbg_gold')}, 干粮 to 刘备 ({inv2[:3]})", it.r16("_dbg_gold") == 450 and 0 in inv2)
+for _ in range(12):                                      # 9 more purchases: gold runs out before the bag does
+    it.press("a"); it.frames(4)
+check(f"shop never overspends (gold {it.r16('_dbg_gold')})", it.r16("_dbg_gold") == 0 or it.r16("_dbg_gold") < 50)
+it.press("b"); it.wait_state([G_CAMP], 30)
+it.press("right"); it.press("a"); it.wait_state([G_IDLE], 300)
+inv3 = [it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
+check(f"depart: new battle keeps purchases and gold ({inv3}, {it.r16('_dbg_gold')})",
+      it.r16("_dbg_round") == 1 and it.unit(0) == (4, 12) and inv3.count(0) >= 1 and it.r16("_dbg_gold") == 0)
+check("enemies are back after departing", all(it.hp(i) > 0 for i in range(3, 7)))
+check("BG map consistent after camp", view_mismatches(it) == 0)
+it.pb.stop(save=False)
 
 # ------------------------------------------------------------------ in-game save: SELECT -> power off -> cold boot
 s = Emu()

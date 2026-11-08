@@ -16,6 +16,7 @@ OUT_C = ROOT / "src" / "gen" / "rules_data.c"
 
 EFFECTS = ["fire", "water", "rock", "heal", "morale", "status", "cleanse"]
 CONDS = ["any", "fire", "water", "rock", "flood"]
+IKINDS = ["hp", "morale", "mp", "cleanse", "fire", "rain", "clear"]
 STATUS = ["ROOT", "CONFUSE", "SILENCE", "POISON", "BURN"]
 
 
@@ -31,6 +32,14 @@ def main():
     classes = d["classes"]
     terrain = d["terrain"]
     strats = d["strategies"]
+    items = json.loads((ROOT / "content" / "items.json").read_text(encoding="utf-8"))["items"]
+    if [it["id"] for it in items] != list(range(len(items))):
+        die("item ids must be dense 0..n-1 (append-only)")
+    if len(items) >= 255:
+        die("item ids must fit u8 (0xFF = empty slot)")
+    for it in items:
+        if it["kind"] not in IKINDS:
+            die(f"item {it['id']}: unknown kind {it['kind']}")
 
     if [c["id"] for c in classes] != list(range(len(classes))):
         die("class ids must be dense 0..n-1")
@@ -77,6 +86,9 @@ def main():
     h.append(f"#define RULES_PROFILE_CRC 0x{profile_crc:08X}ul")
     h.append(f"#define NUM_CLASSES {len(classes)}u\n#define NUM_TERRAIN {len(terrain)}u\n#define NUM_STRATEGIES {len(strats)}u")
     h.append(f"#define NUM_FAMILIES {len(fams)}u")
+    h.append(f"#define NUM_ITEMS {len(items)}u")
+    for i, k in enumerate(IKINDS):
+        h.append(f"#define IK_{k.upper()} {i}u")
     h.append(f"#define PROMO_L1 {d['promotion_levels'][0]}u\n#define PROMO_L2 {d['promotion_levels'][1]}u")
     h.append(f"#define ITEM_SCROLL_MAG {d['item_scroll_MAG']}u")
     h.append(f"#define RAIN_BOW_PERCENT {d['rain_bow_percent']}u")
@@ -112,6 +124,12 @@ typedef struct {
     uint8_t effect, mp, range, power, radius, status, ttl, cond, learn;
 } StrategyDef;
 
+typedef struct {
+    uint8_t kind, range;
+    uint16_t power, price;
+} ItemDef;
+
+extern const ItemDef item_defs[NUM_ITEMS];
 extern const ClassDef class_defs[NUM_CLASSES];
 extern const TerrainDef terrain_defs[NUM_TERRAIN];
 extern const StrategyDef strategy_defs[NUM_STRATEGIES];
@@ -141,6 +159,10 @@ extern const uint8_t type_percent_table[NUM_FAMILIES][NUM_FAMILIES];
         st = "ST_NONE" if s["status"] is None else f"ST_{s['status']}"
         c.append(f"    /* {s['id']:2d} {s['name']} */ {{FX_{s['effect'].upper()}, {s['mp']}, {s['range']}, "
                  f"{s['power']}, {s['radius']}, {st}, {s['ttl']}, SC_{s['cond'].upper()}, {s['learn']}}},")
+    c.append("};\n")
+    c.append("const ItemDef item_defs[NUM_ITEMS] = {")
+    for it in items:
+        c.append(f"    /* {it['id']:2d} {it['name']} */ {{IK_{it['kind'].upper()}, {it['range']}, {it['power']}, {it['price']}}},")
     c.append("};\n")
     c.append("const uint8_t type_percent_table[NUM_FAMILIES][NUM_FAMILIES] = {")
     for i, row in enumerate(adv):

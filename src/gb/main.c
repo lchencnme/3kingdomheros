@@ -24,6 +24,7 @@
 #include "duel.h"
 #include "../core/vm.h"
 #include "../core/strategy.h"
+#include "../core/item.h"
 #include "../gen/tech01_data.h"
 #include "../gen/text_data.h"
 
@@ -39,13 +40,17 @@ void vm_clear_battle_flags(void);
 #define SNAP_ALIVE(i) (snap_hp[i] && !(snap_flags[i] & (AF_RETREAT | AF_DEAD | AF_AWAY)))
 
 enum {
-    G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE, G_SLIST, G_SAIM
+    G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE, G_SLIST, G_SAIM,
+    G_ILIST, G_IAIM, G_XLIST, G_CAMP, G_SHOP
 };
 
 #define MI_ATTACK 0u
 #define MI_STRAT 1u
 #define MI_WAIT 2u
 #define MI_TALK 3u
+#define MI_ITEM 4u
+#define MI_EXCH 5u
+#define WIN_GOLD 500u
 #define talks ((uint8_t *)ER_TALKS)
 /* UI scratch in the event region (CD00..CD1F): known strategy ids for the strategy list */
 #include "eventram.h"
@@ -56,9 +61,10 @@ enum {
 
 static Battle B;
 static uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
-static uint8_t mitems[4], n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
+static uint8_t mitems[6], isel, xrecv, camp_sel, shop_sel, keep_inv, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
 static uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
 static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
+static uint16_t gold;
 static const uint8_t blank16[16];
 
 /* debug/test hooks (read by tests/emu/test_rom.py through the .noi symbol file) */
@@ -90,7 +96,8 @@ static void place_sprites(void)
 {
     uint8_t i;
     for (i = 0; i < 2 * MAX_SHOWN; i++) move_sprite(i, 0, 0);
-    if ((state == G_MENU || state == G_TARGET || state == G_SLIST || state == G_SAIM) && sel < MAX_SHOWN) {
+    if ((state == G_MENU || state == G_TARGET || state == G_SLIST || state == G_SAIM || state == G_ILIST
+         || state == G_IAIM || state == G_XLIST) && sel < MAX_SHOWN) {
         int16_t sx = (int16_t)tent_x * 16 - (int16_t)cam_x + 8;
         int16_t sy = (int16_t)tent_y * 16 - (int16_t)cam_y + 16;
         uint8_t base = OBJT_PLAYER;
@@ -105,7 +112,7 @@ static void place_sprites(void)
         uint8_t s = 2 * MAX_SHOWN;
         int16_t sx = (int16_t)cur_x * 16 - (int16_t)cam_x + 8;
         int16_t sy = (int16_t)cur_y * 16 - (int16_t)cam_y + 16;
-        uint8_t hide = state == G_ENEMY || state == G_BANNER || state == G_OUTCOME;
+        uint8_t hide = state == G_ENEMY || state == G_BANNER || state == G_OUTCOME || state == G_CAMP || state == G_SHOP;
         set_sprite_tile(s, OBJT_CURSOR); set_sprite_tile(s + 1, OBJT_CURSOR + 2);
         set_sprite_prop(s, 2); set_sprite_prop(s + 1, 2);
         move_sprite(s, (uint8_t)sx, hide ? 0 : (uint8_t)sy);
@@ -157,6 +164,22 @@ static void build_menu(void)
             if (vm_would_fire(&B, &f)) talks[n_talk++] = (uint8_t)u;
         }
         if (n_talk) mitems[n_mitems++] = MI_TALK;
+        /* 道具 / 交换 (design doc 7.3): exchange = hand an item to an adjacent ally with a free slot */
+        xrecv = 0xFF;
+        if (inv_count(sel)) {
+            mitems[n_mitems++] = MI_ITEM;
+            for (k = 0; k < 4 && xrecv == 0xFF; k++) {
+                int16_t x = (int16_t)tent_x + DX[k], y = (int16_t)tent_y + DY[k];
+                int8_t u;
+                ActiveUnit r;
+                if (x < 0 || y < 0 || x >= (int16_t)grid_w || y >= (int16_t)grid_h) continue;
+                u = unit_at((uint8_t)x, (uint8_t)y);
+                if (u < 0 || (uint8_t)u == sel) continue;
+                load((uint8_t)u, &r);
+                if (r.faction == a.faction && inv_count((uint8_t)u) < INV_SLOTS) xrecv = (uint8_t)u;
+            }
+            if (xrecv != 0xFF) mitems[n_mitems++] = MI_EXCH;
+        }
     }
     mitems[n_mitems++] = MI_WAIT;
     menu = ntarget ? 0 : (uint8_t)(n_mitems - 1);   /* default: attack if possible, else wait */
@@ -164,15 +187,16 @@ static void build_menu(void)
 
 static void hud_menu(void)
 {
-    static const uint8_t label[4] = {TX_ACT_ATTACK, TX_ACT_STRAT, TX_ACT_WAIT, TX_ACT_TALK};
+    static const uint8_t label[6] = {TX_ACT_ATTACK, TX_ACT_STRAT, TX_ACT_WAIT, TX_ACT_TALK, TX_ACT_ITEM, TX_ACT_EXCH};
     uint8_t i;
     hud_begin();
     for (i = 0; i < n_mitems; i++) {
-        if (i == menu) hud_tx(0, TX_ARROW, 0); else { hud_space(0); hud_space(0); }
-        hud_tx(0, label[mitems[i]], 0);
-        hud_space(0);
+        uint8_t ln = (uint8_t)(n_mitems > 4 && i >= 3 ? 1 : 0);     /* up to 3 per line when 5-6 items */
+        if (i == menu) hud_tx(ln, TX_ARROW, 0); else { hud_space(ln); hud_space(ln); }
+        hud_tx(ln, label[mitems[i]], 0);
+        hud_space(ln);
     }
-    hud_tx(1, TX_MOVE_HINT, 0);
+    if (n_mitems <= 4) hud_tx(1, TX_MOVE_HINT, 0);
     hud_end();
     dbg_menu_item = mitems[menu];
 }
@@ -188,6 +212,115 @@ static void hud_slist(void)
     hud_tx(0, TX_RANGE, 0); hud_num(0, strategy_defs[s].range);
     if (a.mp < strategy_defs[s].mp) hud_tx(1, TX_SR_1, 0); else hud_tx(1, TX_CAST_HINT, 0);
     hud_end();
+}
+
+static void publish_inv(void)
+{
+    uint8_t s;
+    for (s = 0; s < INV_SLOTS; s++) dbg_inv[s] = inv_get(0, s);
+    dbg_gold = gold;
+}
+
+/* next non-empty slot of the selected unit after/before isel (dir +1 / -1); isel itself if alone */
+static uint8_t next_item(uint8_t from, int8_t dir)
+{
+    uint8_t k, s = from;
+    for (k = 0; k < INV_SLOTS; k++) {
+        s = (uint8_t)((s + INV_SLOTS + dir) % INV_SLOTS);
+        if (inv_get(sel, s) != ITEM_NONE) return s;
+    }
+    return from;
+}
+
+static void hud_ilist(uint8_t hint)
+{
+    uint8_t it = inv_get(sel, isel);
+    hud_begin();
+    hud_tx(0, TX_ARROW, 0);
+    if (it != ITEM_NONE) hud_tx(0, item_name_tx[it], 0);
+    hud_space(0); hud_num(0, inv_count(sel)); hud_glyph(0, GLYPH_SLASH); hud_num(0, INV_SLOTS);
+    hud_tx(1, hint, 0);
+    hud_end();
+}
+
+static uint8_t item_aim_check(void)
+{
+    ActiveUnit a;
+    uint8_t ox, oy, r;
+    load(sel, &a);
+    ox = a.x; oy = a.y;
+    if (ox != tent_x || oy != tent_y) { a.x = tent_x; a.y = tent_y; unit_store(sel, &a); }
+    r = item_check(&B, sel, isel, aim_x, aim_y);
+    if (ox != tent_x || oy != tent_y) { a.x = ox; a.y = oy; unit_store(sel, &a); }
+    return r;
+}
+
+static void hud_item_aim(void)
+{
+    uint8_t r = item_aim_check(), it = inv_get(sel, isel);
+    hud_begin();
+    if (it != ITEM_NONE) hud_tx(0, item_name_tx[it], 0);
+    hud_space(0); hud_tx(0, TX_ITEM_HINT, 0);
+    if (r == IR_OK) hud_tx(1, TX_USE_OK, 0); else hud_tx(1, (uint8_t)(TX_IR_1 + r - 1u), 0);
+    hud_end();
+}
+
+static void hud_item_result(const ItemResult *r)
+{
+    uint8_t k;
+    hud_begin();
+    if (r->item != ITEM_NONE) {
+        k = item_defs[r->item].kind;
+        hud_tx(0, item_name_tx[r->item], 0); hud_space(0);
+        if (k == IK_HP) { hud_tx(0, TX_HEAL, 0); hud_num(0, r->amount); }
+        else if (k == IK_MORALE) { hud_tx(0, TX_MORALE, 0); hud_glyph(0, GLYPH_PLUS); hud_num(0, r->amount); }
+        else if (k == IK_MP) { hud_tx(0, TX_MP, 0); hud_glyph(0, GLYPH_PLUS); hud_num(0, r->amount); }
+        else if (k == IK_FIRE) { hud_tx(0, TX_DMG, 0); hud_num(0, r->amount); }
+        else if (k == IK_RAIN) hud_tx(0, TX_RAIN, 0);
+        else if (k == IK_CLEAR) hud_tx(0, TX_CLEAR, 0);
+        if (r->killed) { hud_tx(1, TX_RETREAT, 0); sfx_play(SFX_RETREAT); } else sfx_play(SFX_HIT);
+    }
+    hud_end();
+    dbg_item_uses++;
+    publish_inv();
+}
+
+static void hud_camp(void)
+{
+    hud_begin();
+    hud_tx(0, TX_CAMP, 0); hud_space(0); hud_tx(0, TX_GOLD, 0); hud_num(0, gold);
+    if (camp_sel == 0) hud_tx(1, TX_ARROW, 0); else { hud_space(1); hud_space(1); }
+    hud_tx(1, TX_SHOP, 0); hud_space(1);
+    if (camp_sel == 1) hud_tx(1, TX_ARROW, 0); else { hud_space(1); hud_space(1); }
+    hud_tx(1, TX_DEPART, 0);
+    hud_end();
+    publish_inv();
+}
+
+static void hud_shop(uint8_t msg)
+{
+    hud_begin();
+    hud_tx(0, TX_ARROW, 0); hud_tx(0, item_name_tx[shop_sel], 0); hud_space(0);
+    hud_tx(0, TX_GOLD, 0); hud_num(0, item_defs[shop_sel].price);
+    hud_tx(1, TX_GOLD, 0); hud_num(1, gold); hud_space(1);
+    hud_tx(1, msg, 0);
+    hud_end();
+    publish_inv();
+}
+
+/* shop (design doc 7.3): check gold and a free slot first, then take the gold and give the item */
+static void shop_buy(void)
+{
+    static const uint8_t buyers[4] = {0, 1, 2, 7};      /* 刘备 关羽 张飞 简雍: first with a free slot */
+    uint16_t price = item_defs[shop_sel].price;
+    uint8_t k, who = 0xFF;
+    if (gold < price) { sfx_play(SFX_ERROR); hud_shop(TX_NO_GOLD); return; }
+    for (k = 0; k < 4 && who == 0xFF; k++) if (inv_count(buyers[k]) < INV_SLOTS) who = buyers[k];
+    if (who == 0xFF) { sfx_play(SFX_ERROR); hud_shop(TX_BAG_FULL); return; }
+    gold = (uint16_t)(gold - price);
+    inv_add(who, shop_sel);
+    sfx_play(SFX_CONFIRM);
+    hud_shop(TX_BOUGHT);
 }
 
 /* caster is assumed at its tentative cell: temporarily place it there for the check */
@@ -363,7 +496,7 @@ static uint8_t do_suspend_save(void)
     SaveUi ui;
     uint8_t r;
     ui.battle_id = 0xFFFEu; ui.cam_x = cam_x; ui.cam_y = cam_y; ui.cur_x = cur_x; ui.cur_y = cur_y;
-    ui.presentation = 0; ui.text_speed = 0; ui.options = options; ui.gold = 0;
+    ui.presentation = 0; ui.text_speed = 0; ui.options = options; ui.gold = gold;
     r = save_battle(SAVE_SLOT_SUSPEND, &B, &ui);
     dbg_save_result = r; dbg_saves++;
     return r;
@@ -380,6 +513,7 @@ static uint8_t do_suspend_load(void)
     pending_start = 0; end_fired = 0; DQ->n = 0;
     B.turn_limit = 30;                          /* from the battle definition, not the save */
     options = ui.options;
+    gold = (uint16_t)ui.gold;
     cam_x = ui.cam_x; cam_y = ui.cam_y; cur_x = ui.cur_x; cur_y = ui.cur_y;
     {
         uint8_t o = SVBK_REG;
@@ -410,6 +544,21 @@ static void start_battle(void)
         const Tech01Unit *t = &tech01_units[i];
         battle_spawn(&B, i, t->faction == 0 ? (uint16_t)(i + 1) : ANON_CHARACTER, t->cls, t->faction, 1, t->x, t->y);
     }
+    /* inventory (7.1): a new game starts from the battle's item list; departing from the camp keeps what
+     * the player's officers carry (shop purchases) and only re-issues the enemies' items */
+    if (!keep_inv) inv_clear_all();
+    else {
+        uint8_t s;
+        for (i = 0; i < MAX_UNITS; i++)
+            if (i >= TECH01_UNITS || tech01_units[i].faction != FAC_PLAYER)
+                for (s = 0; s < INV_SLOTS; s++) if (inv_get(i, s) != ITEM_NONE) inv_set(i, s, ITEM_NONE);
+    }
+    for (i = 0; i < TECH01_START_ITEMS; i++)
+        if (!keep_inv || tech01_units[tech01_start_items[i][0]].faction != FAC_PLAYER)
+            inv_add(tech01_start_items[i][0], tech01_start_items[i][1]);
+    if (!keep_inv) gold = 0;
+    keep_inv = 0;
+    publish_inv();
     cur_x = tech01_units[0].x; cur_y = tech01_units[0].y;
     battle_phase_start(&B, FAC_PLAYER);
     state = G_BANNER; timer = 45; next_state = G_IDLE;
@@ -501,6 +650,38 @@ static uint8_t commit_move_if_needed(void)
     return 1;
 }
 
+/* item / exchange commits live in their own functions so their locals stay out of logic_player's frame
+ * (the 512 B stack, design doc 11.4) */
+static void do_item_use(void)
+{
+    ItemResult ir;
+    if (commit_move_if_needed()) {
+        item_use(&B, sel, isel, aim_x, aim_y, &ir);
+        hud_item_result(&ir);
+        if (ir.killed) fire(TR_UNIT_RETREAT, B.phase, sel, ir.target, ir.target);
+        cur_x = tent_x; cur_y = tent_y;
+        state = G_SHOW; timer = 50; next_state = G_IDLE;
+    } else { cur_x = tent_x; cur_y = tent_y; state = G_IDLE; hud_dirty = 1; after_action(); }
+}
+
+static void do_exchange(void)
+{
+    ActiveUnit r;
+    uint8_t s, it = inv_get(sel, isel);
+    if (commit_move_if_needed()) {
+        for (s = 0; s < INV_SLOTS && inv_get(xrecv, s) != ITEM_NONE; s++) {}
+        if (s < INV_SLOTS && item_exchange(sel, isel, xrecv, s) == IR_OK) {
+            load(xrecv, &r);
+            hud_begin(); hud_tx(0, TX_GIVE, 0); hud_tx(0, unit_name_tx(&r), 0); hud_space(0);
+            hud_tx(0, item_name_tx[it], 0); hud_end();
+            sfx_play(SFX_CONFIRM);
+            publish_inv();
+        } else { load(sel, &r); r.action_flags |= AF_ACTED; unit_store(sel, &r); }
+        cur_x = tent_x; cur_y = tent_y;
+        state = G_SHOW; timer = 40; next_state = G_IDLE;
+    } else { cur_x = tent_x; cur_y = tent_y; state = G_IDLE; hud_dirty = 1; after_action(); }
+}
+
 static void logic_player(void)
 {
     int8_t u;
@@ -556,6 +737,8 @@ static void logic_player(void)
             uint8_t it = mitems[menu];
             if (it == MI_ATTACK) { tsel = 0; state = G_TARGET; cur_x = tent_x; cur_y = tent_y; hud_target(); }
             else if (it == MI_STRAT) { ssel = 0; state = G_SLIST; hud_slist(); }
+            else if (it == MI_ITEM) { isel = next_item(INV_SLOTS - 1, 1); state = G_ILIST; hud_ilist(TX_ITEM_HINT); }
+            else if (it == MI_EXCH) { isel = next_item(INV_SLOTS - 1, 1); state = G_XLIST; hud_ilist(TX_GIVE_HINT); }
             else if (it == MI_TALK) {
                 ActiveUnit a;
                 uint8_t ok = commit_move_if_needed();
@@ -608,6 +791,26 @@ static void logic_player(void)
         }
         if (state == G_SAIM) { cur_x = aim_x; cur_y = aim_y; if (aim_dirty) { hud_aim(); aim_dirty = 0; } }
         break;
+    case G_ILIST:
+    case G_XLIST:
+        if (in_dx > 0 || in_dy > 0) { isel = next_item(isel, 1); hud_ilist(state == G_ILIST ? TX_ITEM_HINT : TX_GIVE_HINT); }
+        else if (in_dx < 0 || in_dy < 0) { isel = next_item(isel, -1); hud_ilist(state == G_ILIST ? TX_ITEM_HINT : TX_GIVE_HINT); }
+        else if (in_pressed & J_B) { state = G_MENU; hud_menu(); }
+        else if ((in_pressed & J_A) && state == G_ILIST) {
+            aim_x = tent_x; aim_y = tent_y; state = G_IAIM; aim_dirty = 1; sfx_play(SFX_CONFIRM);
+        } else if (in_pressed & J_A) do_exchange();   /* 交换: hand the item to the adjacent ally */
+        break;
+    case G_IAIM:
+        if (in_dx || in_dy) {
+            int16_t nx = (int16_t)aim_x + in_dx, ny = (int16_t)aim_y + in_dy;
+            if (nx >= 0 && ny >= 0 && nx < (int16_t)grid_w && ny < (int16_t)grid_h) { aim_x = (uint8_t)nx; aim_y = (uint8_t)ny; aim_dirty = 1; }
+        } else if (in_pressed & J_B) { state = G_ILIST; cur_x = tent_x; cur_y = tent_y; hud_ilist(TX_ITEM_HINT); }
+        else if (in_pressed & J_A) {
+            if (item_aim_check() != IR_OK) sfx_play(SFX_ERROR);
+            else do_item_use();
+        }
+        if (state == G_IAIM) { cur_x = aim_x; cur_y = aim_y; if (aim_dirty) { hud_item_aim(); aim_dirty = 0; } }
+        break;
     case G_TARGET:
         if (in_dx > 0 || in_dy > 0) { tsel = (uint8_t)((tsel + 1) % ntarget); hud_target(); }
         else if (in_dx < 0 || in_dy < 0) { tsel = (uint8_t)((tsel + ntarget - 1) % ntarget); hud_target(); }
@@ -630,18 +833,82 @@ static void logic_player(void)
     }
 }
 
-static void enemy_step(void)
+static void mark_acted(uint8_t i)
 {
     ActiveUnit u;
-    AiCommand c;
-    AttackResult r;
-    uint8_t o;
-    uint16_t t0;
+    load(i, &u); u.action_flags |= AF_ACTED; unit_store(i, &u);
+}
+
+/* AI strategy / item command (design doc 8.3); separate frame for the 512 B stack */
+static void enemy_special(const AiCommand *c)
+{
+    static union { StrategyResult sr; ItemResult ir; } r;      /* static: keeps 28 B off the stack */
+    uint8_t k, ok;
+    if (c->action == ACT_STRATEGY) {
+        ok = strategy_cast(&B, enemy_i, c->param, c->tx, c->ty, &r.sr) == SR_OK;
+        if (ok) {
+            dbg_ai_strats++;
+            hud_strat_result(c->param, &r.sr);
+            for (k = 0; k < r.sr.n; k++) if (r.sr.killed[k]) fire(TR_UNIT_RETREAT, B.phase, enemy_i, r.sr.unit[k], r.sr.unit[k]);
+        }
+    } else {
+        ok = item_use(&B, enemy_i, c->param, c->tx, c->ty, &r.ir) == IR_OK;
+        if (ok) { dbg_ai_items++; hud_item_result(&r.ir); }
+    }
+    if (!ok) { mark_acted(enemy_i); hud_begin(); hud_end(); }   /* never expected: AI proposes legal commands */
+}
+
+/* small helpers keep enemy_step's frame tiny: it sits under ai_decide, the deepest call chain */
+static void enemy_skip_idle(void)
+{
+    ActiveUnit u;
     while (enemy_i < B.n_units) {
         load(enemy_i, &u);
         if (u.faction == FAC_ENEMY && battle_can_act(&u)) break;
         enemy_i++;
     }
+}
+
+static uint8_t unit_pos(uint8_t i, uint8_t *x, uint8_t *y)
+{
+    ActiveUnit u;
+    load(i, &u);
+    *x = u.x; *y = u.y;
+    return unit_alive(&u);
+}
+
+static void enemy_attack(uint8_t target)
+{
+    AttackResult r;
+    attack_and_present(enemy_i, target, &r);
+    hud_result(&r);
+}
+
+/* design doc 8.4: one cached approach field. When the next enemy uses another move type, start its field
+ * now as a cooperative job so it is built while this action's result is shown, not inside the decision */
+static void prewarm_next(void)
+{
+    ActiveUnit u;
+    uint8_t j, m, o;
+    for (j = (uint8_t)(enemy_i + 1u); j < B.n_units; j++) {
+        load(j, &u);
+        if (u.faction == FAC_ENEMY && battle_can_act(&u)) break;
+    }
+    if (j >= B.n_units) return;
+    m = rules_class_move_type(u.class_id);
+    o = SVBK_REG;
+    SVBK_REG = WB_SCRATCH;
+    if (W7_AI->field_state == 0 || W7_AI->field_mtype != m || W7_AI->field_side != SIDE_E)
+        ai_field_request(&B, W7_AI, m, SIDE_E);
+    SVBK_REG = o;
+}
+
+static void enemy_step(void)
+{
+    AiCommand c;
+    uint8_t o, ux, uy;
+    uint16_t t0;
+    enemy_skip_idle();
     if (enemy_i >= B.n_units) {
         fire(TR_ROUND_END, FAC_ENEMY, 0xFF, 0xFF, 0xFF);   /* round number of the round that ends */
         if (B.outcome) return;
@@ -655,28 +922,32 @@ static void enemy_step(void)
         autosave_pending = (uint8_t)(options & OPT_AUTOSAVE);
         return;
     }
+    unit_pos(enemy_i, &ux, &uy);
     o = SVBK_REG;
     t0 = sys_time;
     SVBK_REG = WB_SCRATCH;
     ai_decide(&B, W7_AI, W7_MR, enemy_i, AI_AGGRESSIVE, &c);
     SVBK_REG = o;
     dbg_t_ai = sys_time - t0;
-    if (c.x != u.x || c.y != u.y) {
+    if (c.x != ux || c.y != uy) {
         battle_move(enemy_i, c.x, c.y);
         fire(TR_POST_MOVE, FAC_ENEMY, enemy_i, 0xFF, 0xFF);
-        load(enemy_i, &u);
-        if (B.outcome || !unit_alive(&u)) c.action = ACT_WAIT;   /* 4.3: the move's event ended the action */
+        if (B.outcome || !unit_pos(enemy_i, &ux, &uy)) c.action = ACT_WAIT;   /* 4.3: the move's event ended the action */
     }
     cur_x = c.x; cur_y = c.y;                  /* camera follows the actor */
     if (c.action == ACT_ATTACK) {
-        attack_and_present(enemy_i, c.target, &r);
-        hud_result(&r);
+        enemy_attack(c.target);
+        timer = 50;
+    } else if (c.action == ACT_STRATEGY || c.action == ACT_ITEM) {
+        enemy_special(&c);
+        if (c.action == ACT_STRATEGY) { cur_x = c.tx; cur_y = c.ty; }
         timer = 50;
     } else {
-        load(enemy_i, &u); u.action_flags |= AF_ACTED; unit_store(enemy_i, &u);
+        mark_acted(enemy_i);
         timer = 20;
         hud_begin(); hud_end();
     }
+    if (!B.outcome) prewarm_next();
     enemy_i++;
     state = G_SHOW; next_state = G_ENEMY;
 }
@@ -692,10 +963,12 @@ static void logic(void)
         end_fired = 1;
         fire(TR_BATTLE_END, B.phase, 0xFF, 0xFF, 0xFF);
     }
-    if (B.outcome && state != G_OUTCOME && state != G_SHOW && state != G_TITLE) {
+    if (B.outcome && state != G_OUTCOME && state != G_SHOW && state != G_TITLE && state != G_CAMP && state != G_SHOP) {
         state = G_OUTCOME;
         save_invalidate(SAVE_SLOT_SUSPEND);     /* never "continue" a finished battle */
-        hud_begin(); hud_tx(0, B.outcome == OUT_WIN ? TX_WIN : TX_LOSE, 0); hud_end();
+        if (B.outcome == OUT_WIN) gold = (uint16_t)(gold + WIN_GOLD);
+        hud_begin(); hud_tx(0, B.outcome == OUT_WIN ? TX_WIN_CAMP : TX_LOSE, 0); hud_end();
+        publish_inv();
         return;
     }
     if (autosave_pending && state == G_BANNER) {
@@ -727,11 +1000,28 @@ static void logic(void)
         enemy_step();
         break;
     case G_OUTCOME:
-        if (in_pressed & J_A) {
+        if ((in_pressed & J_A) && B.outcome == OUT_WIN) { state = G_CAMP; camp_sel = 0; hud_camp(); }
+        else if (in_pressed & J_A) {
             DISPLAY_OFF;
             start_battle(); mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
             DISPLAY_ON;
         }
+        break;
+    case G_CAMP:                               /* camp node (design doc 2.2): shop / depart */
+        if (in_dx || in_dy) { camp_sel ^= 1u; hud_camp(); }
+        else if ((in_pressed & J_A) && camp_sel == 0) { state = G_SHOP; shop_sel = 0; hud_shop(TX_SHOP_HINT); }
+        else if (in_pressed & J_A) {
+            DISPLAY_OFF;
+            keep_inv = 1;
+            start_battle(); mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
+            DISPLAY_ON;
+        }
+        break;
+    case G_SHOP:
+        if (in_dx > 0 || in_dy > 0) { shop_sel = (uint8_t)((shop_sel + 1) % NUM_ITEMS); hud_shop(TX_SHOP_HINT); }
+        else if (in_dx < 0 || in_dy < 0) { shop_sel = (uint8_t)((shop_sel + NUM_ITEMS - 1) % NUM_ITEMS); hud_shop(TX_SHOP_HINT); }
+        else if (in_pressed & J_B) { state = G_CAMP; hud_camp(); }
+        else if (in_pressed & J_A) shop_buy();
         break;
     case G_TITLE:
         if (in_pressed & J_START) {

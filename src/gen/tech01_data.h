@@ -25,4 +25,6 @@ extern const uint8_t tech01_meta[10][4];
 extern const uint8_t tech01_terrain_pal[10];
 extern const uint8_t tech01_terrain[];
 extern const Tech01Unit tech01_units[];
+#define TECH01_START_ITEMS 7u
+extern const uint8_t tech01_start_items[][2];
 #endif

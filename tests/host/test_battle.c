@@ -3,6 +3,9 @@
 #include <string.h>
 #include "../../src/core/battle.h"
 #include "../../src/core/ai.h"
+#include "../../src/core/item.h"
+#include "../../src/core/strategy.h"
+static unsigned n_ai_strat;
 #include "../../src/core/path.h"
 
 extern uint8_t host_terrain[4096], host_occ[4096];
@@ -23,6 +26,7 @@ static void reset(uint8_t w, uint8_t h)
     memset(host_terrain, 0, sizeof host_terrain);
     memset(host_occ, 0, sizeof host_occ);
     memset(host_units, 0, sizeof host_units);
+    inv_clear_all();                      /* no carried items: the AI sees attack/wait candidates only */
     for (i = 0; i < MAX_UNITS; i++) { host_base[i].str = 70; host_base[i].intl = 60; host_base[i].cmd = 70; }
     memset(&B, 0, sizeof B);
     rng_seed(&B.rng, 1);
@@ -188,8 +192,9 @@ static void test_ai(void)
     /* in reach: attack */
     battle_move(1, 4, 4);
     host_units[1].action_flags = 0;
+    host_units[1].mp = 0;                 /* infantry knows 绊马: isolate the attack candidates here */
     ai_decide(&B, &AS, &MR, 1, AI_AGGRESSIVE, &c);
-    CHECK(c.action == ACT_ATTACK && c.target == 0, "attacks when reachable");
+    CHECK(c.action == ACT_ATTACK && c.target == 0, "attacks when reachable (action %u target %u param %u)", c.action, c.target, c.param);
     CHECK((c.x == 2 && c.y == 4) || (c.x == 1 && (c.y == 3 || c.y == 5)), "adjacent endpoint (%u,%u)", c.x, c.y);
     /* kill priority: a weak unit in reach is chosen over a full-hp one */
     battle_spawn(&B, 2, 2, 0, FAC_PLAYER, 1, 6, 6);
@@ -238,6 +243,10 @@ static uint32_t self_play(uint8_t *rounds_out, uint8_t *outcome_out)
                 if (c.action == ACT_ATTACK) {
                     CHECK(battle_in_range(&host_units[i], c.x, c.y, &host_units[c.target]), "AI target in range");
                     battle_attack(&B, i, c.target, &r);
+                } else if (c.action == ACT_STRATEGY) {
+                    StrategyResult sr;
+                    CHECK(strategy_cast(&B, i, c.param, c.tx, c.ty, &sr) == SR_OK, "AI strategy legal");
+                    n_ai_strat++;
                 } else host_units[i].action_flags |= AF_ACTED;
                 occupancy_consistent("self_play");
             }
@@ -268,7 +277,7 @@ int main(void)
     h2 = self_play(&r2, &o2);
     CHECK(h1 == h2 && r1 == r2 && o1 == o2, "self-play replay identical");
     CHECK(o1 != OUT_NONE, "self-play reaches an outcome (round %u)", r1);
-    printf("self-play: outcome %u after round %u, state hash %08X, draws %u\n", o1, r1, h1, (unsigned)B.rng.draws);
+    printf("self-play: outcome %u after round %u, state hash %08X, draws %u, AI strategies %u\n", o1, r1, h1, (unsigned)B.rng.draws, n_ai_strat);
     printf("battle/ai: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
 }

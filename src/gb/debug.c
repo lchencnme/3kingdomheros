@@ -35,3 +35,8 @@ volatile __at(0xCDE5) uint8_t dbg_n_units;
 volatile __at(0xCDE6) uint8_t dbg_strat_casts;
 volatile __at(0xCDE7) uint8_t dbg_menu_item;
 volatile __at(0xCDEC) uint32_t dbg_crc_check;
+volatile __at(0xCDF0) uint16_t dbg_gold;
+volatile __at(0xCDF2) uint8_t dbg_item_uses;
+volatile __at(0xCDF3) uint8_t dbg_ai_strats;
+volatile __at(0xCDF4) uint8_t dbg_ai_items;
+volatile __at(0xCDF5) uint8_t dbg_inv[8];         /* unit 0 (刘备) inventory, refreshed after item actions */

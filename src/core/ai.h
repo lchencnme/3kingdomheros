@@ -11,7 +11,23 @@
 #define AI_AGGRESSIVE 1u
 
 #define ACT_ATTACK 2u     /* enum order DUEL/TALK/ATTACK/STRATEGY/ITEM/WAIT */
+#define ACT_STRATEGY 3u
+#define ACT_ITEM 4u
 #define ACT_WAIT 5u
+
+/* offensive strategy candidates of the current actor, valued once per decision (independent of the
+ * endpoint); the endpoint loop only checks range and LOS. GB: WRAM bank7 D500..D5FF. */
+typedef struct { uint8_t sid, cx, cy, range; int32_t val; } AiStrat;   /* val: endpoint-independent score */
+#define AI_MAX_STRAT 32u
+#ifdef __SDCC
+#define AI_STRAT_BUF ((AiStrat *)0xD500u)
+#define AI_TMP_UNIT ((ActiveUnit *)0xD4C0u)    /* bank7 D4C0..D4E7: unit buffer for strategy_estimate */
+#else
+extern ActiveUnit ai_tmp_host;
+#define AI_TMP_UNIT (&ai_tmp_host)
+extern AiStrat ai_strat_host[AI_MAX_STRAT];
+#define AI_STRAT_BUF ai_strat_host
+#endif
 
 #define AI_MAX_OPP 24u
 #define AI_MAX_TARGET_CELLS 96u
@@ -29,11 +45,14 @@ typedef struct {              /* lives in WRAM bank7 0xDC00..0xDFFF on GB (same 
     AiOpp opp[AI_MAX_OPP];
     uint16_t cells[AI_MAX_TARGET_CELLS];   /* field sources (kept off the 512B stack) */
     uint8_t field_mtype, field_state, field_side;   /* field_state: 0 invalid, 1 building, 2 valid */
+    uint8_t n_strat, item_slot;                       /* per-decision special candidates (kept off the stack) */
+    int32_t item_sc;
     FieldJob job;
 } AiScratch;
 
 typedef struct {
     uint8_t x, y, action, target;
+    uint8_t param, tx, ty;    /* STRATEGY: sid + centre cell; ITEM: inventory slot + target cell */
     int32_t score;
 } AiCommand;
 

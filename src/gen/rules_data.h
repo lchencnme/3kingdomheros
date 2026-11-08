@@ -9,6 +9,14 @@
 #define NUM_TERRAIN 10u
 #define NUM_STRATEGIES 20u
 #define NUM_FAMILIES 8u
+#define NUM_ITEMS 11u
+#define IK_HP 0u
+#define IK_MORALE 1u
+#define IK_MP 2u
+#define IK_CLEANSE 3u
+#define IK_FIRE 4u
+#define IK_RAIN 5u
+#define IK_CLEAR 6u
 #define PROMO_L1 12u
 #define PROMO_L2 24u
 #define ITEM_SCROLL_MAG 60u
@@ -74,6 +82,12 @@ typedef struct {
     uint8_t effect, mp, range, power, radius, status, ttl, cond, learn;
 } StrategyDef;
 
+typedef struct {
+    uint8_t kind, range;
+    uint16_t power, price;
+} ItemDef;
+
+extern const ItemDef item_defs[NUM_ITEMS];
 extern const ClassDef class_defs[NUM_CLASSES];
 extern const TerrainDef terrain_defs[NUM_TERRAIN];
 extern const StrategyDef strategy_defs[NUM_STRATEGIES];

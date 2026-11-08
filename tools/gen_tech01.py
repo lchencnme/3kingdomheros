@@ -230,6 +230,8 @@ UNITS = [  # (name, char_tag, class, faction, x, y)
     ("弓手", "ANON", 3, "ENEMY", 26, 12),
     ("简雍", "CH_JIANYONG", 9, "PLAYER", 3, 13),   # 文士: strategies (design doc 6.3)
 ]
+# starting inventory (design doc 7.1): (unit index, item id from content/items.json)
+START_ITEMS = [(0, 1), (0, 7), (1, 3), (2, 0), (7, 8), (7, 9), (3, 0)]
 
 
 def main():
@@ -268,6 +270,7 @@ def main():
          "extern const uint16_t tech01_bg_pals[32];", "extern const uint16_t tech01_obj_pals[16];",
          "extern const uint8_t tech01_meta[10][4];", "extern const uint8_t tech01_terrain_pal[10];",
          "extern const uint8_t tech01_terrain[];", "extern const Tech01Unit tech01_units[];",
+         f"#define TECH01_START_ITEMS {len(START_ITEMS)}u", "extern const uint8_t tech01_start_items[][2];",
          "#endif"]
     c = ["#pragma bank 11", "#include \"tech01_data.h\""]   # same bank as mapview (direct reads); others use the gateway
     ci = ["#include \"tech01_data.h\""]                       # unbanked index data
@@ -288,6 +291,7 @@ def main():
     ci.append("const uint8_t tech01_meta[10][4] = {" + ", ".join("{" + ", ".join(map(str, m)) + "}" for m in meta) + "};")
     ci.append("const uint8_t tech01_terrain_pal[10] = {" + ", ".join(str(TERRAIN_PAL[i]) for i in range(10)) + "};")
     fac = {"PLAYER": 0, "ALLY": 1, "ENEMY": 2}
+    ci.append("const uint8_t tech01_start_items[][2] = {" + ", ".join(f"{{{u}, {i}}}" for u, i in START_ITEMS) + "};")
     ci.append("const Tech01Unit tech01_units[] = {")
     for n, _, cl, f, x, y in UNITS:
         ci.append(f"    {{{cl}, {fac[f]}, {x}, {y}}}, /* {n} */")
