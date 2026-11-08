@@ -16,6 +16,7 @@
 #include "mapview.h"
 #include "hud.h"
 #include "rom.h"
+#include "audio.h"
 #include "../gen/tech01_data.h"
 #include "../gen/text_data.h"
 
@@ -156,6 +157,8 @@ static void hud_target(void)
 
 static void hud_result(const AttackResult *r)
 {
+    if (r->killed || r->c_killed) sfx_play(SFX_RETREAT);
+    else if (r->hit || r->c_hit) sfx_play(SFX_HIT);
     hud_begin();
     if (r->hit) { hud_tx(0, TX_DMG, 0); hud_num(0, r->dmg); } else hud_tx(0, TX_MISS, 0);
     if (r->killed) { hud_space(0); hud_tx(0, TX_RETREAT, 0); }
@@ -318,7 +321,7 @@ static void logic_player(void)
             u = unit_at(cur_x, cur_y);
             if (u >= 0) {
                 load((uint8_t)u, &a);
-                if (a.faction == FAC_PLAYER && battle_can_act(&a)) do_preview((uint8_t)u);
+                if (a.faction == FAC_PLAYER && battle_can_act(&a)) { sfx_play(SFX_CONFIRM); do_preview((uint8_t)u); }
             }
         } else if (in_pressed & J_START) {
             begin_enemy_phase();               /* end turn */
@@ -339,7 +342,9 @@ static void logic_player(void)
             SVBK_REG = WB_SCRATCH;
             ok = path_endpoint_ok(W7_MR, cur_x, cur_y);
             SVBK_REG = o;
+            if (!ok) sfx_play(SFX_ERROR);
             if (ok) {
+                sfx_play(SFX_CONFIRM);
                 tent_x = cur_x; tent_y = cur_y;
                 collect_targets();
                 menu = ntarget ? 0 : 1;
@@ -540,6 +545,8 @@ void game_run(void) BANKED
     }
 
     input_init();
+    audio_init();
+    music_play(&song_battle);
     SPRITES_8x16;
     SHOW_BKG; SHOW_WIN; SHOW_SPRITES;
     DISPLAY_ON;

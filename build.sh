@@ -6,6 +6,7 @@ LCC=${GBDK_LCC:-tools/gbdk/bin/lcc}
 python3 -I tools/gen_rules.py
 python3 -I tools/gen_tech01.py
 python3 -I tools/gen_font.py
+python3 -I tools/gen_music.py
 mkdir -p build/host build/gb
 python3 -I tools/ref_model.py > build/host/ref_cases.txt
 cc -std=c99 -Wall -Wextra -O1 -o build/host/test_core tests/host/test_core.c tests/host/host_grid.c \

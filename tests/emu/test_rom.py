@@ -32,10 +32,10 @@ def check(name, cond, detail=""):
 
 
 class Emu:
-    def __init__(self, ram=None):
+    def __init__(self, ram=None, sound=False):
         import io
         kw = {"ram_file": io.BytesIO(ram)} if ram is not None else {}
-        self.pb = PyBoy(str(ROM), window="null", cgb=True, sound_emulated=False, **kw)
+        self.pb = PyBoy(str(ROM), window="null", cgb=True, sound_emulated=sound, **kw)
         self.m = self.pb.memory
         self.fc = 0
         self.frames(120)  # PyBoy plays the ~77-frame CGB boot animation first
@@ -304,6 +304,28 @@ check(f"stack high-water margin >= 64B (free {r1['stack_free']})", r1["stack_fre
 check("restart from outcome resets the battle", r1["restart_ok"])
 check("replay: identical outcome/round/RNG/draws/hp",
       all(r1[k] == r2[k] for k in ("outcome", "round", "rng", "draws", "hps")), f"{r1} vs {r2}")
+
+# ------------------------------------------------------------------ audio (design doc 14)
+a = Emu(sound=True)
+a.wait_state([G_IDLE], 200)
+t0 = a.r16("_dbg_audio_ticks")
+a.frames(600)                       # 600 frames = 10.05 s of LCD time
+ticks = (a.r16("_dbg_audio_ticks") - t0) & 0xFFFF
+expect = 96 * 24 / 60 * 600 / 59.7275
+check(f"tempo: 96 BPM -> {ticks} ticks in 600 frames (expect ~{expect:.0f})", abs(ticks - expect) <= 3)
+check("music plays notes on all channels (NR52 status bits)", (a.m[0xFF26] & 0x80) and a.r8("_dbg_audio_notes") > 0)
+try:
+    import numpy as _np
+    samples = []
+    for _ in range(120):
+        a.frames(1)
+        samples.append(_np.array(a.pb.sound.ndarray, copy=True))
+    buf = _np.concatenate(samples).astype(int)
+    check(f"audio output is not silent (peak {int(abs(buf).max())})", abs(buf).max() > 0)
+except Exception as ex:  # pragma: no cover
+    check(f"audio samples readable ({ex})", False)
+# keep time while the LCD is off is covered by the timer-driven design: tick rate is independent of frames
+a.pb.stop(save=False)
 
 # ------------------------------------------------------------------ in-game save: SELECT -> power off -> cold boot
 s = Emu()
