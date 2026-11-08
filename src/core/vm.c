@@ -5,7 +5,7 @@
 #include "grid.h"
 #include "path.h"
 
-uint8_t vm_last_ran;
+uint8_t vm_last_ran, vm_action_replaced, vm_units_changed;
 
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | ((uint16_t)p[1] << 8)); }
 
@@ -145,6 +145,7 @@ static uint8_t run_code(Battle *b, const VmFact *f, uint16_t off, uint16_t len)
             x = a[1]; y = a[2];
             if (!spawn_cell(class_defs[t.cls].move_type, &x, &y)) break;   /* G1: no pending queue yet */
             battle_spawn(b, t.instance_id, t.character, t.cls, t.faction, t.level, x, y);
+            vm_units_changed = 1;
             break;
         }
         case OP_RETREAT:
@@ -156,6 +157,7 @@ static uint8_t run_code(Battle *b, const VmFact *f, uint16_t off, uint16_t len)
                     grid_occ_clear(u.x, u.y);
                     u.hp = 0; u.action_flags |= AF_RETREAT;
                     unit_store(a[0], &u);
+                    vm_units_changed = 1;
                 }
             }
             break;
@@ -182,10 +184,51 @@ static uint8_t run_code(Battle *b, const VmFact *f, uint16_t off, uint16_t len)
                 if (unit_alive(&u)) {
                     uint16_t v = rd16(a + 1);
                     if (v > u.max_hp) v = u.max_hp;
-                    if (v == 0) { grid_occ_clear(u.x, u.y); u.action_flags |= AF_RETREAT; }
+                    if (v == 0) { grid_occ_clear(u.x, u.y); u.action_flags |= AF_RETREAT; vm_units_changed = 1; }
                     u.hp = v;
                     unit_store(a[0], &u);
                 }
+            }
+            break;
+        case OP_DUEL: {
+            /* design doc 9.3: named duel replaces this attack, consumes the action, draws no RNG */
+            uint16_t lhp;
+            uint8_t retreated = 0;
+            vm_read((uint16_t)(off + 1u), a, 4);
+            off += 5;
+            if (a[0] >= b->n_units || a[1] >= b->n_units) return VM_BAD_SCRIPT;
+            unit_load(a[1], &u);
+            if (!unit_alive(&u)) return VM_BAD_SCRIPT;
+            lhp = rd16(a + 2);
+            if (lhp > u.hp) lhp = u.hp;
+            vm_duel(a[0], a[1], lhp == 0);              /* platform snapshots the pre-duel sides */
+            if (lhp == 0) {
+                grid_occ_clear(u.x, u.y);
+                u.action_flags |= AF_RETREAT; u.status_mask = 0;
+                retreated = 1;
+                vm_units_changed = 1;
+            }
+            u.hp = lhp;
+            unit_store(a[1], &u);
+            unit_load(a[0], &u);
+            u.action_flags |= (uint8_t)(AF_MOVED | AF_ACTED);
+            unit_store(a[0], &u);
+            vm_action_replaced = 1;
+            (void)retreated;
+            break;
+        }
+        case OP_FACTION_SET:
+            vm_read((uint16_t)(off + 1u), a, 2);
+            off += 3;
+            if (a[0] >= b->n_units || a[1] > FAC_ENEMY) return VM_BAD_SCRIPT;
+            unit_load(a[0], &u);
+            if (unit_alive(&u)) {
+                grid_occ_clear(u.x, u.y);
+                u.faction = a[1];
+                u.action_flags |= (uint8_t)(AF_MOVED | AF_ACTED);   /* acts again in its new faction's phase */
+                grid_occ_set(u.x, u.y, faction_side(a[1]));
+                unit_store(a[0], &u);
+                vm_units_changed = 1;
             }
             break;
         default:
@@ -203,17 +246,31 @@ static uint8_t matches(const VmEvent *e, const VmFact *f)
     case TR_PHASE_START:
     case TR_PHASE_END: return e->param == f->phase;
     case TR_POST_MOVE:
-    case TR_PRE_ACTION: return e->param == f->actor;
+    case TR_PRE_ACTION:
+    case TR_TALK: return e->param == f->actor;
     case TR_UNIT_RETREAT: return e->param == f->unit;
     default: return 1;
     }
+}
+
+uint8_t vm_would_fire(const Battle *b, const VmFact *f) CORE_API
+{
+    uint8_t n = vm_event_count(), i, cnt = 0;
+    VmEvent e;
+    for (i = 0; i < n; i++) {
+        vm_event_header(i, &e);
+        if (!matches(&e, f)) continue;
+        if (e.once_bit != VM_NO_ONCE && vm_flag_get(SCOPE_BATTLE, e.once_bit)) continue;
+        if (cond_true(b, f, e.cond_off)) cnt++;
+    }
+    return cnt;
 }
 
 uint8_t vm_fire(Battle *b, const VmFact *f) CORE_API
 {
     uint8_t n = vm_event_count(), i, done_prio = 0, first = 1;
     VmEvent e;
-    vm_last_ran = 0;
+    vm_last_ran = 0; vm_action_replaced = 0; vm_units_changed = 0;
     /* priority ascending, then event index (= id order, compiler-sorted) ascending; no allocation:
      * repeated scans over the small per-battle table */
     for (;;) {

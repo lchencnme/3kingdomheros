@@ -3,11 +3,11 @@
 #define TECH01_EVENTS_H
 #include <stdint.h>
 #include "../core/vm.h"
-#define TECH01_EVENT_COUNT 5u
+#define TECH01_EVENT_COUNT 7u
 #define TECH01_TEMPLATE_COUNT 2u
-#define TECH01_SCRIPT_BYTES 79u
+#define TECH01_SCRIPT_BYTES 109u
 #define TECH01_SCRIPT_BANK 2u
-#define TECH01_ONCE_BITS 5u
+#define TECH01_ONCE_BITS 7u
 extern const VmEvent tech01_events[TECH01_EVENT_COUNT];
 extern const VmTemplate tech01_templates[TECH01_TEMPLATE_COUNT];
 extern const uint8_t tech01_script[TECH01_SCRIPT_BYTES];

@@ -443,6 +443,89 @@ check(f"strategy cast spends MP ({mp_before} -> {s2.m[1, 0xD000 + 40 * 7 + 14]})
       s2.r8("_dbg_strat_casts") == 1 and s2.m[1, 0xD000 + 40 * 7 + 14] == mp_before - 4)
 s2.pb.stop(save=False)
 
+# ------------------------------------------------------------------ DUEL and TALK (design doc 9.1/9.3)
+def faction(em, i):
+    return em.m[1, 0xD000 + 40 * i + 3]
+
+
+def neighbours(em, x, y):
+    out = []
+    for dx, dy in ((0, -1), (-1, 0), (1, 0), (0, 1)):
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < 32 and 0 <= ny < 24 and _TERR[ny * 32 + nx] in (0, 1, 3, 9) and \
+                all(em.unit(j) != (nx, ny) or em.hp(j) == 0 for j in range(em.r8("_dbg_n_units"))):
+            out.append((nx, ny))
+    return out
+
+
+def try_reach_and_menu(em, actor, target):
+    """move actor next to target if possible; returns True when the action menu is open there"""
+    for cell in neighbours(em, *em.unit(target)):
+        em.goto(*em.unit(actor)); em.press("a"); em.wait_state([G_MOVE], 20)
+        if em.state() != G_MOVE:
+            return False
+        em.goto(*cell); em.press("a"); em.wait_state([G_MENU, G_MOVE], 30)
+        if em.state() == G_MENU:
+            return True
+        em.press("b"); em.wait_state([G_IDLE], 30)
+    return False
+
+
+d = Emu()
+d.wait_state([G_IDLE], 300)
+duel_done = talk_done = False
+fs0 = d.r8("_dbg_fs_count")
+for _round in range(12):
+    if d.state() == G_OUTCOME:
+        break
+    d.wait_state([G_IDLE], 3000)
+    if not duel_done and d.hp(3) and d.hp(1):
+        ax, ay = d.unit(1); tx, ty = d.unit(3)
+        if abs(ax - tx) + abs(ay - ty) <= 6 and try_reach_and_menu(d, 1, 3):
+            for _ in range(4):
+                if d.r8("_dbg_menu_item") == 0:
+                    break
+                d.press("right")
+            d.press("a"); d.wait_state([G_TARGET], 20)
+            for _ in range(6):
+                if d.cur() == d.unit(3):
+                    break
+                d.press("right")
+            draws0 = d.r32("_dbg_draws")
+            d.press("a")
+            d.wait_state([G_IDLE, G_BANNER, G_ENEMY, G_OUTCOME], 3000)
+            duel_done = True
+            check("DUEL: 关羽 vs 敌将 replaced the attack (no RNG, target retreated, fullscreen shown)",
+                  d.hp(3) == 0 and d.r32("_dbg_draws") == draws0 and d.r8("_dbg_fs_count") > fs0,
+                  f"hp3={d.hp(3)} draws {draws0}->{d.r32('_dbg_draws')} fs {fs0}->{d.r8('_dbg_fs_count')}")
+            continue
+    d.press("start")
+check("DUEL scenario exercised", duel_done)
+check("no VM error during duel", d.r8("_dbg_vm_err") == 0)
+d.pb.stop(save=False)
+
+# TALK: deterministic replay -- by round 8 the east archer (unit 4) has come within 简雍's reach
+k = Emu()
+k.wait_state([G_IDLE], 300)
+while k.r16("_dbg_round") < 8 and k.state() != G_OUTCOME:
+    k.wait_state([G_IDLE], 3000)
+    k.press("start")
+k.wait_state([G_IDLE], 3000)
+if try_reach_and_menu(k, 7, 4):
+    for _ in range(5):
+        if k.r8("_dbg_menu_item") == 3:
+            break
+        k.press("right")
+    check("action menu offers 交谈 next to the archer", k.r8("_dbg_menu_item") == 3)
+    k.press("a")
+    k.wait_state([G_IDLE, G_BANNER, G_ENEMY, G_OUTCOME], 3000)
+    talk_done = True
+    check("TALK: 简雍 persuades the archer (faction -> PLAYER)", faction(k, 4) == 0, f"fac={faction(k, 4)}")
+    check("persuaded unit occupies as an ally (cursor shows it as own)", k.hp(4) > 0)
+check("TALK scenario exercised", talk_done)
+check("no VM error during talk", k.r8("_dbg_vm_err") == 0)
+k.pb.stop(save=False)
+
 # ------------------------------------------------------------------ in-game save: SELECT -> power off -> cold boot
 s = Emu()
 s.wait_state([G_IDLE])

@@ -9,6 +9,8 @@
 #include "rom.h"
 #include "wram.h"
 #include "dialogq.h"
+#include "eventram.h"
+#include "duel.h"
 
 #define SRAM_RUNTIME_BANK 12u
 #define SRAM_BATTLE_FLAGS 6400u
@@ -63,6 +65,20 @@ uint8_t vm_template(uint8_t idx, VmTemplate *t) PLATFORM_API
 }
 
 void vm_gold(uint16_t amount) PLATFORM_API { (void)amount; }
+
+/* called by OP_DUEL after the state change: the queue entry is played in order with the text pages */
+void vm_duel(uint8_t winner, uint8_t loser, uint8_t retreated) PLATFORM_API
+{
+    DialogQ *q = DQ;
+    if (q->n < DQ_MAX) { q->speaker[q->n] = DQ_DUEL; q->text[q->n] = (uint16_t)((winner << 8) | loser); q->n++; }
+    {
+        DuelInfo *d = DUEL_INFO;
+        ActiveUnit u;
+        d->winner = winner; d->loser = loser; d->retreated = retreated;
+        unit_load(winner, &u); d->w_cls = u.class_id; d->w_fac = u.faction; d->w_hp = u.hp;
+        unit_load(loser, &u); d->l_cls = u.class_id; d->l_fac = u.faction; d->l_hp = u.hp;
+    }
+}
 
 void vm_clear_battle_flags(void)
 {

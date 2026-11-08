@@ -1891,6 +1891,62 @@
    ]
   },
   {
+   "id": 6,
+   "trigger": "TALK",
+   "param": 7,
+   "priority": 0,
+   "once": true,
+   "condition": {
+    "leaf": "target_eq",
+    "unit": 4
+   },
+   "code": [
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_T01_TALK_JY"
+    ],
+    [
+     "RECRUIT",
+     4
+    ],
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_T01_TALK_DONE"
+    ]
+   ]
+  },
+  {
+   "id": 7,
+   "trigger": "PRE_ACTION",
+   "param": 1,
+   "priority": 0,
+   "once": true,
+   "condition": {
+    "leaf": "target_eq",
+    "unit": 3
+   },
+   "code": [
+    [
+     "TEXT",
+     "P0002",
+     "TXD_T01_DUEL_GUANYU"
+    ],
+    [
+     "DUEL",
+     1,
+     3,
+     0
+    ],
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_T01_DUEL_DONE"
+    ]
+   ]
+  },
+  {
    "id": 5,
    "trigger": "BATTLE_END",
    "param": null,

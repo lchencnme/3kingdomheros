@@ -2,6 +2,7 @@
 #ifndef GB_DIALOG_H
 #define GB_DIALOG_H
 #include <stdint.h>
-/* plays every queued page (A = next page), clears the queue; returns with the LCD off */
-void dialog_run(void) BANKED;
+/* plays queued text entries from index i up to the next non-text entry (A = next page);
+ * returns that index; leaves the LCD off if anything was shown */
+uint8_t dialog_run_from(uint8_t i) BANKED;
 #endif

@@ -88,15 +88,15 @@ static void wait_a(void)
     sfx_play(SFX_CURSOR);
 }
 
-void dialog_run(void) BANKED
+uint8_t dialog_run_from(uint8_t i) BANKED
 {
     DialogQ *q = DQ;
-    uint8_t i, first = 1, last_sp = 0xFE;
+    uint8_t first = 1, last_sp = 0xFD;
     uint16_t pal7[4];
-    if (!q->n) return;
+    if (i >= q->n || q->speaker[i] == DQ_DUEL) return i;
     dbg_dialog_active = 1;
     pal7[0] = fs_pals[0]; pal7[1] = fs_pals[1]; pal7[2] = fs_pals[2]; pal7[3] = fs_pals[3];
-    for (i = 0; i < q->n; i++) {
+    for (; i < q->n && q->speaker[i] != DQ_DUEL; i++) {
         uint8_t sp = q->speaker[i], page = 0;
         for (;;) {
             uint8_t more;
@@ -134,10 +134,10 @@ void dialog_run(void) BANKED
             page++;
         }
     }
-    q->n = 0;
     while (joypad() & J_A) vb_wait();
     input_flush();
     vb_wait();
     DISPLAY_OFF;
     dbg_dialog_active = 0;
+    return i;
 }

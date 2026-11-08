@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TRIG = {"BATTLE_START": 0, "PHASE_START": 1, "POST_MOVE": 2, "PRE_ACTION": 3, "UNIT_RETREAT": 4,
-        "ROUND_END": 5, "PHASE_END": 6, "BATTLE_END": 7}
+        "ROUND_END": 5, "PHASE_END": 6, "BATTLE_END": 7, "TALK": 8}
 PHASE = {"PLAYER": 0, "ALLY": 1, "ENEMY": 2}
 CMP = {"eq": 0, "ne": 1, "lt": 2, "le": 3, "gt": 4, "ge": 5}
 SPEAKER = {f"P{i + 1:04d}": i for i in range(8)} | {"NARRATOR": 0xFF}
@@ -111,6 +111,11 @@ class Compiler:
                 out += [0x09] + u16(args[0])
             elif name == "HP_SET":
                 out += [0x0A, self.unit(args[0])] + u16(min(args[1], 9999))
+            elif name == "DUEL":
+                out += [0x0B, self.unit(args[0]), self.unit(args[1])] + u16(min(args[2], 9999))
+            elif name in ("FACTION_SET", "RECRUIT"):
+                fac = FACTION[args[1]] if name == "FACTION_SET" else FACTION["PLAYER"]
+                out += [0x0C, self.unit(args[0]), fac]
             else:
                 die(f"unknown opcode {name}")
         return out

@@ -21,6 +21,7 @@
 #include "fs.h"
 #include "dialog.h"
 #include "dialogq.h"
+#include "duel.h"
 #include "../core/vm.h"
 #include "../core/strategy.h"
 #include "../gen/tech01_data.h"
@@ -44,6 +45,8 @@ enum {
 #define MI_ATTACK 0u
 #define MI_STRAT 1u
 #define MI_WAIT 2u
+#define MI_TALK 3u
+#define talks ((uint8_t *)ER_TALKS)
 /* UI scratch in the event region (CD00..CD1F): known strategy ids for the strategy list */
 #include "eventram.h"
 #define SLIST ((uint8_t *)ER_SLIST)
@@ -53,7 +56,7 @@ enum {
 
 static Battle B;
 static uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
-static uint8_t mitems[3], n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty;
+static uint8_t mitems[4], n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
 static uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
 static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 static const uint8_t blank16[16];
@@ -144,13 +147,29 @@ static void build_menu(void)
     for (s = 0; s < NUM_STRATEGIES; s++) if (strategy_known(&a, s)) SLIST[n_slist++] = s;
     if (ntarget) mitems[n_mitems++] = MI_ATTACK;
     if (n_slist && !(a.status_mask & (1u << ST_SILENCE))) mitems[n_mitems++] = MI_STRAT;
+    {   /* 交谈: an adjacent unit with a TALK event this actor can trigger (design doc 4.3/9.1) */
+        static const int8_t DX[4] = {0, -1, 1, 0}, DY[4] = {-1, 0, 0, 1};
+        uint8_t k;
+        n_talk = 0;
+        for (k = 0; k < 4; k++) {
+            int16_t x = (int16_t)tent_x + DX[k], y = (int16_t)tent_y + DY[k];
+            int8_t u;
+            VmFact f;
+            if (x < 0 || y < 0 || x >= (int16_t)grid_w || y >= (int16_t)grid_h) continue;
+            u = unit_at((uint8_t)x, (uint8_t)y);
+            if (u < 0 || (uint8_t)u == sel) continue;
+            f.trigger = TR_TALK; f.phase = B.phase; f.actor = sel; f.target = (uint8_t)u; f.unit = (uint8_t)u;
+            if (vm_would_fire(&B, &f)) talks[n_talk++] = (uint8_t)u;
+        }
+        if (n_talk) mitems[n_mitems++] = MI_TALK;
+    }
     mitems[n_mitems++] = MI_WAIT;
     menu = ntarget ? 0 : (uint8_t)(n_mitems - 1);   /* default: attack if possible, else wait */
 }
 
 static void hud_menu(void)
 {
-    static const uint8_t label[3] = {TX_ACT_ATTACK, TX_ACT_STRAT, TX_ACT_WAIT};
+    static const uint8_t label[4] = {TX_ACT_ATTACK, TX_ACT_STRAT, TX_ACT_WAIT, TX_ACT_TALK};
     uint8_t i;
     hud_begin();
     for (i = 0; i < n_mitems; i++) {
@@ -276,6 +295,31 @@ static uint8_t count_alive(void)
     return n;
 }
 
+/* play the VM output queue in order: runs of text pages, and the duel presentation */
+static void play_queue(void)
+{
+    uint8_t i = 0;
+    while (i < DQ->n) {
+        if (DQ->speaker[i] == DQ_DUEL) {
+            DuelInfo *d = DUEL_INFO;
+            FsSide sw, sl;
+            AttackResult r;
+            ActiveUnit u;
+            load(d->winner, &u); sw.name_tx = unit_name_tx(&u);
+            load(d->loser, &u); sl.name_tx = unit_name_tx(&u);
+            sw.cls = d->w_cls; sw.fac = d->w_fac; sw.hp = d->w_hp;
+            sl.cls = d->l_cls; sl.fac = d->l_fac; sl.hp = d->l_hp;
+            memset(&r, 0, sizeof r);
+            r.hit = 1; r.dmg = (uint16_t)(d->l_hp - u.hp); r.killed = d->retreated;
+            fs_present(&sw, &sl, &r);
+            i++;
+        } else {
+            i = dialog_run_from(i);
+        }
+    }
+    DQ->n = 0;
+}
+
 /* run the event VM for one fact; play queued dialogue (design doc 9) */
 static void fire(uint8_t trig, uint8_t phase, uint8_t actor, uint8_t target, uint8_t unit)
 {
@@ -285,11 +329,11 @@ static void fire(uint8_t trig, uint8_t phase, uint8_t actor, uint8_t target, uin
     f.trigger = trig; f.phase = phase; f.actor = actor; f.target = target; f.unit = unit;
     r = vm_fire(&B, &f);
     if (r != VM_OK) { dbg_vm_err = r; B.outcome = OUT_LOSE; }   /* BAD_SCRIPT: safe stop (9.3) */
-    if (B.n_units != n_before || count_alive() != alive_before) {
+    if (vm_units_changed || B.n_units != n_before || count_alive() != alive_before) {
         uint8_t o = SVBK_REG;                   /* spawns/retreats change the approach-field sources */
         SVBK_REG = WB_SCRATCH; ai_invalidate(W7_AI); SVBK_REG = o;
     }
-    if (DQ->n) { dialog_run(); map_mode_restore(); }
+    if (DQ->n) { play_queue(); map_mode_restore(); }
 }
 
 static void side_of_unit(uint8_t i, FsSide *s)
@@ -303,6 +347,12 @@ static void side_of_unit(uint8_t i, FsSide *s)
 static void attack_and_present(uint8_t ai, uint8_t di, AttackResult *r)
 {
     FsSide sa, sd;
+    memset(r, 0, sizeof *r);
+    fire(TR_PRE_ACTION, B.phase, ai, di, di);   /* 4.4: PRE_ACTION may replace the attack (DUEL) */
+    if (vm_action_replaced || B.outcome) {
+        if (r) { ActiveUnit t_; load(di, &t_); if (!unit_alive(&t_)) fire(TR_UNIT_RETREAT, B.phase, ai, di, di); }
+        return;
+    }
     side_of_unit(ai, &sa);
     side_of_unit(di, &sd);
     battle_attack(&B, ai, di, r);           /* logic sealed before any presentation (design doc 4.4) */
@@ -511,6 +561,16 @@ static void logic_player(void)
             uint8_t it = mitems[menu];
             if (it == MI_ATTACK) { tsel = 0; state = G_TARGET; cur_x = tent_x; cur_y = tent_y; hud_target(); }
             else if (it == MI_STRAT) { ssel = 0; state = G_SLIST; hud_slist(); }
+            else if (it == MI_TALK) {
+                ActiveUnit a;
+                uint8_t ok = commit_move_if_needed();
+                if (ok) fire(TR_TALK, B.phase, sel, talks[0], talks[0]);
+                load(sel, &a);
+                if (unit_alive(&a)) { a.action_flags |= (uint8_t)(AF_MOVED | AF_ACTED); unit_store(sel, &a); }
+                cur_x = tent_x; cur_y = tent_y;
+                state = G_IDLE; hud_dirty = 1;
+                after_action();
+            }
             else {
                 ActiveUnit a;
                 commit_move_if_needed();

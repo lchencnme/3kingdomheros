@@ -15,6 +15,7 @@
 #define TR_ROUND_END 5u
 #define TR_PHASE_END 6u
 #define TR_BATTLE_END 7u
+#define TR_TALK 8u           /* param = actor; conditions usually target_eq (design doc 9.1) */
 
 /* condition nodes */
 #define CN_ALL 0x01u
@@ -45,6 +46,8 @@
 #define OP_OUTCOME 0x08u      /* OUT_WIN / OUT_LOSE */
 #define OP_GIVE_GOLD 0x09u    /* amount u16 */
 #define OP_HP_SET 0x0Au       /* unit u8, value u16 */
+#define OP_DUEL 0x0Bu         /* winner u8, loser u8, loser_hp u16: replaces the pending normal attack, 0 draws */
+#define OP_FACTION_SET 0x0Cu  /* unit u8, faction u8: clears the unit's action for this phase (9.3) */
 
 #define SCOPE_GLOBAL 0u
 #define SCOPE_BATTLE 1u
@@ -79,9 +82,16 @@ void vm_text(uint8_t speaker, uint16_t text_id) PLATFORM_API;      /* queue a di
 uint8_t vm_template(uint8_t idx, VmTemplate *t) PLATFORM_API;      /* 0 = no such template */
 void vm_gold(uint16_t amount) PLATFORM_API;
 
+void vm_duel(uint8_t winner, uint8_t loser, uint8_t loser_retreated) PLATFORM_API;   /* before the change */
+
+/* how many events would run for this fact (matching, condition true, once unused); no side effects */
+uint8_t vm_would_fire(const Battle *b, const VmFact *f) CORE_API;
+
 /* run every event whose trigger/param/condition matches the fact (priority asc, then id asc).
  * Returns VM_OK, or an error after which the battle must stop safely (design doc 9.3). */
 uint8_t vm_fire(Battle *b, const VmFact *f) CORE_API;
 /* number of events executed by the last vm_fire (for tests) */
 extern uint8_t vm_last_ran;
+/* set by the last vm_fire: a DUEL replaced the pending action; units were spawned/removed/converted */
+extern uint8_t vm_action_replaced, vm_units_changed;
 #endif

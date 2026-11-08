@@ -30,6 +30,8 @@ void vm_flag_set(uint8_t s, uint16_t id, uint8_t v) PLATFORM_API { uint8_t *f = 
 void vm_text(uint8_t sp, uint16_t id) PLATFORM_API { speakers[n_text] = sp; texts[n_text++] = id; }
 uint8_t vm_template(uint8_t i, VmTemplate *t) PLATFORM_API { if (i >= 4) return 0; *t = tpls[i]; return 1; }
 void vm_gold(uint16_t a) PLATFORM_API { gold += a; }
+static uint8_t duels;
+void vm_duel(uint8_t w, uint8_t l, uint8_t r) PLATFORM_API { (void)w; (void)l; (void)r; duels++; }
 
 static Battle B;
 static uint16_t at;
@@ -147,6 +149,42 @@ int main(void)
     c0 = at; E(0x7E, OP_END);
     ev(TR_ROUND_END, VM_ANY, 0, VM_NO_ONCE, 0xFFFF, c0, 2);
     CHECK(vm_fire(&B, &f) == VM_BAD_SCRIPT, "unknown opcode -> BAD_SCRIPT");
+    /* TALK availability (would_fire) + FACTION_SET recruit; DUEL replaces the action with 0 draws */
+    reset();
+    battle_spawn(&B, 2, 0xFFFF, 3, FAC_ENEMY, 1, 2, 1);           /* enemy archer next to unit 0 */
+    {
+        uint16_t cnd = at;
+        E(CN_TARGET_EQ, 2);
+        c0 = at; E(OP_FACTION_SET, 2, FAC_PLAYER, OP_END);
+        ev(TR_TALK, 0, 0, 0, cnd, c0, 4);
+        f.trigger = TR_TALK; f.actor = 0; f.target = 1;
+        CHECK(vm_would_fire(&B, &f) == 0, "talk to another unit: no event");
+        f.target = 2;
+        CHECK(vm_would_fire(&B, &f) == 1, "talk to the archer is available");
+        f.actor = 1;
+        CHECK(vm_would_fire(&B, &f) == 0, "only the scripted actor can talk");
+        f.actor = 0;
+        vm_fire(&B, &f);
+        CHECK(host_units[2].faction == FAC_PLAYER && host_occ[1 * 10 + 2] == SIDE_A && vm_units_changed, "recruited: faction + occupancy side");
+        CHECK(host_units[2].action_flags & AF_ACTED, "recruit cannot act again this phase");
+        CHECK(vm_would_fire(&B, &f) == 0, "once talk no longer available");
+    }
+    reset();
+    {
+        uint16_t cnd = at;
+        uint32_t d0 = B.rng.draws;
+        E(CN_TARGET_EQ, 1);
+        c0 = at; E(OP_TEXT, 1, 3, 0, OP_DUEL, 0, 1, 0, 0, OP_END);
+        ev(TR_PRE_ACTION, 0, 0, 0, cnd, c0, 10);
+        duels = 0;
+        f.trigger = TR_PRE_ACTION; f.actor = 0; f.target = 1;
+        vm_fire(&B, &f);
+        CHECK(vm_action_replaced && duels == 1, "duel replaced the attack and was presented");
+        CHECK(host_units[1].hp == 0 && (host_units[1].action_flags & AF_RETREAT) && host_occ[8 * 10 + 8] == 0, "duel loser retreated");
+        CHECK(host_units[0].action_flags & AF_ACTED, "duel consumes the winner's action");
+        CHECK(B.rng.draws == d0, "duel draws no RNG");
+        CHECK(B.outcome == OUT_WIN, "last enemy removed by duel -> win");
+    }
     printf("vm: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
 }
