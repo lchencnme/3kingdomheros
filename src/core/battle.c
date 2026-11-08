@@ -95,10 +95,13 @@ static uint8_t can_counter(const ActiveUnit *d, const ActiveUnit *a_at)
     return battle_in_range(d, d->x, d->y, a_at);
 }
 
+static ActiveUnit pv_a_at;   /* static: keeps battle_preview's 40B copy off the stack */
+
 void battle_preview(const ActiveUnit *a, uint8_t fx, uint8_t fy, const ActiveUnit *d, uint8_t weather,
                     AttackPreview *p) CORE_API
 {
-    ActiveUnit a_at = *a;
+#define a_at pv_a_at
+    a_at = *a;
     uint8_t td = grid_terrain(d->x, d->y) & 0x0F, ta = grid_terrain(fx, fy) & 0x0F;
     uint16_t dhp;
     a_at.x = fx; a_at.y = fy;
@@ -108,6 +111,7 @@ void battle_preview(const ActiveUnit *a, uint8_t fx, uint8_t fy, const ActiveUni
     p->counter = dhp > 0 && can_counter(d, &a_at);
     p->c_hit_pct = p->counter ? rules_phys_hit(d->agility, a->agility, d->morale, ta) : 0;
     p->c_dmg = p->counter ? calc_dmg(d, dhp, &a_at, ta, weather, 100) : 0;
+#undef a_at
 }
 
 static void retreat(ActiveUnit *u)

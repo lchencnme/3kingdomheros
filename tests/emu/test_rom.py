@@ -114,6 +114,13 @@ class Emu:
     def canary_ok(self):
         return all(self.m[0xCE00 + i] == 0xA5 for i in range(16))
 
+    def stack_free(self):
+        """bytes of the A5 fill pattern still untouched above CE00 (stack high-water margin)"""
+        n = 0
+        while 0xCE00 + n < 0xD000 and self.m[0xCE00 + n] == 0xA5:
+            n += 1
+        return n
+
     def png(self, path):
         a = self.pb.screen.ndarray
         h, w = a.shape[0], a.shape[1]
@@ -273,7 +280,7 @@ def play_battle(shots=False, max_frames=60 * 60 * 20):
     res = dict(outcome=em.r8("_dbg_outcome"), round=em.r16("_dbg_round"), rng=em.r32("_dbg_rng"),
                draws=em.r32("_dbg_draws"), hps=[em.hp(i) for i in range(N_UNITS)],
                worst_ai=worst_ai, worst_range=worst_range, enemy_attacked=saw_enemy_attack,
-               hp_ok=hp_ok, canary=em.canary_ok(), state=em.state())
+               hp_ok=hp_ok, canary=em.canary_ok(), stack_free=em.stack_free(), state=em.state())
     if shots:
         em.frames(10)
         em.png(ROM.parent / "shot_outcome.png")
@@ -293,6 +300,7 @@ check(f"AI decision <=750ms (worst {r1['worst_ai']} frames)", r1["worst_ai"] <= 
 check(f"move range <=150ms in battle (worst {r1['worst_range']} frames)", r1["worst_range"] <= 9)
 check("hp never out of range", r1["hp_ok"])
 check("stack canary intact after full battle", r1["canary"])
+check(f"stack high-water margin >= 64B (free {r1['stack_free']})", r1["stack_free"] >= 64)
 check("restart from outcome resets the battle", r1["restart_ok"])
 check("replay: identical outcome/round/RNG/draws/hp",
       all(r1[k] == r2[k] for k in ("outcome", "round", "rng", "draws", "hps")), f"{r1} vs {r2}")

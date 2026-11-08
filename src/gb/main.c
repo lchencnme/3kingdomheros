@@ -1,3 +1,4 @@
+#pragma bank 5   /* game logic, HUD and map view: code bank 5 (design doc 11.3) */
 /* 《三国豪杰传》 TECH01 v2 (design doc 16.2 G1 slice).
  * Player phase: select -> move preview -> action menu (攻击/待命) -> target -> resolve.
  * Enemy phase: core AI (第8章) per unit with map-fast presentation. Victory/defeat + restart.
@@ -500,12 +501,16 @@ static void publish_debug(void)
     dbg_frame_lo++;
 }
 
-void main(void)
+void game_run(void) BANKED
 {
     uint8_t i;
     DISPLAY_OFF;
     if (_cpu == CGB_TYPE) cpu_fast();          /* design doc 11.2: double speed */
-    memset((void *)0xCE00, 0xA5, 16);          /* stack canary (11.4) */
+    {   /* stack canary + high-water pattern (11.4): fill CE00 .. current SP-32 with A5 */
+        uint8_t probe;
+        uint16_t top = (uint16_t)&probe - 32u;
+        memset((void *)0xCE00, 0xA5, (uint16_t)(top - 0xCE00u));
+    }
     options = OPT_AUTOSAVE;
 
     set_bkg_palette(0, 8, tech01_bg_pals);

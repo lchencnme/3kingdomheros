@@ -104,9 +104,12 @@ static uint16_t attack_value(AiScratch *s, uint8_t oi, const ActiveUnit *a, uint
     return o->e_att;
 }
 
+static ActiveUnit ai_t;   /* static (fixed RAM) to keep the deepest call chain off the 512B stack */
+
 void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mode, AiCommand *out) CORE_API
 {
-    ActiveUnit a, t;
+    ActiveUnit a;
+#define t ai_t
     uint8_t i, side, mtype, ly, lx, have = 0, armin, armax;
     uint16_t here_field, bcnt = 0, bcell = 0;
     uint8_t bcost = 0;
@@ -222,4 +225,5 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
         }
     }
     PROF_SET(dbg_ai_t_cand, PROF_T() - pt0);
+#undef t
 }

@@ -1,3 +1,4 @@
+#pragma bank 5   /* game logic, HUD and map view: code bank 5 (design doc 11.3) */
 #include <gb/gb.h>
 #include "mapview.h"
 #include "wram.h"
