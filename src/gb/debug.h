@@ -17,8 +17,6 @@ extern volatile uint16_t dbg_cam_y;
 extern volatile uint16_t dbg_round;
 extern volatile uint16_t dbg_t_range;
 extern volatile uint16_t dbg_t_ai;
-extern volatile uint8_t dbg_unit_xy[20];
-extern volatile uint16_t dbg_unit_hp[10];
 extern volatile uint32_t dbg_rng;
 extern volatile uint32_t dbg_draws;
 extern volatile uint8_t dbg_save_result;
@@ -35,4 +33,6 @@ extern volatile uint8_t dbg_dialog_active;
 extern volatile uint8_t dbg_dialog_pages;
 extern volatile uint8_t dbg_vm_err;
 extern volatile uint8_t dbg_n_units;
+extern volatile uint8_t dbg_strat_casts;
+extern volatile uint8_t dbg_menu_item;
 #endif

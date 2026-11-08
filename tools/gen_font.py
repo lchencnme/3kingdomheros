@@ -3,7 +3,7 @@
 
 - Scans content/text/*.json plus class/terrain names in content/default_rules.json.
 - Assigns stable glyph IDs in content/text/glyph_registry.json (append-only, never renumbered).
-- Rasterises only the used glyphs from the OFL Ark Pixel 12px BDF into 12x12 1bpp
+- Rasterises only the used glyphs from the OFL Fusion Pixel 12px BDF into 12x12 1bpp
   (12 rows x u16, MSB first) plus a width table (6 = half width, 12 = full width).
 - Encodes strings as u16 glyph-ID streams. Control codes: 0xFFF1 = number variable {n},
   0xFFFE = newline, 0xFFFF = end. Unknown characters fail the build (no silent tofu).
@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BDF = ROOT / "third_party" / "fonts" / "ark-pixel-12px-monospaced-zh_hans.bdf"
+BDF = ROOT / "third_party" / "fonts" / "fusion-pixel-12px-monospaced-zh_hans.bdf"
 REG = ROOT / "content" / "text" / "glyph_registry.json"
 OUT_H = ROOT / "src" / "gen" / "text_data.h"
 OUT_C = ROOT / "src" / "gen" / "text_data.c"
@@ -92,6 +92,8 @@ def main():
         texts[f"TX_CLASS_{c['id']}"] = c["name"]
     for t in rules["terrain"]:
         texts[f"TX_TERRAIN_{t['id']}"] = t["name"]
+    for s_ in rules["strategies"]:
+        texts[f"TX_STRAT_{s_['id']}"] = s_["name"]
 
     def chars_of(s):
         return re.sub(r"\{n\}", "", s).replace("\n", "")
@@ -202,7 +204,8 @@ def main():
           "extern const uint8_t glyph_width[];",
           "extern const uint16_t text_pool[];", "extern const uint16_t text_offset[];",
           "extern const uint8_t digit_glyph[10];",
-          "extern const uint8_t class_name_tx[];", "extern const uint8_t terrain_name_tx[];", "#endif"]
+          "extern const uint8_t class_name_tx[];", "extern const uint8_t terrain_name_tx[];",
+          "extern const uint8_t strat_name_tx[];", "#endif"]
     c = ["#pragma bank 2", "#include \"text_data.h\""]    # asset bank: read through rom.c gateway
     ci = ['#include "text_data.h"']
 
@@ -219,6 +222,7 @@ def main():
     ci += arr("text_offset", "uint16_t", offs + [len(pool)])
     ci.append("const uint8_t digit_glyph[10] = {" + ", ".join(str(reg["glyphs"][d]) for d in "0123456789") + "};")
     ci.append("const uint8_t class_name_tx[] = {" + ", ".join(str(names.index(f"TX_CLASS_{c_['id']}")) for c_ in rules["classes"]) + "};")
+    ci.append("const uint8_t strat_name_tx[] = {" + ", ".join(str(names.index(f"TX_STRAT_{s_['id']}")) for s_ in rules["strategies"]) + "};")
     ci.append("const uint8_t terrain_name_tx[] = {" + ", ".join(str(names.index(f"TX_TERRAIN_{t_['id']}")) for t_ in rules["terrain"]) + "};")
     OUT_H.write_text("\n".join(h) + "\n", encoding="utf-8")
     OUT_C.write_text("\n".join(c) + "\n", encoding="utf-8")

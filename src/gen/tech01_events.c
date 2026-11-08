@@ -9,6 +9,6 @@ const VmEvent tech01_events[TECH01_EVENT_COUNT] = {
     {7, 255, 0, 0, 0x0004, 0x0048, 0x004A, 5},
 };
 const VmTemplate tech01_templates[TECH01_TEMPLATE_COUNT] = {
-    {0xFFFF, 6, 2, 2, 7},
-    {0xFFFF, 3, 2, 2, 8},
+    {0xFFFF, 6, 2, 2, 8},
+    {0xFFFF, 3, 2, 2, 9},
 };

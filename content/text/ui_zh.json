@@ -30,5 +30,20 @@
   "TX_AUTOSAVE": "自动存档中",
   "TX_CONTINUE_Q": "发现中断存档",
   "TX_CONTINUE_KEYS": "START继续  A新开",
-  "TX_LOAD_FAIL": "读取失败"
+  "TX_LOAD_FAIL": "读取失败",
+  "TX_ACT_STRAT": "策略",
+  "TX_MP": "MP",
+  "TX_RANGE": "射程",
+  "TX_CAST_HINT": "选择目标 B返回",
+  "TX_CAST_OK": "A施放",
+  "TX_HEAL": "恢复",
+  "TX_NAME_JIANYONG": "简雍",
+  "TX_STATUS_ON": "陷入",
+  "TX_SR_1": "MP不足",
+  "TX_SR_2": "未习得",
+  "TX_SR_3": "被禁策",
+  "TX_SR_4": "射程外",
+  "TX_SR_5": "视线受阻",
+  "TX_SR_6": "天气不符",
+  "TX_SR_7": "无有效目标"
 }

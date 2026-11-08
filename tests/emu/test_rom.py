@@ -23,7 +23,7 @@ for line in ROM.with_suffix(".noi").read_text().splitlines():
         SYMS[p[1]] = int(p[2], 16)
 
 G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE = range(9)
-N_UNITS = 7
+N_UNITS = 8
 results = []
 
 
@@ -74,12 +74,13 @@ class Emu:
         return self.m[a] | (self.m[a + 1] << 8) | (self.m[a + 2] << 16) | (self.m[a + 3] << 24)
 
     def unit(self, i):
-        a = SYMS["_dbg_unit_xy"] + 2 * i
-        return self.m[a], self.m[a + 1]
+        """(x, y) of unit i straight from its 40 B record in WRAM bank1 (design doc 附录B.1)"""
+        a = 0xD000 + 40 * i
+        return self.m[1, a + 7], self.m[1, a + 8]
 
     def hp(self, i):
-        a = SYMS["_dbg_unit_hp"] + 2 * i
-        return self.m[a] | (self.m[a + 1] << 8)
+        a = 0xD000 + 40 * i
+        return self.m[1, a + 10] | (self.m[1, a + 11] << 8)
 
     def state(self):
         return self.r8("_dbg_state")
@@ -380,7 +381,10 @@ def move_unit(em, i, x, y):
     em.goto(*em.unit(i)); em.press("a"); em.wait_state([G_MOVE], 20)
     em.goto(x, y); em.press("a"); em.wait_state([G_MENU], 30)
     if em.state() == G_MENU:
-        em.press("right")          # select 待命 when attack is offered
+        for _ in range(4):         # move the menu cursor onto 待命 (MI_WAIT = 2)
+            if em.r8("_dbg_menu_item") == 2:
+                break
+            em.press("right")
         em.press("a")
     em.wait_state([G_IDLE, G_BANNER, G_ENEMY], 300)
 
@@ -397,7 +401,7 @@ while v.r16("_dbg_round") < 4 and v.fc < 30000 and v.state() != G_OUTCOME:
     if v.state() == G_IDLE:
         v.press("start")
     v.frames(1)
-check(f"round-3 reinforcements spawned (units {v.r8('_dbg_n_units')})", v.r8("_dbg_n_units") == 9)
+check(f"round-3 reinforcements spawned (units {v.r8('_dbg_n_units')})", v.r8("_dbg_n_units") == 10)
 check("no VM error", v.r8("_dbg_vm_err") == 0)
 v.wait_state([G_IDLE], 3000)
 v.press("select"); v.frames(90)
@@ -412,8 +416,32 @@ while w.r16("_dbg_round") < 6 and w.fc < 40000 and w.state() != G_OUTCOME:
         w.press("start")
     w.frames(1)
 check("battle flags restored: no duplicate spawn / BAD_SCRIPT after load",
-      w.r8("_dbg_vm_err") == 0 and w.r8("_dbg_n_units") == 9)
+      w.r8("_dbg_vm_err") == 0 and w.r8("_dbg_n_units") == 10)
 w.pb.stop(save=False)
+
+# ------------------------------------------------------------------ strategies (design doc 5.3/6.3)
+s2 = Emu()
+s2.wait_state([G_IDLE], 300)
+mp_before = s2.m[1, 0xD000 + 40 * 7 + 14]                # 简雍 (unit 7) mp
+s2.goto(*s2.unit(7)); s2.press("a"); s2.wait_state([G_MOVE], 20)
+s2.press("a"); s2.wait_state([G_MENU], 20)               # stay in place
+for _ in range(4):
+    if s2.r8("_dbg_menu_item") == 1:
+        break
+    s2.press("right")
+check("action menu offers 策略 for 文士", s2.r8("_dbg_menu_item") == 1)
+s2.press("a"); s2.wait_state([9], 20)                     # G_SLIST
+check("strategy list opens", s2.state() == 9)
+# list for 文士 L1 (by id): [0 火攻, 3 激流, 6 滚木, 9 补给, 15 绊马, 18 投毒, 19 安抚] -> 补给 is index 3
+for _ in range(3):
+    s2.press("right")
+s2.press("a"); s2.wait_state([10], 20)                    # G_SAIM, cursor on the caster
+check("aim mode", s2.state() == 10)
+s2.press("a")                                             # 补给 on himself (valid even at full HP)
+s2.wait_state([G_IDLE, G_SHOW, G_BANNER, G_ENEMY], 120)
+check(f"strategy cast spends MP ({mp_before} -> {s2.m[1, 0xD000 + 40 * 7 + 14]})",
+      s2.r8("_dbg_strat_casts") == 1 and s2.m[1, 0xD000 + 40 * 7 + 14] == mp_before - 4)
+s2.pb.stop(save=False)
 
 # ------------------------------------------------------------------ in-game save: SELECT -> power off -> cold boot
 s = Emu()

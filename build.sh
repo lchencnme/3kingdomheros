@@ -27,6 +27,10 @@ cc -std=c99 -Wall -Wextra -O1 -o build/host/test_vm tests/host/test_vm.c tests/h
    tests/host/host_grid.c src/core/vm.c src/core/battle.c src/core/rng.c src/core/rules.c src/core/path.c \
    src/gen/rules_data.c
 build/host/test_vm
+cc -std=c99 -Wall -Wextra -O1 -o build/host/test_strategy tests/host/test_strategy.c tests/host/host_units.c \
+   tests/host/host_grid.c src/core/strategy.c src/core/battle.c src/core/rng.c src/core/rules.c src/core/path.c \
+   src/gen/rules_data.c
+build/host/test_strategy
 tools/build_rom.sh                     # single source of truth for the ROM link line
 shasum -a 256 build/gb/sanguo_hjz.gbc
 python3 tests/emu/test_rom.py build/gb/sanguo_hjz.gbc

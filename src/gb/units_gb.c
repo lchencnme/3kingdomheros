@@ -3,7 +3,7 @@
 #include <string.h>
 #include "../core/battle.h"
 #include "wram.h"
-#define SNAP_MAX 10u
+#define SNAP_MAX 12u
 
 #define W1_UNITS ((ActiveUnit *)0xD000)
 

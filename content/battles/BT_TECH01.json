@@ -1561,13 +1561,18 @@
    [
     5,
     13
+   ],
+   [
+    3,
+    13
    ]
   ],
-  "max_count": 3,
+  "max_count": 4,
   "forced": [
    "CH_LIUBEI",
    "CH_GUANYU",
-   "CH_ZHANGFEI"
+   "CH_ZHANGFEI",
+   "CH_JIANYONG"
   ],
   "forbidden": []
  },
@@ -1736,7 +1741,7 @@
    "class": 6,
    "level": 2,
    "faction": "ENEMY",
-   "instance_id": 7
+   "instance_id": 8
   },
   {
    "template": 1,
@@ -1744,7 +1749,7 @@
    "class": 3,
    "level": 2,
    "faction": "ENEMY",
-   "instance_id": 8
+   "instance_id": 9
   }
  ],
  "events": [
@@ -1830,11 +1835,11 @@
      },
      {
       "leaf": "target_eq",
-      "unit": 7
+      "unit": 8
      },
      {
       "leaf": "target_eq",
-      "unit": 8
+      "unit": 9
      }
     ]
    },

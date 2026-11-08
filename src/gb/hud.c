@@ -13,8 +13,9 @@
 
 #define LINE_TILES 18u
 /* text fetch buffers live in the event region (CC40..CCFF) to keep them off the 512 B stack */
-#define PAGE_BUF ((uint16_t *)0xCC40u)       /* 64 codes = 128 B */
-#define LINE_BUF ((uint16_t *)0xCCC0u)       /* 25 codes = 50 B */
+#include "eventram.h"
+#define PAGE_BUF ((uint16_t *)ER_PAGE_BUF)   /* 64 codes = 128 B */
+#define LINE_BUF ((uint16_t *)ER_LINE_BUF)   /* 25 codes = 50 B */
 
 #define LINE_GLYPHS 24u
 #define LINE_BYTES (2u * LINE_TILES * 16u)   /* 576 */
@@ -23,8 +24,9 @@
 __at(0xC800) uint8_t hud_tiles[LINE_BYTES];
 __at(0xCA40) uint8_t hud_bits[16 * LINE_TILES];
 
-static uint16_t glyphs[3][LINE_GLYPHS];   /* 0/1 = HUD lines (dialogue text), 2 = dialogue name */
-static uint8_t nglyph[3];
+/* glyph lists 0/1 = HUD lines (dialogue text), 2 = dialogue name; kept in the event region */
+#define GLY(l, i) (((uint16_t *)ER_GLYPHS)[(uint8_t)((l) * LINE_GLYPHS) + (i)])
+#define nglyph ((uint8_t *)ER_NGLYPH)
 static uint8_t shown, blank;
 static uint8_t job;            /* 0 idle, 1 raster L0, 2 dma L0, 3 raster L1, 4 dma L1, 5 prep ids, 6 flip */
 static uint8_t job_page;       /* page being drawn */
@@ -36,7 +38,7 @@ void hud_begin(void) { nglyph[0] = nglyph[1] = nglyph[2] = 0; }
 
 static void add(uint8_t line, uint16_t g)
 {
-    if (nglyph[line] < LINE_GLYPHS) glyphs[line][nglyph[line]++] = g;
+    if (nglyph[line] < LINE_GLYPHS) GLY(line, nglyph[line]++) = g;
 }
 
 void hud_num(uint8_t line, uint16_t n)
@@ -114,7 +116,7 @@ void hud_raster(uint8_t line)
     uint8_t i, x = 0;
     memset(hud_bits, 0, sizeof hud_bits);
     for (i = 0; i < nglyph[line]; i++) {
-        uint16_t g = glyphs[line][i];
+        uint16_t g = GLY(line, i);
         uint8_t w = glyph_width[g], col, sh, last;
         uint8_t rows[24];
         if ((uint16_t)x + w > LINE_TILES * 8u) break;

@@ -22,6 +22,7 @@
 #include "dialog.h"
 #include "dialogq.h"
 #include "../core/vm.h"
+#include "../core/strategy.h"
 #include "../gen/tech01_data.h"
 #include "../gen/text_data.h"
 
@@ -30,21 +31,29 @@ typedef char ai_fits_bank7[(sizeof(AiScratch) <= 0x400u) ? 1 : -1];
 
 void units_clear(void);
 void units_snapshot(uint8_t n);
-#define MAX_SHOWN 10u               /* OBJ placeholders: up to 10 units (20 OBJ + cursor) */
+#define MAX_SHOWN 12u               /* OBJ placeholders: up to 12 units (24 OBJ + cursor) */
 extern uint8_t snap_x[MAX_SHOWN], snap_y[MAX_SHOWN], snap_fac[MAX_SHOWN], snap_flags[MAX_SHOWN];
 extern uint16_t snap_hp[MAX_SHOWN];
 void vm_clear_battle_flags(void);
 #define SNAP_ALIVE(i) (snap_hp[i] && !(snap_flags[i] & (AF_RETREAT | AF_DEAD | AF_AWAY)))
 
 enum {
-    G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE
+    G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE, G_SLIST, G_SAIM
 };
+
+#define MI_ATTACK 0u
+#define MI_STRAT 1u
+#define MI_WAIT 2u
+/* UI scratch in the event region (CD00..CD1F): known strategy ids for the strategy list */
+#include "eventram.h"
+#define SLIST ((uint8_t *)ER_SLIST)
+#define targets ((uint8_t *)ER_TARGETS)
 
 #define OPT_AUTOSAVE 0x01u        /* design doc 11.6: autosave at player phase start, default on */
 
 static Battle B;
 static uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
-static uint8_t targets[8];
+static uint8_t mitems[3], n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty;
 static uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
 static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 static const uint8_t blank16[16];
@@ -68,6 +77,7 @@ static uint8_t unit_name_tx(const ActiveUnit *u)
     if (u->character_id == 1) return TX_NAME_LIUBEI;
     if (u->character_id == 2) return TX_NAME_GUANYU;
     if (u->character_id == 3) return TX_NAME_ZHANGFEI;
+    if (u->character_id == 8) return TX_NAME_JIANYONG;
     return class_name_tx[u->class_id];
 }
 
@@ -125,16 +135,83 @@ static void hud_unit_or_terrain(void)
     hud_end();
 }
 
+static void build_menu(void)
+{
+    ActiveUnit a;
+    uint8_t s;
+    load(sel, &a);
+    n_mitems = 0; n_slist = 0;
+    for (s = 0; s < NUM_STRATEGIES; s++) if (strategy_known(&a, s)) SLIST[n_slist++] = s;
+    if (ntarget) mitems[n_mitems++] = MI_ATTACK;
+    if (n_slist && !(a.status_mask & (1u << ST_SILENCE))) mitems[n_mitems++] = MI_STRAT;
+    mitems[n_mitems++] = MI_WAIT;
+    menu = ntarget ? 0 : (uint8_t)(n_mitems - 1);   /* default: attack if possible, else wait */
+}
+
 static void hud_menu(void)
 {
+    static const uint8_t label[3] = {TX_ACT_ATTACK, TX_ACT_STRAT, TX_ACT_WAIT};
+    uint8_t i;
     hud_begin();
-    if (ntarget) {
-        if (menu == 0) hud_tx(0, TX_ARROW, 0); else { hud_space(0); hud_space(0); }
-        hud_tx(0, TX_ACT_ATTACK, 0); hud_space(0); hud_space(0);
+    for (i = 0; i < n_mitems; i++) {
+        if (i == menu) hud_tx(0, TX_ARROW, 0); else { hud_space(0); hud_space(0); }
+        hud_tx(0, label[mitems[i]], 0);
+        hud_space(0);
     }
-    if (menu == 1 || !ntarget) hud_tx(0, TX_ARROW, 0); else { hud_space(0); hud_space(0); }
-    hud_tx(0, TX_ACT_WAIT, 0);
     hud_tx(1, TX_MOVE_HINT, 0);
+    hud_end();
+    dbg_menu_item = mitems[menu];
+}
+
+static void hud_slist(void)
+{
+    ActiveUnit a;
+    uint8_t s = SLIST[ssel];
+    load(sel, &a);
+    hud_begin();
+    hud_tx(0, TX_ARROW, 0); hud_tx(0, strat_name_tx[s], 0); hud_space(0);
+    hud_tx(0, TX_MP, 0); hud_num(0, strategy_defs[s].mp); hud_space(0);
+    hud_tx(0, TX_RANGE, 0); hud_num(0, strategy_defs[s].range);
+    if (a.mp < strategy_defs[s].mp) hud_tx(1, TX_SR_1, 0); else hud_tx(1, TX_CAST_HINT, 0);
+    hud_end();
+}
+
+/* caster is assumed at its tentative cell: temporarily place it there for the check */
+static uint8_t aim_check(void)
+{
+    ActiveUnit a;
+    uint8_t ox, oy, r;
+    load(sel, &a);
+    ox = a.x; oy = a.y;
+    if (ox != tent_x || oy != tent_y) { a.x = tent_x; a.y = tent_y; unit_store(sel, &a); }
+    r = strategy_check(&B, sel, SLIST[ssel], aim_x, aim_y);
+    if (ox != tent_x || oy != tent_y) { a.x = ox; a.y = oy; unit_store(sel, &a); }
+    return r;
+}
+
+static void hud_aim(void)
+{
+    uint8_t r = aim_check();
+    hud_begin();
+    hud_tx(0, strat_name_tx[SLIST[ssel]], 0); hud_space(0); hud_tx(0, TX_CAST_HINT, 0);
+    if (r == SR_OK) hud_tx(1, TX_CAST_OK, 0); else hud_tx(1, (uint8_t)(TX_SR_1 + r - 1u), 0);
+    hud_end();
+}
+
+static void hud_strat_result(uint8_t sid, const StrategyResult *sr)
+{
+    uint8_t i, any_hit = 0, any_kill = 0;
+    uint16_t total = 0;
+    for (i = 0; i < sr->n; i++) { any_hit |= sr->hit[i]; any_kill |= sr->killed[i]; total += sr->amount[i]; }
+    hud_begin();
+    hud_tx(0, strat_name_tx[sid], 0); hud_space(0);
+    if (!any_hit) hud_tx(0, TX_MISS, 0);
+    else if (strategy_defs[sid].effect == FX_HEAL) { hud_tx(0, TX_HEAL, 0); hud_num(0, total); }
+    else if (total) { hud_tx(0, TX_DMG, 0); hud_num(0, total); }
+    else if (strategy_defs[sid].status != ST_NONE) hud_tx(0, TX_STATUS_ON, 0);
+    if (any_kill) { hud_tx(1, TX_RETREAT, 0); sfx_play(SFX_RETREAT); }
+    else if (any_hit) sfx_play(SFX_HIT);
+    if (sr->levels) { hud_space(1); hud_tx(1, TX_LEVELUP, 0); }
     hud_end();
 }
 
@@ -419,7 +496,7 @@ static void logic_player(void)
                 sfx_play(SFX_CONFIRM);
                 tent_x = cur_x; tent_y = cur_y;
                 collect_targets();
-                menu = ntarget ? 0 : 1;
+                build_menu();
                 state = G_MENU;
                 mapview_highlight(0);
                 hud_menu();
@@ -427,10 +504,13 @@ static void logic_player(void)
         }
         break;
     case G_MENU:
-        if (ntarget && (in_dx || in_dy)) { menu ^= 1; hud_menu(); }
+        if (n_mitems > 1 && (in_dx > 0 || in_dy > 0)) { menu = (uint8_t)((menu + 1) % n_mitems); hud_menu(); }
+        else if (n_mitems > 1 && (in_dx < 0 || in_dy < 0)) { menu = (uint8_t)((menu + n_mitems - 1) % n_mitems); hud_menu(); }
         else if (in_pressed & J_B) { state = G_MOVE; mapview_highlight(1); hud_begin(); hud_tx(0, TX_MOVE_HINT, 0); hud_end(); }
         else if (in_pressed & J_A) {
-            if (menu == 0 && ntarget) { tsel = 0; state = G_TARGET; cur_x = tent_x; cur_y = tent_y; hud_target(); }
+            uint8_t it = mitems[menu];
+            if (it == MI_ATTACK) { tsel = 0; state = G_TARGET; cur_x = tent_x; cur_y = tent_y; hud_target(); }
+            else if (it == MI_STRAT) { ssel = 0; state = G_SLIST; hud_slist(); }
             else {
                 ActiveUnit a;
                 commit_move_if_needed();
@@ -441,6 +521,37 @@ static void logic_player(void)
                 after_action();
             }
         }
+        break;
+    case G_SLIST:
+        if (in_dx > 0 || in_dy > 0) { ssel = (uint8_t)((ssel + 1) % n_slist); hud_slist(); }
+        else if (in_dx < 0 || in_dy < 0) { ssel = (uint8_t)((ssel + n_slist - 1) % n_slist); hud_slist(); }
+        else if (in_pressed & J_B) { state = G_MENU; hud_menu(); }
+        else if (in_pressed & J_A) {
+            ActiveUnit a;
+            load(sel, &a);
+            if (a.mp < strategy_defs[SLIST[ssel]].mp) sfx_play(SFX_ERROR);
+            else { aim_x = tent_x; aim_y = tent_y; state = G_SAIM; aim_dirty = 1; sfx_play(SFX_CONFIRM); }
+        }
+        break;
+    case G_SAIM:
+        if (in_dx || in_dy) {
+            int16_t nx = (int16_t)aim_x + in_dx, ny = (int16_t)aim_y + in_dy;
+            if (nx >= 0 && ny >= 0 && nx < (int16_t)grid_w && ny < (int16_t)grid_h) { aim_x = (uint8_t)nx; aim_y = (uint8_t)ny; aim_dirty = 1; }
+        } else if (in_pressed & J_B) { state = G_SLIST; cur_x = tent_x; cur_y = tent_y; hud_slist(); }
+        else if (in_pressed & J_A) {
+            if (aim_check() != SR_OK) sfx_play(SFX_ERROR);
+            else if (commit_move_if_needed()) {    /* 4.3 confirm boundary */
+                StrategyResult sr;
+                uint8_t sid = SLIST[ssel], k;
+                strategy_cast(&B, sel, sid, aim_x, aim_y, &sr);
+                dbg_strat_casts++;
+                hud_strat_result(sid, &sr);
+                for (k = 0; k < sr.n; k++) if (sr.killed[k]) fire(TR_UNIT_RETREAT, B.phase, sel, sr.unit[k], sr.unit[k]);
+                cur_x = tent_x; cur_y = tent_y;
+                state = G_SHOW; timer = 50; next_state = G_IDLE;
+            } else { cur_x = tent_x; cur_y = tent_y; state = G_IDLE; hud_dirty = 1; after_action(); }
+        }
+        if (state == G_SAIM) { cur_x = aim_x; cur_y = aim_y; if (aim_dirty) { hud_aim(); aim_dirty = 0; } }
         break;
     case G_TARGET:
         if (in_dx > 0 || in_dy > 0) { tsel = (uint8_t)((tsel + 1) % ntarget); hud_target(); }
@@ -590,17 +701,11 @@ static void logic(void)
 
 static void publish_debug(void)
 {
-    uint8_t i;
     dbg_state = state; dbg_sel = sel; dbg_cur_x = cur_x; dbg_cur_y = cur_y;
     dbg_cam_x = cam_x; dbg_cam_y = cam_y;
     dbg_outcome = B.outcome; dbg_round = B.round; dbg_phase = B.phase;
     dbg_rng = B.rng.state; dbg_draws = B.rng.draws;
-    for (i = 0; i < MAX_SHOWN; i++) {             /* snapshot taken by place_sprites this frame */
-        uint8_t live = i < B.n_units;
-        dbg_unit_xy[i * 2] = live ? snap_x[i] : 0; dbg_unit_xy[i * 2 + 1] = live ? snap_y[i] : 0;
-        dbg_unit_hp[i] = live ? snap_hp[i] : 0;
-    }
-    dbg_n_units = B.n_units;
+    dbg_n_units = B.n_units;                      /* tests read the 40 B unit records in WRAM bank1 */
     dbg_frame_lo++;
 }
 

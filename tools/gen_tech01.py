@@ -200,6 +200,7 @@ UNITS = [  # (name, char_tag, class, faction, x, y)
     ("弓手", "ANON", 3, "ENEMY", 23, 11),
     ("刀盾兵", "ANON", 0, "ENEMY", 24, 13),
     ("弓手", "ANON", 3, "ENEMY", 26, 12),
+    ("简雍", "CH_JIANYONG", 9, "PLAYER", 3, 13),   # 文士: strategies (design doc 6.3)
 ]
 
 
@@ -259,8 +260,8 @@ def main():
         "schema_version": 2, "id": "BT_TECH01", "profile": "DEFAULT_D1", "source_ref": "ORIGINAL",
         "map": {"width": W, "height": H, "tileset": "TS_TECH01",
                 "metatiles": terrain, "terrain": terrain},
-        "deploy": {"slots": [[x, y] for n, tag, cl, f, x, y in UNITS if f == "PLAYER"], "max_count": 3,
-                   "forced": ["CH_LIUBEI", "CH_GUANYU", "CH_ZHANGFEI"], "forbidden": []},
+        "deploy": {"slots": [[x, y] for n, tag, cl, f, x, y in UNITS if f == "PLAYER"], "max_count": 4,
+                   "forced": ["CH_LIUBEI", "CH_GUANYU", "CH_ZHANGFEI", "CH_JIANYONG"], "forbidden": []},
         "templates": [{"id": i, "character": "ANON", "class": cl, "level": 1, "str": 70, "int": 60, "cmd": 70,
                        "items": [None] * 8, "equipment": [None] * 3, "instance_id": 3 + i,
                        "blocks_victory": True, "appearance_variant": 0}
@@ -270,8 +271,8 @@ def main():
         "ai_groups": [{"id": 0, "mode": "AGGRESSIVE", "target": None, "leash": 3}],
         "treasures": [], "zones": [],
         "reinforcements": [   # SPAWN templates: compile-time reserved instance slots (design doc 9.3)
-            {"template": 0, "character": "ANON", "class": 6, "level": 2, "faction": "ENEMY", "instance_id": 7},
-            {"template": 1, "character": "ANON", "class": 3, "level": 2, "faction": "ENEMY", "instance_id": 8},
+            {"template": 0, "character": "ANON", "class": 6, "level": 2, "faction": "ENEMY", "instance_id": 8},
+            {"template": 1, "character": "ANON", "class": 3, "level": 2, "faction": "ENEMY", "instance_id": 9},
         ],
         "events": [
             {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
@@ -281,7 +282,7 @@ def main():
              "condition": {"leaf": "turn_cmp", "op": "eq", "n": 3},
              "code": [["TEXT", "NARRATOR", "TXD_T01_REINF"], ["SPAWN", 0, 30, 10], ["SPAWN", 1, 30, 14]]},
             {"id": 3, "trigger": "UNIT_RETREAT", "param": None, "priority": 0, "once": True,
-             "condition": {"any": [{"leaf": "target_eq", "unit": u} for u in (3, 4, 5, 6, 7, 8)]},
+             "condition": {"any": [{"leaf": "target_eq", "unit": u} for u in (3, 4, 5, 6, 8, 9)]},
              "code": [["TEXT", "P0003", "TXD_T01_FIRST_KILL"]]},
             {"id": 4, "trigger": "POST_MOVE", "param": 0, "priority": 0, "once": True,
              "condition": {"leaf": "unit_in_rect", "unit": 0, "rect": [7, 10, 7, 10]},
