@@ -1,34 +1,64 @@
 # 《三国豪杰传》GBC
 
 设计契约：[三国豪杰传_GBC_最终设计文档_v2.0.md](三国豪杰传_GBC_最终设计文档_v2.0.md)
+开发日志（每项发现与修复）：[docs/DEV_LOG.md](docs/DEV_LOG.md)
 
 ## 构建与测试
+
+首次使用先拉取锁定版本的工具链（GBDK-2020 4.5.0，带 SHA-256 校验）：
+
+```bash
+tools/get_gbdk.sh
+```
+
+一条命令完成生成、全部测试和 ROM 构建：
 
 ```bash
 ./build.sh
 ```
 
-依次执行：
-1. `tools/gen_rules.py`：把 `content/default_rules.json` 生成为 `src/gen/rules_data.{h,c}`（数值唯一来源）。
-2. `tools/gen_tech01.py`：生成 TECH01 占位素材，以及 `content/battles/BT_TECH01.json`（schema v2）。
-3. `tools/ref_model.py`：独立 Python 参考模型，生成随机交叉对照用例。
-4. 主机测试 `tests/host/test_core.c`：附录D 向量加交叉对照。
-5. GBDK 4.5.0 构建 `build/gb/sanguo_hjz.gbc`（8 MiB，CGB 专用，MBC5+RAM+电池）。
-6. PyBoy 端到端测试 `tests/emu/test_rom.py`，截图输出到 `build/gb/`。
+只构建 ROM（迭代时用）：
 
-工具链：GBDK-2020 4.5.0 位于 `tools/gbdk`（可用 `GBDK_LCC` 环境变量覆盖）；Python 3 加 PyBoy 2.8.1（只有模拟器测试需要）。
+```bash
+tools/build_rom.sh
+```
+
+产物是 `build/gb/sanguo_hjz.gbc`（8 MiB，CGB 专用，MBC5+RAM+电池，128 KiB SRAM），可在 SameBoy 等支持 CGB 的模拟器中运行。
+
+`build.sh` 依次执行：
+1. 数据生成：规则表、TECH01 地图与关卡、字库与文本（含对话分页）、曲谱、全屏演员、画像、事件脚本。
+2. 主机测试：公式与寻路（附录D 向量 + 独立 Python 参考模型交叉对照，86,228 项）、战斗与 AI（含自对弈复现）、存档（逐字节断电模型）、事件 VM、策略。
+3. ROM 构建，以及 bank/RAM 预算硬检查（任何 bank 溢出都会让构建失败）。
+4. PyBoy 端到端测试（70 项，全部用真实按键驱动），截图输出到 `build/gb/`。
+
+## 操作（TECH01 试验场）
+
+| 按键 | 作用 |
+|---|---|
+| 方向键 | 移动光标，镜头自动跟随 |
+| A | 选己方单位 → 选终点 → 行动菜单（攻击 / 策略 / 交谈 / 待命）→ 选目标 → 确认 |
+| B | 逐层取消；全屏演出中按 B 跳过 |
+| START | 结束回合；在胜负画面重新开始；开机时继续中断存档 |
+| SELECT | 写入中断存档（只在我方阶段的空闲状态下有效） |
+
+剧情：开场三人对话；关羽首次攻击敌将时触发单挑；第 3 回合东面出现援军；简雍可以劝降弓手；刘备进村可得到补给。
 
 ## 目录
 
 | 路径 | 内容 |
 |---|---|
-| `src/core/` | 可移植规则核心（rng、rules、path/视线）；主机与 GB 共用 |
-| `src/gb/` | GB 平台层：banked WRAM 访问器、输入、地图视图、主循环 |
-| `src/gen/` | 生成代码（不要手改） |
-| `content/` | 规则参数与关卡数据（JSON） |
-| `tools/` | 生成器与参考模型 |
-| `tests/host`、`tests/emu` | 主机测试、模拟器测试 |
+| `src/core/` | 可移植的规则核心：rng、rules、path、battle、ai、save、vm、strategy（主机与 GB 共用同一份代码） |
+| `src/gb/` | GB 平台层：WRAM/SRAM 访问器、ROM 网关、输入、地图视图、HUD、全屏演出、对话、音频、主循环 |
+| `src/gen/` | 生成的代码（不要手改） |
+| `content/` | 规则参数、关卡、文本、曲谱（JSON） |
+| `art_src/` | 美术源文件及来源说明 |
+| `third_party/` | 字体（Fusion Pixel 12px，OFL）及许可台账 |
+| `tools/` | 生成器、编译器、参考模型、构建脚本 |
+| `tests/host`、`tests/emu` | 主机测试、PyBoy 测试 |
 
-## 操作（TECH01）
+## 已知限制
 
-方向键移动光标（镜头自动跟随）；A 选己方单位，显示移动范围，再按 A 在合法终点提交移动；B 取消；START 暂代"回合结束"，重置已行动标记。
+- **美术**：地图单位暂用 OBJ 占位（文档 12.2 的 BG 合成器还没做）；全屏演员和背景是程序生成的占位图；画像只有 8 张 v0.3 概念稿。
+- **玩法**：策略只有地图快演；AI 不会使用策略；道具、交换、商店、营地、出阵画面尚未实现。
+- **性能**：自动存档约 0.7 秒（放在回合横幅期间执行）。
+- **验证**：只在 PyBoy 上测过；SameBoy/Emulicious 交叉验证和真机测试都还没做。
