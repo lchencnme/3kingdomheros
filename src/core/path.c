@@ -1,3 +1,6 @@
+#ifdef __SDCC
+#pragma bank 3
+#endif
 #include "path.h"
 #include <string.h>
 #include "../gen/rules_data.h"
@@ -8,9 +11,14 @@ static const uint8_t BIT[8] = {1, 2, 4, 8, 16, 32, 64, 128};
 static const int8_t NDX[4] = {0, -1, 1, 0};
 static const int8_t NDY[4] = {-1, 0, 0, 1};
 
-uint8_t path_cost(uint8_t x, uint8_t y, uint8_t mtype)
+static uint8_t cost_of(uint8_t x, uint8_t y, uint8_t mtype)
 {
     return terrain_defs[grid_terrain(x, y) & 0x0F].cost[mtype];
+}
+
+uint8_t path_cost(uint8_t x, uint8_t y, uint8_t mtype) CORE_API
+{
+    return cost_of(x, y, mtype);
 }
 
 static const uint16_t mr_row[MR_DIM] = {
@@ -21,7 +29,7 @@ static uint8_t hostile(uint8_t occ, uint8_t side)
     return occ != 0 && occ != side;
 }
 
-void path_move_range(MoveRange *mr, uint8_t x, uint8_t y, uint8_t move, uint8_t mtype, uint8_t side)
+void path_move_range(MoveRange *mr, uint8_t x, uint8_t y, uint8_t move, uint8_t mtype, uint8_t side) CORE_API
 {
     uint16_t i, head = 0, tail = 0, count = 0;
     uint8_t lx, ly, lut[16];
@@ -99,7 +107,7 @@ static int16_t local_index(const MoveRange *mr, uint8_t x, uint8_t y)
     return (int16_t)(mr_row[ly] + lx);
 }
 
-uint8_t path_dist(const MoveRange *mr, uint8_t x, uint8_t y)
+uint8_t path_dist(const MoveRange *mr, uint8_t x, uint8_t y) CORE_API
 {
     int16_t li;
     if (x >= grid_w || y >= grid_h) return MR_INF;
@@ -107,14 +115,14 @@ uint8_t path_dist(const MoveRange *mr, uint8_t x, uint8_t y)
     return li < 0 ? MR_INF : mr->dist[li];
 }
 
-uint8_t path_endpoint_ok(const MoveRange *mr, uint8_t x, uint8_t y)
+uint8_t path_endpoint_ok(const MoveRange *mr, uint8_t x, uint8_t y) CORE_API
 {
     if (path_dist(mr, x, y) == MR_INF) return 0;
     if (x == mr->sx && y == mr->sy) return 1;
     return grid_occ(x, y) == 0;
 }
 
-uint8_t path_backtrack(const MoveRange *mr, uint8_t ex, uint8_t ey, uint16_t *out, uint8_t max)
+uint8_t path_backtrack(const MoveRange *mr, uint8_t ex, uint8_t ey, uint16_t *out, uint8_t max) CORE_API
 {
     uint8_t cx = ex, cy = ey, n = 0, i;
     uint8_t len;
@@ -125,7 +133,7 @@ uint8_t path_backtrack(const MoveRange *mr, uint8_t ex, uint8_t ey, uint16_t *ou
         uint16_t tmp[MR_DIM];
         tmp[n++] = (uint16_t)cy * grid_w + cx;
         while (!(cx == mr->sx && cy == mr->sy)) {
-            uint8_t cc = path_cost(cx, cy, mr->mtype);
+            uint8_t cc = cost_of(cx, cy, mr->mtype);
             uint8_t cd = path_dist(mr, cx, cy);
             uint16_t best = 0xFFFF;
             uint8_t bx = 0, by = 0, k;
@@ -152,7 +160,7 @@ uint8_t path_backtrack(const MoveRange *mr, uint8_t ex, uint8_t ey, uint16_t *ou
 
 /* ---- reverse approach field: dist[v] = min(dist[v], dist[u] + cost[u]) ---- */
 
-void field_begin(FieldJob *j, uint8_t mtype, uint8_t side, const uint16_t *targets, uint8_t ntargets)
+void field_begin(FieldJob *j, uint8_t mtype, uint8_t side, const uint16_t *targets, uint8_t ntargets) CORE_API
 {
     uint16_t i, cells = (uint16_t)grid_w * grid_h;
     j->mtype = mtype; j->side = side; j->done = 0;
@@ -169,12 +177,12 @@ void field_begin(FieldJob *j, uint8_t mtype, uint8_t side, const uint16_t *targe
     if (!j->count) j->done = 1;
 }
 
-uint8_t field_step(FieldJob *j, uint16_t budget)
+uint8_t field_step(FieldJob *j, uint16_t budget) CORE_API
 {
     while (j->count && budget) {
         uint16_t u = fq_get(j->head);
         uint8_t ux = (uint8_t)(u % grid_w), uy = (uint8_t)(u / grid_w), k;
-        uint8_t cu = path_cost(ux, uy, j->mtype);
+        uint8_t cu = cost_of(ux, uy, j->mtype);
         uint16_t du = fld_get(u);
         j->head = (uint16_t)((j->head + 1) % FIELD_MAX_CELLS);
         j->count--;
@@ -185,7 +193,7 @@ uint8_t field_step(FieldJob *j, uint16_t budget)
             int16_t vx = (int16_t)ux + NDX[k], vy = (int16_t)uy + NDY[k];
             uint16_t v, nd;
             if (vx < 0 || vy < 0 || vx >= grid_w || vy >= grid_h) continue;
-            if (path_cost((uint8_t)vx, (uint8_t)vy, j->mtype) == 255) continue;   /* mover cannot stand on v */
+            if (cost_of((uint8_t)vx, (uint8_t)vy, j->mtype) == 255) continue;   /* mover cannot stand on v */
             if (hostile(grid_occ((uint8_t)vx, (uint8_t)vy), j->side)) continue;
             v = (uint16_t)vy * grid_w + (uint16_t)vx;
             nd = du + cu;
@@ -210,7 +218,7 @@ static uint8_t is_wall(int16_t x, int16_t y)
     return terrain_defs[grid_terrain((uint8_t)x, (uint8_t)y) & 0x0F].blocks_los;
 }
 
-uint8_t los_clear(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
+uint8_t los_clear(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1) CORE_API
 {
     int16_t x = x0, y = y0, dx = (int16_t)x1 - x0, dy = (int16_t)y1 - y0;
     int16_t xstep = 1, ystep = 1, ddx, ddy, err, errprev, i;

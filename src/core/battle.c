@@ -1,3 +1,6 @@
+#ifdef __SDCC
+#pragma bank 4
+#endif
 #include "battle.h"
 #include "grid.h"
 #include "path.h"
@@ -5,14 +8,14 @@
 
 typedef char active_unit_is_40_bytes[(sizeof(ActiveUnit) == 40) ? 1 : -1];
 
-uint8_t unit_alive(const ActiveUnit *u)
+uint8_t unit_alive(const ActiveUnit *u) CORE_API
 {
     return u->hp > 0 && !(u->action_flags & (AF_RETREAT | AF_DEAD | AF_AWAY));
 }
 
-uint8_t faction_side(uint8_t faction) { return faction == FAC_ENEMY ? SIDE_E : SIDE_A; }
+uint8_t faction_side(uint8_t faction) CORE_API { return faction == FAC_ENEMY ? SIDE_E : SIDE_A; }
 
-uint8_t factions_hostile(uint8_t fa, uint8_t fb) { return faction_side(fa) != faction_side(fb); }
+uint8_t factions_hostile(uint8_t fa, uint8_t fb) CORE_API { return faction_side(fa) != faction_side(fb); }
 
 static void derive_into(uint8_t i, ActiveUnit *u)
 {
@@ -29,7 +32,7 @@ static void derive_into(uint8_t i, ActiveUnit *u)
 }
 
 void battle_spawn(Battle *b, uint8_t i, uint16_t character, uint8_t cls, uint8_t faction,
-                  uint8_t level, uint8_t x, uint8_t y)
+                  uint8_t level, uint8_t x, uint8_t y) CORE_API
 {
     ActiveUnit u;
     uint8_t k;
@@ -47,7 +50,7 @@ void battle_spawn(Battle *b, uint8_t i, uint16_t character, uint8_t cls, uint8_t
     if (i >= b->n_units) b->n_units = (uint8_t)(i + 1);
 }
 
-void battle_move(uint8_t i, uint8_t x, uint8_t y)
+void battle_move(uint8_t i, uint8_t x, uint8_t y) CORE_API
 {
     ActiveUnit u;
     unit_load(i, &u);
@@ -64,7 +67,7 @@ static uint8_t manhattan(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
     return (uint8_t)(dx + dy);
 }
 
-uint8_t battle_in_range(const ActiveUnit *u, uint8_t fx, uint8_t fy, const ActiveUnit *t)
+uint8_t battle_in_range(const ActiveUnit *u, uint8_t fx, uint8_t fy, const ActiveUnit *t) CORE_API
 {
     const ClassDef *c = &class_defs[u->class_id];
     uint8_t d = manhattan(fx, fy, t->x, t->y);
@@ -93,7 +96,7 @@ static uint8_t can_counter(const ActiveUnit *d, const ActiveUnit *a_at)
 }
 
 void battle_preview(const ActiveUnit *a, uint8_t fx, uint8_t fy, const ActiveUnit *d, uint8_t weather,
-                    AttackPreview *p)
+                    AttackPreview *p) CORE_API
 {
     ActiveUnit a_at = *a;
     uint8_t td = grid_terrain(d->x, d->y) & 0x0F, ta = grid_terrain(fx, fy) & 0x0F;
@@ -149,7 +152,7 @@ static void strike(Battle *b, ActiveUnit *a, ActiveUnit *d, uint8_t *hit, uint16
     }
 }
 
-void battle_attack(Battle *b, uint8_t ai, uint8_t di, AttackResult *r)
+void battle_attack(Battle *b, uint8_t ai, uint8_t di, AttackResult *r) CORE_API
 {
     ActiveUnit a, d;
     unit_load(ai, &a);
@@ -177,12 +180,12 @@ void battle_attack(Battle *b, uint8_t ai, uint8_t di, AttackResult *r)
     battle_check_outcome(b, 0);
 }
 
-uint8_t battle_can_act(const ActiveUnit *u)
+uint8_t battle_can_act(const ActiveUnit *u) CORE_API
 {
     return unit_alive(u) && !(u->action_flags & AF_ACTED) && !(u->status_mask & (1u << ST_CONFUSE));
 }
 
-void battle_phase_start(Battle *b, uint8_t phase)
+void battle_phase_start(Battle *b, uint8_t phase) CORE_API
 {
     uint8_t i;
     ActiveUnit u;
@@ -219,7 +222,7 @@ void battle_phase_start(Battle *b, uint8_t phase)
     battle_check_outcome(b, 0);
 }
 
-void battle_phase_end(Battle *b)
+void battle_phase_end(Battle *b) CORE_API
 {
     uint8_t i, k;
     ActiveUnit u;
@@ -243,7 +246,7 @@ void battle_phase_end(Battle *b)
     }
 }
 
-uint8_t battle_check_outcome(Battle *b, uint8_t round_end_checkpoint)
+uint8_t battle_check_outcome(Battle *b, uint8_t round_end_checkpoint) CORE_API
 {
     uint8_t i, enemies = 0;
     ActiveUnit u;

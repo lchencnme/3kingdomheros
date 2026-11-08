@@ -7,7 +7,7 @@ static uint8_t hold, last_axis;   /* last_axis: 0 vertical, 1 horizontal */
 static volatile uint8_t isr_prev, isr_latch;
 
 /* VBlank ISR: latch rising edges so a short press is never lost if a main-loop frame overruns */
-static void input_vbl(void)
+static void input_vbl(void) NONBANKED   /* ISR: must live in fixed bank 0 (design doc 11.3) */
 {
     uint8_t raw = joypad();
     isr_latch |= (uint8_t)(raw & ~isr_prev);

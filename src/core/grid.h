@@ -5,24 +5,25 @@
 #ifndef CORE_GRID_H
 #define CORE_GRID_H
 #include <stdint.h>
+#include "platform.h"
 
 #define SIDE_A 1u   /* PLAYER + ALLY */
 #define SIDE_E 2u   /* ENEMY */
 
 extern uint8_t grid_w, grid_h;
 
-uint8_t grid_terrain(uint8_t x, uint8_t y);   /* low nibble: effective terrain id */
-uint8_t grid_occ(uint8_t x, uint8_t y);       /* 0, SIDE_A or SIDE_E */
+uint8_t grid_terrain(uint8_t x, uint8_t y) PLATFORM_API;   /* low nibble: effective terrain id */
+uint8_t grid_occ(uint8_t x, uint8_t y) PLATFORM_API;       /* 0, SIDE_A or SIDE_E */
 /* bulk read of one row segment (x0..x0+n-1 inside the map) into caller buffers in fixed RAM:
    one bank switch per row instead of per cell */
-void grid_row(uint8_t y, uint8_t x0, uint8_t n, uint8_t *ter, uint8_t *occ);
+void grid_row(uint8_t y, uint8_t x0, uint8_t n, uint8_t *ter, uint8_t *occ) PLATFORM_API;
 
 /* full-map approach field (u16 x 4096) and its SPFA ring queue (u16 x 4096) + inqueue bits */
-uint16_t fld_get(uint16_t i);
-void fld_set(uint16_t i, uint16_t v);
-uint16_t fq_get(uint16_t i);
-void fq_set(uint16_t i, uint16_t v);
-uint8_t fin_test(uint16_t i);
-void fin_set(uint16_t i);
-void fin_clear(uint16_t i);
+uint16_t fld_get(uint16_t i) PLATFORM_API;
+void fld_set(uint16_t i, uint16_t v) PLATFORM_API;
+uint16_t fq_get(uint16_t i) PLATFORM_API;
+void fq_set(uint16_t i, uint16_t v) PLATFORM_API;
+uint8_t fin_test(uint16_t i) PLATFORM_API;
+void fin_set(uint16_t i) PLATFORM_API;
+void fin_clear(uint16_t i) PLATFORM_API;
 #endif

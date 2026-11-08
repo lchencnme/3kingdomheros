@@ -7,6 +7,7 @@
 #define TECH01_BG_TILES 40u
 #define TECH01_OBJ_TILES 12u
 #define TECH01_UNITS 7u
+#define TECH01_BANK 2u
 #define OBJT_PLAYER 0u
 #define OBJT_ENEMY 4u
 #define OBJT_CURSOR 8u

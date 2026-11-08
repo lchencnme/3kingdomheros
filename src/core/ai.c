@@ -1,3 +1,6 @@
+#ifdef __SDCC
+#pragma bank 4
+#endif
 #include "ai.h"
 #include "grid.h"
 #include "types.h"
@@ -15,7 +18,7 @@ static uint8_t manhattan(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
     return (uint8_t)(dx + dy);
 }
 
-void ai_invalidate(AiScratch *s) { s->field_valid = 0; }
+void ai_invalidate(AiScratch *s) CORE_API { s->field_valid = 0; }
 
 static void build_field(Battle *b, AiScratch *s, uint8_t mtype, uint8_t side)
 {
@@ -70,7 +73,7 @@ static uint8_t better(int32_t sc, uint16_t cnt, uint8_t cost, uint8_t tgt, uint1
     return act < best->action;
 }
 
-void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mode, AiCommand *out)
+void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mode, AiCommand *out) CORE_API
 {
     ActiveUnit a, t;
     uint8_t i, side, mtype, ly, lx, have = 0;

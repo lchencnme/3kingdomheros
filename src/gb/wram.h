@@ -18,6 +18,8 @@ typedef char mr_fits_bank7_region[(sizeof(MoveRange) <= 0x600u) ? 1 : -1];
 #define W2_TERRAIN ((uint8_t *)0xD000)
 
 void wram_init_grid(uint8_t w, uint8_t h, const uint8_t *terrain);
+/* same, but the terrain array lives in ROM asset bank 'bank' (copied via the gateway) */
+void wram_init_grid_rom(uint8_t w, uint8_t h, uint8_t bank, const uint8_t *terrain);
 void occ_set(uint8_t x, uint8_t y, uint8_t side);
 void occ_clear(uint8_t x, uint8_t y);
 #endif

@@ -1,12 +1,13 @@
 #include <gb/gb.h>
 #include <string.h>
 #include "wram.h"
+#include "rom.h"
 
 static const uint8_t BITM[8] = {1, 2, 4, 8, 16, 32, 64, 128};
 
 uint8_t grid_w, grid_h;
 
-uint8_t grid_terrain(uint8_t x, uint8_t y)
+uint8_t grid_terrain(uint8_t x, uint8_t y) PLATFORM_API
 {
     uint8_t o = SVBK_REG, v;
     SVBK_REG = WB_TERRAIN;
@@ -15,7 +16,7 @@ uint8_t grid_terrain(uint8_t x, uint8_t y)
     return v;
 }
 
-uint8_t grid_occ(uint8_t x, uint8_t y)
+uint8_t grid_occ(uint8_t x, uint8_t y) PLATFORM_API
 {
     uint16_t i = (uint16_t)y * grid_w + x;
     uint8_t o = SVBK_REG, m = BITM[i & 7], v = 0;
@@ -26,7 +27,7 @@ uint8_t grid_occ(uint8_t x, uint8_t y)
     return v;
 }
 
-void grid_row(uint8_t y, uint8_t x0, uint8_t n, uint8_t *ter, uint8_t *occ)
+void grid_row(uint8_t y, uint8_t x0, uint8_t n, uint8_t *ter, uint8_t *occ) PLATFORM_API
 {
     uint16_t i = (uint16_t)y * grid_w + x0;
     uint8_t o = SVBK_REG, k;
@@ -61,7 +62,7 @@ void occ_clear(uint8_t x, uint8_t y)
     SVBK_REG = o;
 }
 
-uint16_t fld_get(uint16_t i)
+uint16_t fld_get(uint16_t i) PLATFORM_API
 {
     uint8_t o = SVBK_REG;
     uint16_t v;
@@ -71,7 +72,7 @@ uint16_t fld_get(uint16_t i)
     return v;
 }
 
-void fld_set(uint16_t i, uint16_t v)
+void fld_set(uint16_t i, uint16_t v) PLATFORM_API
 {
     uint8_t o = SVBK_REG;
     SVBK_REG = (uint8_t)(WB_FIELD + (i >> 11));
@@ -79,7 +80,7 @@ void fld_set(uint16_t i, uint16_t v)
     SVBK_REG = o;
 }
 
-uint16_t fq_get(uint16_t i)
+uint16_t fq_get(uint16_t i) PLATFORM_API
 {
     uint8_t o = SVBK_REG;
     uint16_t v;
@@ -89,7 +90,7 @@ uint16_t fq_get(uint16_t i)
     return v;
 }
 
-void fq_set(uint16_t i, uint16_t v)
+void fq_set(uint16_t i, uint16_t v) PLATFORM_API
 {
     uint8_t o = SVBK_REG;
     SVBK_REG = (uint8_t)(WB_QUEUE + (i >> 11));
@@ -97,7 +98,7 @@ void fq_set(uint16_t i, uint16_t v)
     SVBK_REG = o;
 }
 
-uint8_t fin_test(uint16_t i)
+uint8_t fin_test(uint16_t i) PLATFORM_API
 {
     uint8_t o = SVBK_REG, v;
     SVBK_REG = WB_SCRATCH;
@@ -106,7 +107,7 @@ uint8_t fin_test(uint16_t i)
     return v;
 }
 
-void fin_set(uint16_t i)
+void fin_set(uint16_t i) PLATFORM_API
 {
     uint8_t o = SVBK_REG;
     SVBK_REG = WB_SCRATCH;
@@ -114,7 +115,7 @@ void fin_set(uint16_t i)
     SVBK_REG = o;
 }
 
-void fin_clear(uint16_t i)
+void fin_clear(uint16_t i) PLATFORM_API
 {
     uint8_t o = SVBK_REG;
     SVBK_REG = WB_SCRATCH;
@@ -131,5 +132,17 @@ void wram_init_grid(uint8_t w, uint8_t h, const uint8_t *terrain)
     memcpy(W2_TERRAIN, terrain, (uint16_t)w * h);
     SVBK_REG = WB_SCRATCH;
     memset((void *)0xD000, 0, 0x600);   /* occupancy bitmaps + inqueue bits */
+    SVBK_REG = o;
+}
+
+void wram_init_grid_rom(uint8_t w, uint8_t h, uint8_t bank, const uint8_t *terrain)
+{
+    uint8_t o = SVBK_REG;
+    grid_w = w; grid_h = h;
+    SVBK_REG = WB_TERRAIN;
+    memset(W2_TERRAIN, 0, 4096);
+    rom_copy(bank, W2_TERRAIN, terrain, (uint16_t)w * h);
+    SVBK_REG = WB_SCRATCH;
+    memset((void *)0xD000, 0, 0x600);
     SVBK_REG = o;
 }

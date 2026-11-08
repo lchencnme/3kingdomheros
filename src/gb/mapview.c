@@ -191,6 +191,8 @@ void mapview_prepare(void)
 
 void mapview_commit(void)
 {
+    /* LY gate (design doc 12.1): a late frame commits nothing; edge + SCX stay pending together */
+    if (LY_REG < 144u || LY_REG > 150u) return;
     if (edge_kind == 1) {
         VBK_REG = VBK_TILES;      write_col_vram(edge_pos, toy, e_id, CACHE_H);
         VBK_REG = VBK_ATTRIBUTES; write_col_vram(edge_pos, toy, e_at, CACHE_H);

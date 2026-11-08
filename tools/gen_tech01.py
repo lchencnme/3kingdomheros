@@ -220,7 +220,7 @@ def main():
          "#ifndef TECH01_DATA_H\n#define TECH01_DATA_H\n#include <stdint.h>",
          f"#define TECH01_W {W}u\n#define TECH01_H {H}u",
          f"#define TECH01_BG_TILES {len(tiles)}u\n#define TECH01_OBJ_TILES {len(spr)}u",
-         f"#define TECH01_UNITS {len(UNITS)}u",
+         f"#define TECH01_UNITS {len(UNITS)}u", "#define TECH01_BANK 2u",
          "#define OBJT_PLAYER 0u\n#define OBJT_ENEMY 4u\n#define OBJT_CURSOR 8u",
          "typedef struct { uint8_t cls, faction, x, y; } Tech01Unit;",
          "extern const uint8_t tech01_bg_tiles[];", "extern const uint8_t tech01_obj_tiles[];",
@@ -228,7 +228,8 @@ def main():
          "extern const uint8_t tech01_meta[10][4];", "extern const uint8_t tech01_terrain_pal[10];",
          "extern const uint8_t tech01_terrain[];", "extern const Tech01Unit tech01_units[];",
          "#endif"]
-    c = ['#include "tech01_data.h"']
+    c = ["#pragma bank 2", "#include \"tech01_data.h\""]   # asset bank: read only through rom.c gateway
+    ci = ["#include \"tech01_data.h\""]                       # unbanked index data
 
     def arr(name, typ, vals, per=16):
         lines = [f"const {typ} {name}[] = {{"]
@@ -239,18 +240,19 @@ def main():
 
     c += arr("tech01_bg_tiles", "uint8_t", [b for t in tiles for b in t])
     c += arr("tech01_obj_tiles", "uint8_t", [b for t in spr for b in t])
-    c += arr("tech01_bg_pals", "uint16_t", [rgb555(col) for p in BG_PALS for col in p], 4)
-    c += arr("tech01_obj_pals", "uint16_t", [rgb555(col) for p in OBJ_PALS for col in p], 4)
-    c.append("const uint8_t tech01_meta[10][4] = {" + ", ".join("{" + ", ".join(map(str, m)) + "}" for m in meta) + "};")
-    c.append("const uint8_t tech01_terrain_pal[10] = {" + ", ".join(str(TERRAIN_PAL[i]) for i in range(10)) + "};")
     c += arr("tech01_terrain", "uint8_t", terrain, 32)
+    ci += arr("tech01_bg_pals", "uint16_t", [rgb555(col) for p in BG_PALS for col in p], 4)
+    ci += arr("tech01_obj_pals", "uint16_t", [rgb555(col) for p in OBJ_PALS for col in p], 4)
+    ci.append("const uint8_t tech01_meta[10][4] = {" + ", ".join("{" + ", ".join(map(str, m)) + "}" for m in meta) + "};")
+    ci.append("const uint8_t tech01_terrain_pal[10] = {" + ", ".join(str(TERRAIN_PAL[i]) for i in range(10)) + "};")
     fac = {"PLAYER": 0, "ALLY": 1, "ENEMY": 2}
-    c.append("const Tech01Unit tech01_units[] = {")
+    ci.append("const Tech01Unit tech01_units[] = {")
     for n, _, cl, f, x, y in UNITS:
-        c.append(f"    {{{cl}, {fac[f]}, {x}, {y}}}, /* {n} */")
-    c.append("};")
+        ci.append(f"    {{{cl}, {fac[f]}, {x}, {y}}}, /* {n} */")
+    ci.append("};")
     (ROOT / "src/gen/tech01_data.h").write_text("\n".join(h) + "\n", encoding="utf-8")
     (ROOT / "src/gen/tech01_data.c").write_text("\n".join(c) + "\n", encoding="utf-8")
+    (ROOT / "src/gen/tech01_index.c").write_text("\n".join(ci) + "\n", encoding="utf-8")
 
     # battle JSON (schema v2, 附录C.2); player units come from the roster, not this file
     battle = {

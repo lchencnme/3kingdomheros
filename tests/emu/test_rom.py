@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""PyBoy end-to-end checks for the TECH01 v2 skeleton (real key presses, no memory pokes).
+"""PyBoy end-to-end checks for TECH01 v2 (real key presses only; RAM is read, never written).
 
 usage: python3 tests/emu/test_rom.py build/gb/sanguo_hjz.gbc
 """
+import struct
 import sys
 import warnings
+import zlib
 from pathlib import Path
 
 warnings.filterwarnings("ignore")
+import logging  # noqa: E402
+
+logging.disable(logging.WARNING)
 from pyboy import PyBoy  # noqa: E402
 
 ROM = Path(sys.argv[1] if len(sys.argv) > 1 else "build/gb/sanguo_hjz.gbc")
@@ -17,135 +22,231 @@ for line in ROM.with_suffix(".noi").read_text().splitlines():
     if len(p) == 3 and p[0] == "DEF":
         SYMS[p[1]] = int(p[2], 16)
 
+G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME = range(8)
+N_UNITS = 7
 results = []
-
-
-def save_png(path):
-    """screen -> PNG without Pillow (zlib only)"""
-    import struct, zlib
-    a = pb.screen.ndarray  # (144,160,4) RGBA
-    h, w = a.shape[0], a.shape[1]
-    raw = b"".join(b"\x00" + bytes(a[y, :, :3].tobytes()) for y in range(h))
-    def chunk(k, d):
-        return struct.pack(">I", len(d)) + k + d + struct.pack(">I", zlib.crc32(k + d) & 0xFFFFFFFF)
-    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
-    png += chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
-    Path(path).write_bytes(png)
 
 
 def check(name, cond, detail=""):
     results.append((name, bool(cond), detail))
 
 
-pb = PyBoy(str(ROM), window="null", cgb=True, sound_emulated=False)
-mem = pb.memory
+class Emu:
+    def __init__(self):
+        self.pb = PyBoy(str(ROM), window="null", cgb=True, sound_emulated=False)
+        self.m = self.pb.memory
+        self.fc = 0
+        self.frames(120)  # PyBoy plays the ~77-frame CGB boot animation first
+
+    def frames(self, n):
+        for _ in range(n):
+            self.pb.tick()
+        self.fc += n
+
+    def r8(self, s):
+        return self.m[SYMS[s]]
+
+    def r16(self, s):
+        a = SYMS[s]
+        return self.m[a] | (self.m[a + 1] << 8)
+
+    def r32(self, s):
+        a = SYMS[s]
+        return self.m[a] | (self.m[a + 1] << 8) | (self.m[a + 2] << 16) | (self.m[a + 3] << 24)
+
+    def unit(self, i):
+        a = SYMS["_dbg_unit_xy"] + 2 * i
+        return self.m[a], self.m[a + 1]
+
+    def hp(self, i):
+        a = SYMS["_dbg_unit_hp"] + 2 * i
+        return self.m[a] | (self.m[a + 1] << 8)
+
+    def state(self):
+        return self.r8("_dbg_state")
+
+    def cur(self):
+        return self.r8("_dbg_cur_x"), self.r8("_dbg_cur_y")
+
+    def press(self, btn, after=4):
+        self.pb.button_press(btn)
+        self.frames(2)
+        self.pb.button_release(btn)
+        self.frames(after)
+
+    def hold(self, btn, n):
+        self.pb.button_press(btn)
+        self.frames(n)
+        self.pb.button_release(btn)
+        self.frames(4)
+
+    def wait_state(self, states, limit=600):
+        n = 0
+        while self.state() not in states and n < limit:
+            self.frames(1)
+            n += 1
+        return n
+
+    def goto(self, x, y):
+        for _ in range(80):
+            cx, cy = self.cur()
+            if (cx, cy) == (x, y):
+                return
+            if cx != x:
+                self.press("right" if x > cx else "left")
+            else:
+                self.press("down" if y > cy else "up")
+
+    def canary_ok(self):
+        return all(self.m[0xCE00 + i] == 0xA5 for i in range(16))
+
+    def png(self, path):
+        a = self.pb.screen.ndarray
+        h, w = a.shape[0], a.shape[1]
+        raw = b"".join(b"\x00" + bytes(a[y, :, :3].tobytes()) for y in range(h))
+
+        def chunk(k, d):
+            return struct.pack(">I", len(d)) + k + d + struct.pack(">I", zlib.crc32(k + d) & 0xFFFFFFFF)
+        data = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+        data += chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
+        Path(path).write_bytes(data)
 
 
-def rd8(sym):
-    return mem[SYMS[sym]]
-
-
-def rd16(sym):
-    a = SYMS[sym]
-    return mem[a] | (mem[a + 1] << 8)
-
-
-def unit(i):
-    a = SYMS["_dbg_unit_xy"] + 2 * i
-    return mem[a], mem[a + 1]
-
-
-def frames(n):
-    for _ in range(n):
-        pb.tick()
-
-
-def press(btn, hold=2, after=4):
-    pb.button_press(btn)
-    frames(hold)
-    pb.button_release(btn)
-    frames(after)
-
-
-def select(gate_frames=9):
-    """press A on an own unit; the move range must be ready within the 150ms gate (9 frames)"""
-    pb.button_press("a")
-    frames(2)
-    pb.button_release("a")
-    n = 2
-    while rd8("_dbg_state") != 1 and n < 60:
-        frames(1)
-        n += 1
-    rng_frames = rd16("_dbg_t_range")
-    check(f"move range ready <=150ms (took {rng_frames} frames)", rng_frames <= gate_frames)
-    frames(2)
-
-
-def hold_dir(btn, n):
-    pb.button_press(btn)
-    frames(n)
-    pb.button_release(btn)
-    frames(4)
-
-
-frames(120)   # PyBoy plays the ~77-frame CGB boot animation first
-check("boot: main loop running", rd8("_dbg_frame_lo") != 0)
-check("CGB double speed (KEY1 bit7)", mem[0xFF4D] & 0x80, f"KEY1={mem[0xFF4D]:02X}")
+# ------------------------------------------------------------------ basic flow
+e = Emu()
+check("boot: main loop running", e.r8("_dbg_frame_lo") != 0)
+check("CGB double speed (KEY1 bit7)", e.m[0xFF4D] & 0x80, f"KEY1={e.m[0xFF4D]:02X}")
+hdr = ROM.read_bytes()
 check("header: CGB-only + MBC5+RAM+BATT + 8MiB/128KiB",
-      ROM.read_bytes()[0x143] == 0xC0 and ROM.read_bytes()[0x147] == 0x1B
-      and ROM.read_bytes()[0x148] == 0x08 and ROM.read_bytes()[0x149] == 0x04)
-check("cursor starts on 刘备 (4,12)", (rd8("_dbg_cur_x"), rd8("_dbg_cur_y")) == (4, 12))
+      hdr[0x143] == 0xC0 and hdr[0x147] == 0x1B and hdr[0x148] == 0x08 and hdr[0x149] == 0x04)
+check("opening banner shown", e.state() == G_BANNER)
+e.wait_state([G_IDLE])
+check("player phase idle, round 1", e.state() == G_IDLE and e.r16("_dbg_round") == 1)
+check("cursor starts on 刘备 (4,12)", e.cur() == (4, 12))
+e.png(ROM.parent / "shot_start.png")
 
-# --- move 刘备 two cells east along the road (legal) ---
-select()
-check("A on own unit -> move preview", rd8("_dbg_state") == 1)
-press("right"); press("right")
-check("cursor moved to (6,12)", (rd8("_dbg_cur_x"), rd8("_dbg_cur_y")) == (6, 12))
-press("a")
-check("legal endpoint commits move", unit(0) == (6, 12) and rd8("_dbg_state") == 0, f"unit0={unit(0)}")
+# select 刘备 -> move 2 east -> menu (no targets: 待命 only) -> A = wait
+e.press("a")
+e.wait_state([G_MOVE], 30)
+rng_frames = e.r16("_dbg_t_range")
+check(f"move range <=150ms (刘备: {rng_frames} frames)", rng_frames <= 9)
+check("A on own unit -> move preview", e.state() == G_MOVE)
+e.press("right"); e.press("right")
+check("cursor moved to (6,12)", e.cur() == (6, 12))
+e.press("a")
+check("legal endpoint -> action menu, unit not moved yet", e.state() == G_MENU and e.unit(0) == (4, 12))
+e.press("b")
+check("B in menu -> back to move preview, nothing committed", e.state() == G_MOVE and e.unit(0) == (4, 12))
+e.press("a")
+e.press("a")       # 待命
+check("wait commits the move", e.unit(0) == (6, 12) and e.state() == G_IDLE, f"u0={e.unit(0)} st={e.state()}")
+e.press("a")
+check("acted unit not selectable", e.state() == G_IDLE)
 
-# --- acted unit cannot be selected again ---
-press("a")
-check("acted unit not selectable", rd8("_dbg_state") == 0)
+# 关羽: occupied ally endpoint rejected; forest rejected for cavalry; B restores cursor
+e.goto(5, 11)
+e.press("a"); e.wait_state([G_MOVE], 30)
+check(f"move range <=150ms (关羽: {e.r16('_dbg_t_range')} frames)", e.r16("_dbg_t_range") <= 9)
+e.goto(5, 13)
+e.press("a")
+check("occupied ally endpoint rejected", e.state() == G_MOVE and e.unit(1) == (5, 11))
+e.goto(5, 8)
+e.press("a")
+check("cavalry cannot end in forest (5,8)", e.state() == G_MOVE)
+e.frames(16)
+e.png(ROM.parent / "shot_preview_guanyu.png")
+e.press("b")
+check("B cancels preview, cursor back on unit", e.state() == G_IDLE and e.cur() == (5, 11))
 
-# --- 关羽 (cavalry, 5,11): occupied endpoint rejected, B cancels with no change ---
-press("left"); press("up")         # cursor (5,11)
-select()
-check("select 关羽", rd8("_dbg_state") == 1 and rd8("_dbg_sel") == 1)
-frames(20)   # let the highlight repaint finish
-save_png(ROM.parent / "shot_preview_guanyu.png")
-press("down"); press("down")        # (5,13) = 张飞, occupied ally
-press("a")
-check("occupied ally endpoint rejected", rd8("_dbg_state") == 1 and unit(1) == (5, 11))
-press("b")
-check("B cancels preview, unit unchanged, cursor back", rd8("_dbg_state") == 0 and unit(1) == (5, 11)
-      and (rd8("_dbg_cur_x"), rd8("_dbg_cur_y")) == (5, 11))
+# scrolling to the far corner and back
+e.hold("right", 300)
+check("camera clamps at 32*16-160=352", e.r16("_dbg_cam_x") == 352, f"cam_x={e.r16('_dbg_cam_x')}")
+check("SCX = cam_x low byte", e.m[0xFF43] == (e.r16("_dbg_cam_x") & 0xFF))
+e.hold("down", 200)
+check("camera clamps at 24*16-112=272", e.r16("_dbg_cam_y") == 272)
+e.png(ROM.parent / "shot_far_corner.png")
+e.hold("left", 400); e.hold("up", 300)
+check("camera returns to origin", e.r16("_dbg_cam_x") == 0 and e.r16("_dbg_cam_y") == 0)
+check("stack canary intact", e.canary_ok())
+e.pb.stop(save=False)
 
-# --- cavalry cannot end in forest: forest at (4,8) is reachable on foot but cost 255 for cavalry ---
-select()                            # 关羽 again
-for _ in range(3):
-    press("up")                     # (5,8)
-press("a")
-check("cavalry cannot enter forest (5,8)", unit(1) == (5, 11) and rd8("_dbg_state") == 1,
-      f"unit1={unit(1)} state={rd8('_dbg_state')} cur=({rd8('_dbg_cur_x')},{rd8('_dbg_cur_y')})")
-press("b")
 
-# --- scrolling: hold right until the map edge ---
-hold_dir("right", 300)
-cx, cam = rd8("_dbg_cur_x"), rd16("_dbg_cam_x")
-check("cursor reaches east edge", cx == 31, f"cur_x={cx}")
-check("camera clamps at 32*16-160=352", cam == 352, f"cam_x={cam}")
-check("SCX = cam_x low byte", mem[0xFF43] == (cam & 0xFF), f"SCX={mem[0xFF43]}")
-hold_dir("down", 200)
-check("camera clamps at 24*16-112=272", rd16("_dbg_cam_y") == 272, f"cam_y={rd16('_dbg_cam_y')}")
-save_png(ROM.parent / "shot_far_corner.png")
-hold_dir("left", 400); hold_dir("up", 300)
-check("camera returns to origin", rd16("_dbg_cam_x") == 0 and rd16("_dbg_cam_y") == 0)
+# ------------------------------------------------------------------ full battle by a key-press bot
+def play_battle(shots=False, max_frames=60 * 60 * 20):
+    """Bot: each player unit attacks the first target in reach from where it stands, else waits."""
+    em = Emu()
+    em.wait_state([G_IDLE])
+    worst_ai = worst_range = 0
+    saw_enemy_attack = False
+    hp_ok = True
+    shot_done = False
+    start = em.fc
+    while em.state() != G_OUTCOME and em.fc - start < max_frames:
+        st = em.state()
+        if st == G_IDLE:
+            for i in range(3):
+                if em.hp(i) == 0 or em.state() != G_IDLE:
+                    continue
+                em.goto(*em.unit(i))
+                em.press("a")
+                em.wait_state([G_MOVE], 12)
+                if em.state() != G_MOVE:
+                    continue          # already acted
+                worst_range = max(worst_range, em.r16("_dbg_t_range"))
+                em.press("a")         # endpoint = own cell
+                em.wait_state([G_MENU], 12)
+                if em.state() != G_MENU:
+                    continue
+                em.press("a")         # attack if targets (default) else wait
+                em.wait_state([G_TARGET, G_IDLE, G_BANNER, G_SHOW], 12)
+                if em.state() == G_TARGET:
+                    if shots and not shot_done:
+                        em.png(ROM.parent / "shot_target.png")
+                    em.press("a")
+                    if shots and not shot_done:
+                        em.frames(4)
+                        em.png(ROM.parent / "shot_result.png")
+                        shot_done = True
+                em.wait_state([G_IDLE, G_BANNER, G_ENEMY, G_OUTCOME], 200)
+            if em.state() == G_IDLE:
+                em.press("start")     # end turn if anyone is left
+        elif st in (G_MOVE, G_MENU, G_TARGET):
+            em.press("b")             # never get stuck in a sub-menu
+        else:
+            before = [em.hp(i) for i in range(3)]
+            em.frames(1)
+            worst_ai = max(worst_ai, em.r16("_dbg_t_ai"))
+            if any(em.hp(i) < before[i] for i in range(3)):
+                saw_enemy_attack = True
+        for i in range(N_UNITS):
+            if em.hp(i) > 9999:
+                hp_ok = False
+    res = dict(outcome=em.r8("_dbg_outcome"), round=em.r16("_dbg_round"), rng=em.r32("_dbg_rng"),
+               draws=em.r32("_dbg_draws"), hps=[em.hp(i) for i in range(N_UNITS)],
+               worst_ai=worst_ai, worst_range=worst_range, enemy_attacked=saw_enemy_attack,
+               hp_ok=hp_ok, canary=em.canary_ok(), state=em.state())
+    if shots:
+        em.png(ROM.parent / "shot_outcome.png")
+    em.press("a")            # restart from the outcome screen
+    em.wait_state([G_IDLE], 200)
+    res["restart_ok"] = em.state() == G_IDLE and em.r16("_dbg_round") == 1 and em.unit(0) == (4, 12)
+    em.pb.stop(save=False)
+    return res
 
-# --- BG map consistency: every visible hw tile matches the expected terrain metatile ---
-save_png(ROM.parent / "shot_origin.png")
 
-pb.stop(save=False)
+r1 = play_battle(shots=True)
+r2 = play_battle()
+print("battle:", r1)
+check("bot battle reaches an outcome", r1["state"] == G_OUTCOME and r1["outcome"] in (1, 2), str(r1))
+check("enemy phase attacked the player", r1["enemy_attacked"])
+check(f"AI decision <=750ms (worst {r1['worst_ai']} frames)", r1["worst_ai"] <= 45)
+check(f"move range <=150ms in battle (worst {r1['worst_range']} frames)", r1["worst_range"] <= 9)
+check("hp never out of range", r1["hp_ok"])
+check("stack canary intact after full battle", r1["canary"])
+check("restart from outcome resets the battle", r1["restart_ok"])
+check("replay: identical outcome/round/RNG/draws/hp",
+      all(r1[k] == r2[k] for k in ("outcome", "round", "rng", "draws", "hps")), f"{r1} vs {r2}")
+
 ok = sum(1 for _, c, _ in results if c)
 for name, c, d in results:
     print(("PASS " if c else "FAIL ") + name + (f"  [{d}]" if d and not c else ""))

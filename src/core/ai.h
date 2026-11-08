@@ -3,6 +3,7 @@
 #ifndef CORE_AI_H
 #define CORE_AI_H
 #include <stdint.h>
+#include "platform.h"
 #include "battle.h"
 #include "path.h"
 
@@ -35,7 +36,7 @@ typedef struct {
 } AiCommand;
 
 /* invalidate the cached approach field (call at phase start and when any unit retreats/moves sides) */
-void ai_invalidate(AiScratch *s);
+void ai_invalidate(AiScratch *s) CORE_API;
 /* decide for actor; mr and s must be addressable together (GB: both in bank7) */
-void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mode, AiCommand *out);
+void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mode, AiCommand *out) CORE_API;
 #endif
