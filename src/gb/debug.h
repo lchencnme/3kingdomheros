@@ -35,4 +35,5 @@ extern volatile uint8_t dbg_vm_err;
 extern volatile uint8_t dbg_n_units;
 extern volatile uint8_t dbg_strat_casts;
 extern volatile uint8_t dbg_menu_item;
+extern volatile uint32_t dbg_crc_check;
 #endif

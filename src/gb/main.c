@@ -780,6 +780,15 @@ void game_run(void) BANKED
         memset((void *)0xCE00, 0xA5, (uint16_t)(top - 0xCE00u));
     }
     options = OPT_AUTOSAVE;
+    {   /* CRC32 self-test of the SM83 inner loop: "123456789" -> CBF43926 (ISO-HDLC check value) */
+        static const uint8_t chk[9] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+        uint8_t buf[9];
+        uint8_t o = SVBK_REG;
+        memcpy(buf, chk, 9);
+        { uint8_t cp; uint32_t sq; save_probe(SAVE_SLOT_NORMAL1, &cp, &sq); }   /* loads the CRC tables */
+        dbg_crc_check = crc32_update(0xFFFFFFFFul, buf, 9) ^ 0xFFFFFFFFul;
+        SVBK_REG = o;
+    }
 
     set_bkg_palette(0, 8, tech01_bg_pals);
     set_sprite_palette(0, 4, tech01_obj_pals);

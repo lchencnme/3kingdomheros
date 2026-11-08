@@ -7,8 +7,14 @@
 #include "../gen/rules_data.h"
 
 /* ---------------------------------------------------------------- CRC32 ISO-HDLC (reflected EDB88320) */
-static const uint8_t crc_t0[256] = {
-    0, 150, 44, 186, 25, 143, 53, 163, 50, 164, 30, 136, 43, 189, 7, 145,
+
+
+
+
+
+/* byte-sliced CRC tables t0..t3, contiguous (the GB copies all 1024 B to page-aligned WRAM) */
+const uint8_t crc_t0[1024] = {
+0, 150, 44, 186, 25, 143, 53, 163, 50, 164, 30, 136, 43, 189, 7, 145,
     100, 242, 72, 222, 125, 235, 81, 199, 86, 192, 122, 236, 79, 217, 99, 245,
     200, 94, 228, 114, 209, 71, 253, 107, 250, 108, 214, 64, 227, 117, 207, 89,
     172, 58, 128, 22, 181, 35, 153, 15, 158, 8, 178, 36, 135, 17, 171, 61,
@@ -24,9 +30,7 @@ static const uint8_t crc_t0[256] = {
     212, 66, 248, 110, 205, 91, 225, 119, 230, 112, 202, 92, 255, 105, 211, 69,
     120, 238, 84, 194, 97, 247, 77, 219, 74, 220, 102, 240, 83, 197, 127, 233,
     28, 138, 48, 166, 5, 147, 41, 191, 46, 184, 2, 148, 55, 161, 27, 141,
-};
-static const uint8_t crc_t1[256] = {
-    0, 48, 97, 81, 196, 244, 165, 149, 136, 184, 233, 217, 76, 124, 45, 29,
+0, 48, 97, 81, 196, 244, 165, 149, 136, 184, 233, 217, 76, 124, 45, 29,
     16, 32, 113, 65, 212, 228, 181, 133, 152, 168, 249, 201, 92, 108, 61, 13,
     32, 16, 65, 113, 228, 212, 133, 181, 168, 152, 201, 249, 108, 92, 13, 61,
     48, 0, 81, 97, 244, 196, 149, 165, 184, 136, 217, 233, 124, 76, 29, 45,
@@ -42,9 +46,7 @@ static const uint8_t crc_t1[256] = {
     210, 226, 179, 131, 22, 38, 119, 71, 90, 106, 59, 11, 158, 174, 255, 207,
     226, 210, 131, 179, 38, 22, 71, 119, 106, 90, 11, 59, 174, 158, 207, 255,
     242, 194, 147, 163, 54, 6, 87, 103, 122, 74, 27, 43, 190, 142, 223, 239,
-};
-static const uint8_t crc_t2[256] = {
-    0, 7, 14, 9, 109, 106, 99, 100, 219, 220, 213, 210, 182, 177, 184, 191,
+0, 7, 14, 9, 109, 106, 99, 100, 219, 220, 213, 210, 182, 177, 184, 191,
     183, 176, 185, 190, 218, 221, 212, 211, 108, 107, 98, 101, 1, 6, 15, 8,
     110, 105, 96, 103, 3, 4, 13, 10, 181, 178, 187, 188, 216, 223, 214, 209,
     217, 222, 215, 208, 180, 179, 186, 189, 2, 5, 12, 11, 111, 104, 97, 102,
@@ -60,9 +62,7 @@ static const uint8_t crc_t2[256] = {
     211, 212, 221, 218, 190, 185, 176, 183, 8, 15, 6, 1, 101, 98, 107, 108,
     10, 13, 4, 3, 103, 96, 105, 110, 209, 214, 223, 216, 188, 187, 178, 181,
     189, 186, 179, 180, 208, 215, 222, 217, 102, 97, 104, 111, 11, 12, 5, 2,
-};
-static const uint8_t crc_t3[256] = {
-    0, 119, 238, 153, 7, 112, 233, 158, 14, 121, 224, 151, 9, 126, 231, 144,
+0, 119, 238, 153, 7, 112, 233, 158, 14, 121, 224, 151, 9, 126, 231, 144,
     29, 106, 243, 132, 26, 109, 244, 131, 19, 100, 253, 138, 20, 99, 250, 141,
     59, 76, 213, 162, 60, 75, 210, 165, 53, 66, 219, 172, 50, 69, 220, 171,
     38, 81, 200, 191, 33, 86, 207, 184, 40, 95, 198, 177, 47, 88, 193, 182,
@@ -77,8 +77,10 @@ static const uint8_t crc_t3[256] = {
     155, 236, 117, 2, 156, 235, 114, 5, 149, 226, 123, 12, 146, 229, 124, 11,
     134, 241, 104, 31, 129, 246, 111, 24, 136, 255, 102, 17, 143, 248, 97, 22,
     160, 215, 78, 57, 167, 208, 73, 62, 174, 217, 64, 55, 169, 222, 71, 48,
-    189, 202, 83, 36, 186, 205, 84, 35, 179, 196, 93, 42, 180, 195, 90, 45,
-};
+    189, 202, 83, 36, 186, 205, 84, 35, 179, 196, 93, 42, 180, 195, 90, 45};
+#define crc_t1 (crc_t0 + 256)
+#define crc_t2 (crc_t0 + 512)
+#define crc_t3 (crc_t0 + 768)
 
 /* byte-sliced table CRC: no 32-bit shifts on the SM83; u8 loop counter so SDCC keeps it in a register */
 static uint8_t s0, s1, s2, s3;
@@ -96,6 +98,17 @@ static void crc_block(const uint8_t *p, uint8_t n)
     s0 = c0; s1 = c1; s2 = c2; s3 = c3;
 }
 
+#ifdef __SDCC
+/* GB: SM83 assembly inner loop with WRAM tables (src/gb/crc_gb.c); this C loop is the host reference */
+uint32_t crc_update_gb(uint32_t crc, const uint8_t *p, uint16_t n) NONBANKED;
+void crc_prepare(void) NONBANKED;
+#define CRC_PREPARE() crc_prepare()
+uint32_t crc32_update(uint32_t crc, const uint8_t *p, uint16_t n) CORE_API
+{
+    return crc_update_gb(crc, p, n);
+}
+#else
+#define CRC_PREPARE() ((void)0)
 uint32_t crc32_update(uint32_t crc, const uint8_t *p, uint16_t n) CORE_API
 {
     s0 = (uint8_t)crc; s1 = (uint8_t)(crc >> 8); s2 = (uint8_t)(crc >> 16); s3 = (uint8_t)(crc >> 24);
@@ -106,6 +119,7 @@ uint32_t crc32_update(uint32_t crc, const uint8_t *p, uint16_t n) CORE_API
     }
     return (uint32_t)s0 | ((uint32_t)s1 << 8) | ((uint32_t)s2 << 16) | ((uint32_t)s3 << 24);
 }
+#endif
 
 /* ---------------------------------------------------------------- image addressing */
 static uint8_t slot_bank(uint8_t slot, uint8_t copy) { return (uint8_t)(slot * 4u + copy * 2u); }
@@ -179,21 +193,32 @@ static uint16_t body_len_battle(uint8_t n_units)
 
 static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen);
 
+/* probe cache (design doc 11.6 performance): SRAM is only written by this program, so the result of
+ * the last full probe / successful save of a slot stays true; save_battle uses it to pick the target
+ * copy without re-reading and re-CRCing both copies. Loads always run the full validation. */
+static uint8_t pc_state[3];       /* 0 unknown, 1 known: newest valid copy in pc_copy, 2 known: none */
+static uint8_t pc_copy[3];
+static uint32_t pc_seq[3];
+
+void save_cache_reset(void) CORE_API { pc_state[0] = pc_state[1] = pc_state[2] = 0; }
+
 uint8_t save_probe(uint8_t slot, uint8_t *copy, uint32_t *seq) CORE_API
 {
     uint32_t sa = 0, sb = 0;
+    CRC_PREPARE();
     uint16_t la, lb;
     uint8_t va = probe_copy(slot_bank(slot, 0), &sa, &la) == SAVE_OK;
     uint8_t vb = probe_copy(slot_bank(slot, 1), &sb, &lb) == SAVE_OK;
+    pc_state[slot] = 2;
     if (va && vb) {
         uint32_t d = sa - sb;               /* modular comparison (11.6) */
-        if (d == 0x80000000ul) return SAVE_ERR_CONFLICT;                  /* half-range: refuse to guess */
+        if (d == 0x80000000ul) { pc_state[slot] = 0; return SAVE_ERR_CONFLICT; }   /* refuse to guess */
         if (d == 0 || d < 0x80000000ul) { *copy = 0; *seq = sa; } else { *copy = 1; *seq = sb; }
-        return SAVE_OK;
-    }
-    if (va) { *copy = 0; *seq = sa; return SAVE_OK; }
-    if (vb) { *copy = 1; *seq = sb; return SAVE_OK; }
-    return SAVE_ERR_NONE;
+    } else if (va) { *copy = 0; *seq = sa; }
+    else if (vb) { *copy = 1; *seq = sb; }
+    else return SAVE_ERR_NONE;
+    pc_state[slot] = 1; pc_copy[slot] = *copy; pc_seq[slot] = *seq;
+    return SAVE_OK;
 }
 
 uint8_t save_battle(uint8_t slot, const Battle *b, const SaveUi *ui) CORE_API
@@ -204,8 +229,12 @@ uint8_t save_battle(uint8_t slot, const Battle *b, const SaveUi *ui) CORE_API
     uint32_t seq = 0, crc;
     uint16_t blen = body_len_battle(b->n_units);
     ActiveUnit u;
-    if (save_probe(slot, &copy, &seq) == SAVE_OK) { target = (uint8_t)(copy ^ 1u); seq++; }
+    CRC_PREPARE();
+    if (pc_state[slot] == 1) { copy = pc_copy[slot]; seq = pc_seq[slot]; target = (uint8_t)(copy ^ 1u); seq++; }
+    else if (pc_state[slot] == 2) { target = 0; seq = 1; }
+    else if (save_probe(slot, &copy, &seq) == SAVE_OK) { target = (uint8_t)(copy ^ 1u); seq++; }
     else { target = 0; seq = 1; }
+    pc_state[slot] = 0;                                 /* unknown until this save completes */
     w.base = slot_bank(slot, target); w.pos = 0; w.crc = 0xFFFFFFFFul;
 
     img_write(w.base, 30, zero2, 2);                    /* 1. clear both markers of the target copy */
@@ -272,6 +301,7 @@ uint8_t save_battle(uint8_t slot, const Battle *b, const SaveUi *ui) CORE_API
         img_read(w.base, 30, m, 2);
         if (m[0] != 0xA5 || m[1] != 0x5A) return SAVE_ERR_IO;
     }
+    pc_state[slot] = 1; pc_copy[slot] = target; pc_seq[slot] = seq;
     return SAVE_OK;
 }
 
@@ -370,5 +400,6 @@ uint8_t load_battle(uint8_t slot, Battle *b, SaveUi *ui) CORE_API
 void save_invalidate(uint8_t slot) CORE_API
 {
     uint8_t z[2] = {0, 0}, c;
+    pc_state[slot] = 2;
     for (c = 0; c < 2; c++) img_write(slot_bank(slot, c), 30, z, 2);
 }

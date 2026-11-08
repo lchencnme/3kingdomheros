@@ -191,7 +191,7 @@ check("CGB double speed (KEY1 bit7)", e.m[0xFF4D] & 0x80, f"KEY1={e.m[0xFF4D]:02
 hdr = ROM.read_bytes()
 check("header: CGB-only + MBC5+RAM+BATT + 8MiB/128KiB",
       hdr[0x143] == 0xC0 and hdr[0x147] == 0x1B and hdr[0x148] == 0x08 and hdr[0x149] == 0x04)
-check("opening banner shown", e.state() == G_BANNER)
+check(f"SM83 CRC32 self-test = CBF43926 ({e.r32('_dbg_crc_check'):08X})", e.r32("_dbg_crc_check") == 0xCBF43926)
 e.wait_state([G_IDLE])
 check("player phase idle, round 1", e.state() == G_IDLE and e.r16("_dbg_round") == 1)
 check("cursor starts on 刘备 (4,12)", e.cur() == (4, 12))

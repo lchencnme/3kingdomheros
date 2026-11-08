@@ -93,6 +93,7 @@ int main(void)
         for (k = 0; k <= total + 1; k++) {
             int ok2, ok3;
             memcpy(host_sram, base_img, sizeof host_sram);
+            save_cache_reset();
             setup(3);
             host_cut_after = k; host_writes = 0;
             save_battle(SAVE_SLOT_SUSPEND, &B, &ui);
@@ -105,6 +106,7 @@ int main(void)
         CHECK(new_ok >= 1 && old_ok >= total - 2, "old kept until commit (old %ld new %ld)", old_ok, new_ok);
         printf("power-cut model: %ld cut points, old=%ld new=%ld bad=%ld\n", total + 2, old_ok, new_ok, bad);
         memcpy(host_sram, base_img, sizeof host_sram);
+        save_cache_reset();
     }
 
     /* corruption rejection falls back to the other copy */
@@ -157,6 +159,7 @@ int main(void)
         uint8_t hdr[32];
         uint32_t crc;
         memset(host_sram, 0, sizeof host_sram);
+        save_cache_reset();
         setup(4);
         save_battle(SAVE_SLOT_SUSPEND, &B, &ui);
         memcpy(hdr, host_sram[8], 32);
@@ -166,6 +169,7 @@ int main(void)
         memcpy(host_sram[8], hdr, 32);
         CHECK(save_probe(SAVE_SLOT_SUSPEND, &copy, &seq) != SAVE_OK, "unknown schema rejected");
         memset(host_sram, 0, sizeof host_sram);
+        save_cache_reset();
         save_battle(SAVE_SLOT_SUSPEND, &B, &ui);
         memcpy(hdr, host_sram[8], 32);
         hdr[12] ^= 1;                                                      /* other rules profile */
@@ -175,6 +179,7 @@ int main(void)
         CHECK(save_probe(SAVE_SLOT_SUSPEND, &copy, &seq) != SAVE_OK, "other profile rejected");
         /* invalidate */
         memset(host_sram, 0, sizeof host_sram);
+        save_cache_reset();
         save_battle(SAVE_SLOT_SUSPEND, &B, &ui);
         save_invalidate(SAVE_SLOT_SUSPEND);
         CHECK(save_probe(SAVE_SLOT_SUSPEND, &copy, &seq) == SAVE_ERR_NONE, "invalidated suspend");

@@ -42,6 +42,8 @@ uint8_t save_probe(uint8_t slot, uint8_t *copy, uint32_t *seq) CORE_API;
 /* load the newest valid battle save: units via unit_store/grid_occ_set, battle + ui filled.
  * turn_limit is not saved (it comes from the battle definition): the caller sets it. */
 uint8_t load_battle(uint8_t slot, Battle *b, SaveUi *ui) CORE_API;
+/* forget cached probe results (tests that modify SRAM behind the save module's back) */
+void save_cache_reset(void) CORE_API;
 /* invalidate both copies of a slot (clear commit markers), e.g. suspend after RESULT */
 void save_invalidate(uint8_t slot) CORE_API;
 #endif

@@ -34,3 +34,4 @@ volatile __at(0xCDE4) uint8_t dbg_vm_err;
 volatile __at(0xCDE5) uint8_t dbg_n_units;
 volatile __at(0xCDE6) uint8_t dbg_strat_casts;
 volatile __at(0xCDE7) uint8_t dbg_menu_item;
+volatile __at(0xCDEC) uint32_t dbg_crc_check;
