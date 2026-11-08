@@ -164,9 +164,51 @@ _TPAL = list(map(int, _re.search(r"tech01_terrain_pal\[10\] = \{(.*?)\}", _IDX).
 _BLANK = 40
 
 
-def view_mismatches(em):
-    """visible BG hardware tiles (ids + palette bits) vs terrain data; highlight bit ignored"""
+_DATA_C = (ROM.resolve().parents[2] / "src/gen/tech01_data.c").read_text()
+
+
+def _arr(name, src):
+    body = _re.search(name + r"\[\] = \{(.*?)\};", src, _re.S).group(1)
+    return [int(v) for v in body.replace("\n", "").split(",") if v.strip()]
+
+
+_BGT = _arr("tech01_bg_tiles", _DATA_C)
+_UNT = _arr("tech01_unit_tiles", _DATA_C)
+_RULES = _json.load(open(ROM.resolve().parents[2] / "content/default_rules.json"))
+_FAM = {c["id"]: c["family"] for c in _RULES["classes"]}
+
+
+def _slot(wx, wy):
+    return (wx % 22) * 16 + (wy % 16)
+
+
+def _slot_vram(s):
+    if s < 256:
+        bank, tid = 0, s
+    elif s < 304:
+        bank, tid = 1, 72 + s - 256
+    else:
+        bank, tid = 1, 200 + s - 304
+    return bank, tid, (0x9000 + tid * 16 if tid < 128 else 0x8800 + (tid - 128) * 16)
+
+
+def view_mismatches(em, highlight=False):
+    """independent re-implementation of the 352-slot compositor (design doc 12.2): every visible
+    hardware position must point at its own slot and hold exactly terrain + units in draw order"""
     cx, cy = em.r16("_dbg_cam_x"), em.r16("_dbg_cam_y")
+    units = []
+    for i in range(12):
+        a = 0xD000 + 40 * i
+        hp = em.m[1, a + 10] | (em.m[1, a + 11] << 8)
+        fl = em.m[1, a + 34]
+        if not hp or fl & 0x38:
+            continue
+        fac, cls = em.m[1, a + 3], em.m[1, a + 4]
+        pal = 5 if fac == 2 else (7 if fl & 2 else 4)
+        fam = _FAM[cls]
+        body = 1 if fam == "bow" else (2 if fam == "cavalry" else 0)
+        units.append((em.m[1, a + 8], i, em.m[1, a + 7], pal, body))
+    units.sort()
     bad = 0
     for j in range(15):
         for i in range(21):
@@ -174,12 +216,36 @@ def view_mismatches(em):
             if wy * 8 - cy >= 112 or wx * 8 - cx >= 160:
                 continue
             if wx < 0 or wy < 0 or wx >= _W * 2 or wy >= _H * 2:
-                exp = (_BLANK, 0)
+                data, pal = [0] * 16, 0
             else:
                 tt = _TERR[(wy >> 1) * _W + (wx >> 1)]
-                exp = (_META[tt][((wy & 1) << 1) | (wx & 1)], _TPAL[tt])
-            a = 0x9800 + ((wy & 31) << 5) + (wx & 31)
-            if (em.m[0, a], em.m[1, a] & 3) != exp:
+                tid = _META[tt][((wy & 1) << 1) | (wx & 1)]
+                data, pal = list(_BGT[tid * 16:tid * 16 + 16]), _TPAL[tt]
+            under = False
+            for (uy, ui, ux, upal, body) in units:
+                lx, ly = wx - ux * 2, wy - (uy * 2 - 1)
+                if not (0 <= lx <= 1 and 0 <= ly <= 2):
+                    continue
+                o = ((body * 6) + ly * 2 + lx) * 24
+                ut = _UNT[o:o + 24]
+                if not under:
+                    for y in range(8):
+                        ink = data[2 * y] & data[2 * y + 1]
+                        data[2 * y] = data[2 * y + 1] = ink
+                    under = True
+                for y in range(8):
+                    m = ut[16 + y]
+                    data[2 * y] = (data[2 * y] & ~m & 0xFF) | ut[2 * y]
+                    data[2 * y + 1] = (data[2 * y + 1] & ~m & 0xFF) | ut[2 * y + 1]
+                pal = upal
+            bank, tid, addr = _slot_vram(_slot(wx, wy))
+            pos = 0x9800 + ((wy & 31) << 5) + (wx & 31)
+            got_id, got_at = em.m[0, pos], em.m[1, pos]
+            got = [em.m[bank, addr + k] for k in range(16)]
+            ok = got_id == tid and (got_at & 0x08) == (0x08 if bank else 0) and got == data
+            if not highlight:
+                ok = ok and (got_at & 7) == pal
+            if not ok:
                 bad += 1
     return bad
 
@@ -210,7 +276,9 @@ check("legal endpoint -> action menu, unit not moved yet", e.state() == G_MENU a
 e.press("b")
 check("B in menu -> back to move preview, nothing committed", e.state() == G_MOVE and e.unit(0) == (4, 12))
 e.press("a")
+e.wait_state([G_MENU], 30)
 e.press("a")       # 待命
+e.wait_state([G_IDLE], 30)
 check("wait commits the move", e.unit(0) == (6, 12) and e.state() == G_IDLE, f"u0={e.unit(0)} st={e.state()}")
 e.press("a")
 check("acted unit not selectable", e.state() == G_IDLE)

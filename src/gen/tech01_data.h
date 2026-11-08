@@ -7,10 +7,15 @@
 #define TECH01_BG_TILES 40u
 #define TECH01_OBJ_TILES 12u
 #define TECH01_UNITS 8u
-#define TECH01_BANK 2u
+#define TECH01_BANK 11u
 #define OBJT_PLAYER 0u
 #define OBJT_ENEMY 4u
 #define OBJT_CURSOR 8u
+#define UNIT_BODY_FOOT 0u
+#define UNIT_BODY_BOW 1u
+#define UNIT_BODY_HORSE 2u
+#define UNIT_TILE_BYTES 24u   /* 16 B 2bpp + 8 B mask; 6 tiles per body (2 x 3) */
+extern const uint8_t tech01_unit_tiles[];
 typedef struct { uint8_t cls, faction, x, y; } Tech01Unit;
 extern const uint8_t tech01_bg_tiles[];
 extern const uint8_t tech01_obj_tiles[];

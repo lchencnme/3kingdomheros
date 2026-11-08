@@ -84,30 +84,25 @@ static uint8_t unit_name_tx(const ActiveUnit *u)
     return class_name_tx[u->class_id];
 }
 
+/* units are composited into BG by mapview (design doc 12.2); OBJ only for the cursor and a "ghost"
+ * of the selected unit at its tentative cell while the action is being chosen */
 static void place_sprites(void)
 {
-    uint8_t i, s = 0;
-    units_snapshot(B.n_units);
-    for (i = 0; i < MAX_SHOWN; i++, s += 2) {
-        int16_t ux, uy, sx, sy;
-        uint8_t base, pal;
-        if (i >= B.n_units || !SNAP_ALIVE(i)) { move_sprite(s, 0, 0); move_sprite(s + 1, 0, 0); continue; }
-        ux = snap_x[i]; uy = snap_y[i];
-        if ((state == G_MENU || state == G_TARGET) && i == sel) { ux = tent_x; uy = tent_y; }
-        sx = ux * 16 - (int16_t)cam_x + 8;
-        sy = uy * 16 - (int16_t)cam_y + 16;
-        base = snap_fac[i] == FAC_ENEMY ? OBJT_ENEMY : OBJT_PLAYER;
-        pal = snap_fac[i] == FAC_ENEMY ? 1 : ((snap_flags[i] & AF_ACTED) ? 3 : 0);
-        set_sprite_tile(s, base); set_sprite_tile(s + 1, (uint8_t)(base + 2));
-        set_sprite_prop(s, pal); set_sprite_prop(s + 1, pal);
-        if (sx < -8 || sx > 168 || sy < 0 || sy >= (int16_t)VIEW_H + 16) {
-            move_sprite(s, 0, 0); move_sprite(s + 1, 0, 0);
-        } else {
-            move_sprite(s, (uint8_t)sx, (uint8_t)sy);
-            move_sprite(s + 1, (uint8_t)(sx + 8), (uint8_t)sy);
+    uint8_t i;
+    for (i = 0; i < 2 * MAX_SHOWN; i++) move_sprite(i, 0, 0);
+    if ((state == G_MENU || state == G_TARGET || state == G_SLIST || state == G_SAIM) && sel < MAX_SHOWN) {
+        int16_t sx = (int16_t)tent_x * 16 - (int16_t)cam_x + 8;
+        int16_t sy = (int16_t)tent_y * 16 - (int16_t)cam_y + 16;
+        uint8_t base = OBJT_PLAYER;
+        set_sprite_tile(0, base); set_sprite_tile(1, (uint8_t)(base + 2));
+        set_sprite_prop(0, 0); set_sprite_prop(1, 0);
+        if (sx >= -8 && sx <= 168 && sy >= 0 && sy < (int16_t)VIEW_H + 16) {
+            move_sprite(0, (uint8_t)sx, (uint8_t)sy);
+            move_sprite(1, (uint8_t)(sx + 8), (uint8_t)sy);
         }
     }
     {
+        uint8_t s = 2 * MAX_SHOWN;
         int16_t sx = (int16_t)cur_x * 16 - (int16_t)cam_x + 8;
         int16_t sy = (int16_t)cur_y * 16 - (int16_t)cam_y + 16;
         uint8_t hide = state == G_ENEMY || state == G_BANNER || state == G_OUTCOME;
@@ -751,9 +746,10 @@ static void logic(void)
     default:
         logic_player();
     }
-    /* cursor info HUD: refresh once the cursor has rested 3 frames (no re-raster on every step while scrolling) */
+    /* cursor info HUD: refresh once the cursor has rested 8 frames (longer than the 4-frame key repeat,
+     * so holding a direction never re-rasterises the HUD) */
     if (state == G_IDLE) {
-        if (cur_x != last_hx || cur_y != last_hy) { last_hx = cur_x; last_hy = cur_y; hud_settle = 3; hud_dirty = 1; }
+        if (cur_x != last_hx || cur_y != last_hy) { last_hx = cur_x; last_hy = cur_y; hud_settle = 8; hud_dirty = 1; }
         else if (hud_settle) hud_settle--;
         if (hud_dirty && !hud_settle) { hud_unit_or_terrain(); hud_dirty = 0; }
     }
