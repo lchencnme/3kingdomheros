@@ -10,6 +10,10 @@ python3 -I tools/ref_model.py > build/host/ref_cases.txt
 cc -std=c99 -Wall -Wextra -O1 -o build/host/test_core tests/host/test_core.c tests/host/host_grid.c \
    src/core/rng.c src/core/rules.c src/core/path.c src/gen/rules_data.c
 build/host/test_core build/host/ref_cases.txt
+cc -std=c99 -Wall -Wextra -O1 -o build/host/test_battle tests/host/test_battle.c tests/host/host_units.c \
+   tests/host/host_grid.c src/core/battle.c src/core/ai.c src/core/rng.c src/core/rules.c src/core/path.c \
+   src/gen/rules_data.c
+build/host/test_battle
 $LCC -Wa-l -Wl-m -Wl-j -Wm-yC -Wm-yt0x1B -Wm-yo512 -Wm-ya16 -Wm-ynSANGUOHJZ \
      -Wl-g.STACK=0xD000 -Wl-b_DATA=0xC600 -o build/gb/sanguo_hjz.gbc \
      src/gb/main.c src/gb/wram.c src/gb/input.c src/gb/mapview.c \
