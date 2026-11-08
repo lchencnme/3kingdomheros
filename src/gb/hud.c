@@ -78,6 +78,11 @@ static void blit_rows(uint8_t *d, const uint8_t *src, uint8_t n, uint8_t sh, uin
 
 static void raster_line(uint8_t line)
 {
+    hud_raster(line);
+}
+
+void hud_raster(uint8_t line)
+{
     uint8_t i, x = 0;
     memset(hud_bits, 0, sizeof hud_bits);
     for (i = 0; i < nglyph[line]; i++) {

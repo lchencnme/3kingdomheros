@@ -227,7 +227,7 @@ e.pb.stop(save=False)
 
 
 # ------------------------------------------------------------------ full battle by a key-press bot
-def play_battle(shots=False, max_frames=60 * 60 * 20):
+def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
     """Bot: each player unit attacks the first target in reach from where it stands, else waits."""
     em = Emu()
     em.wait_state([G_IDLE])
@@ -270,6 +270,8 @@ def play_battle(shots=False, max_frames=60 * 60 * 20):
             em.press("b")             # never get stuck in a sub-menu
         else:
             before = [em.hp(i) for i in range(3)]
+            if skip_presentations and em.fc % 7 == 0:
+                em.press("b", after=1)     # B skips fullscreen presentations (and only presentations)
             em.frames(1)
             worst_ai = max(worst_ai, em.r16("_dbg_t_ai"))
             if any(em.hp(i) < before[i] for i in range(3)):
@@ -280,7 +282,10 @@ def play_battle(shots=False, max_frames=60 * 60 * 20):
     res = dict(outcome=em.r8("_dbg_outcome"), round=em.r16("_dbg_round"), rng=em.r32("_dbg_rng"),
                draws=em.r32("_dbg_draws"), hps=[em.hp(i) for i in range(N_UNITS)],
                worst_ai=worst_ai, worst_range=worst_range, enemy_attacked=saw_enemy_attack,
-               hp_ok=hp_ok, canary=em.canary_ok(), stack_free=em.stack_free(), state=em.state())
+               hp_ok=hp_ok, canary=em.canary_ok(), stack_free=em.stack_free(), state=em.state(),
+               fs_count=em.r8("_dbg_fs_count"), fs_ly_max=em.r8("_dbg_fs_ly_max"),
+               fs_chunk_max=em.r16("_dbg_fs_bytes_max"), fs_skipped=em.r8("_dbg_fs_skipped"),
+               bg_ok=view_mismatches(em) == 0)
     if shots:
         em.frames(10)
         em.png(ROM.parent / "shot_outcome.png")
@@ -302,6 +307,14 @@ check("hp never out of range", r1["hp_ok"])
 check("stack canary intact after full battle", r1["canary"])
 check(f"stack high-water margin >= 64B (free {r1['stack_free']})", r1["stack_free"] >= 64)
 check("restart from outcome resets the battle", r1["restart_ok"])
+check(f"fullscreen presentations ran ({r1['fs_count']})", r1["fs_count"] >= 3)
+check(f"all fullscreen GDMA end inside VBlank (max LY {r1['fs_ly_max']} <= 152)", 144 <= r1["fs_ly_max"] <= 152)
+check(f"fullscreen upload chunk <= 1024 B ({r1['fs_chunk_max']})", 0 < r1["fs_chunk_max"] <= 1024)
+check("map consistent after the last presentation", r1["bg_ok"])
+r3 = play_battle(skip_presentations=True)
+check(f"B skipped presentations ({r3['fs_skipped']})", r3["fs_skipped"] >= 1)
+check("skipping presentations does not change logic (outcome/round/RNG/draws/hp)",
+      all(r1[k] == r3[k] for k in ("outcome", "round", "rng", "draws", "hps")), f"{r1} vs {r3}")
 check("replay: identical outcome/round/RNG/draws/hp",
       all(r1[k] == r2[k] for k in ("outcome", "round", "rng", "draws", "hps")), f"{r1} vs {r2}")
 

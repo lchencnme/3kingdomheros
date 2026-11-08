@@ -8,4 +8,5 @@ extern int8_t in_dx, in_dy;          /* one-step cursor move this frame (0/±1, 
 
 void input_init(void);
 void input_update(void);
+void input_flush(void);          /* drop latched edges (e.g. the B that skipped a presentation) */
 #endif

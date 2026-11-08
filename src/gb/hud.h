@@ -13,4 +13,6 @@ void hud_glyph(uint8_t line, uint16_t g);
 void hud_end(void);                            /* schedule: raster + GDMA + flip over the next frames */
 void hud_service(void);                        /* main loop, visible period */
 void hud_commit(void);                         /* inside VBlank */
+/* rasterise one composed line into the 576 B staging buffer at 0xC800 (2 tile rows x 18 tiles) */
+void hud_raster(uint8_t line);
 #endif

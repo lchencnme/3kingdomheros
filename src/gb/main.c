@@ -17,6 +17,7 @@
 #include "hud.h"
 #include "rom.h"
 #include "audio.h"
+#include "fs.h"
 #include "../gen/tech01_data.h"
 #include "../gen/text_data.h"
 
@@ -176,6 +177,38 @@ static void hud_banner(uint8_t phase)
     hud_begin();
     hud_tx(0, phase == FAC_ENEMY ? TX_PHASE_ENEMY : TX_PHASE_PLAYER, B.round);
     hud_end();
+}
+
+/* ---------------------------------------------------------------- presentation (design doc 12.4/12.5) */
+static void map_mode_restore(void)
+{
+    /* LCD is off (fs_present returns that way): reload map-mode VRAM, palettes, HUD */
+    set_bkg_palette(0, 8, tech01_bg_pals);
+    VBK_REG = VBK_TILES;
+    rom_set_bkg_data(TECH01_BANK, 0, TECH01_BG_TILES, tech01_bg_tiles);
+    set_bkg_data(TECH01_BG_TILES, 1, blank16);
+    hud_init(TECH01_BG_TILES);
+    mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
+    SHOW_WIN; SHOW_SPRITES;
+    DISPLAY_ON;
+}
+
+static void side_of_unit(uint8_t i, FsSide *s)
+{
+    ActiveUnit u;
+    load(i, &u);
+    s->cls = u.class_id; s->fac = u.faction; s->hp = u.hp; s->name_tx = unit_name_tx(&u);
+}
+
+/* resolve (sealed) then present the attack fullscreen, then restore the map */
+static void attack_and_present(uint8_t ai, uint8_t di, AttackResult *r)
+{
+    FsSide sa, sd;
+    side_of_unit(ai, &sa);
+    side_of_unit(di, &sd);
+    battle_attack(&B, ai, di, r);           /* logic sealed before any presentation (design doc 4.4) */
+    fs_present(&sa, &sd, r);
+    map_mode_restore();
 }
 
 /* ---------------------------------------------------------------- save (design doc 11.6) */
@@ -376,7 +409,7 @@ static void logic_player(void)
         else if (in_pressed & J_A) {
             AttackResult r;
             commit_move_if_needed();           /* 4.3 confirm boundary */
-            battle_attack(&B, sel, targets[tsel], &r);
+            attack_and_present(sel, targets[tsel], &r);
             cur_x = tent_x; cur_y = tent_y;
             hud_result(&r);
             state = G_SHOW; timer = 50; next_state = G_IDLE;
@@ -421,7 +454,7 @@ static void enemy_step(void)
     if (c.x != u.x || c.y != u.y) battle_move(enemy_i, c.x, c.y);
     cur_x = c.x; cur_y = c.y;                  /* camera follows the actor */
     if (c.action == ACT_ATTACK) {
-        battle_attack(&B, enemy_i, c.target, &r);
+        attack_and_present(enemy_i, c.target, &r);
         hud_result(&r);
         timer = 50;
     } else {

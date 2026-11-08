@@ -52,3 +52,9 @@ void input_update(void)
     }
     if (hold < 250) hold++;
 }
+
+void input_flush(void)
+{
+    CRITICAL { isr_latch = 0; isr_prev = joypad(); }
+    hold = 0;
+}
