@@ -2,6 +2,7 @@
  * design doc 11.3) and reads only unbanked song data. Driven by a 64 Hz timer interrupt so that it
  * keeps time while the LCD is off (design doc 14.1). */
 #include <gb/gb.h>
+#include "debug.h"
 #include <gb/hardware.h>
 #include "audio.h"
 
@@ -23,8 +24,6 @@ typedef struct {
 #define acc (AS->acc)
 #define sfx_left (AS->sfx_left)
 #define sfx_prio (AS->sfx_prio)
-volatile uint16_t dbg_audio_ticks;
-volatile uint8_t dbg_audio_notes;
 
 /* SFX table (design doc 14.3): channel, priority, ticks @64 Hz */
 typedef struct { uint8_t ch, prio, ticks, r1, r2, r3, r4; } Sfx;

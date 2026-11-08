@@ -4,6 +4,7 @@
  * Enemy phase: core AI (第8章) per unit with map-fast presentation. Victory/defeat + restart.
  * Temporary: units are OBJ placeholders (BG compositor pending); presentation is map-fast only. */
 #include <gb/gb.h>
+#include "debug.h"
 #include <gb/cgb.h>
 #include <string.h>
 #include "../core/battle.h"
@@ -44,14 +45,6 @@ static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 static const uint8_t blank16[16];
 
 /* debug/test hooks (read by tests/emu/test_rom.py through the .noi symbol file) */
-volatile uint8_t dbg_state, dbg_sel, dbg_cur_x, dbg_cur_y, dbg_frame_lo, dbg_outcome, dbg_phase;
-volatile uint16_t dbg_cam_x, dbg_cam_y, dbg_round, dbg_t_range, dbg_t_ai;
-volatile uint8_t dbg_unit_xy[TECH01_UNITS * 2];
-volatile uint16_t dbg_unit_hp[TECH01_UNITS];
-volatile uint32_t dbg_rng, dbg_draws;
-volatile uint8_t dbg_save_result, dbg_saves;
-volatile uint16_t dbg_sv[4], dbg_sv_probe;
-volatile uint16_t dbg_ai_t_range, dbg_ai_t_field, dbg_ai_t_cand;
 
 /* ---------------------------------------------------------------- helpers */
 static void load(uint8_t i, ActiveUnit *u) { unit_load(i, u); }
@@ -218,7 +211,6 @@ static uint8_t do_suspend_save(void)
     uint8_t r;
     ui.battle_id = 0xFFFEu; ui.cam_x = cam_x; ui.cam_y = cam_y; ui.cur_x = cur_x; ui.cur_y = cur_y;
     ui.presentation = 0; ui.text_speed = 0; ui.options = options; ui.gold = 0;
-    { uint8_t c; uint32_t q; uint16_t t0 = sys_time; save_probe(SAVE_SLOT_SUSPEND, &c, &q); dbg_sv_probe = sys_time - t0; }
     r = save_battle(SAVE_SLOT_SUSPEND, &B, &ui);
     dbg_save_result = r; dbg_saves++;
     return r;

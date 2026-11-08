@@ -1,5 +1,6 @@
 #pragma bank 5   /* game logic, HUD and map view: code bank 5 (design doc 11.3) */
 #include <gb/gb.h>
+#include "debug.h"
 #include <string.h>
 #include "hud.h"
 #include "rom.h"
@@ -25,7 +26,6 @@ static uint8_t shown, blank;
 static uint8_t job;            /* 0 idle, 1 raster L0, 2 dma L0, 3 raster L1, 4 dma L1, 5 prep ids, 6 flip */
 static uint8_t job_page;       /* page being drawn */
 
-volatile uint8_t dbg_hud_busy;
 
 static uint8_t page_base(uint8_t pg) { return pg ? 128u : 0u; }
 

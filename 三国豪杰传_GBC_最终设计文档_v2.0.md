@@ -849,7 +849,8 @@ score =
 | C400–C5FF | 512 | core512（附录B.3） |
 | C600–C7FF | 512 | **新增**：GBDK 运行时 _DATA/_BSS、C 全局变量、银行影子（u16 rom、u8 svbk/vbk/sram）、作业游标、VM 游标；链接时设 `-Wl-b_DATA=0xC600`，并用 link map 校验末地址 ≤C7FF |
 | C800–CBFF | 1024 | UI 与字形解压区（分页缓冲、320B tile 行缓冲） |
-| CC00–CDFF | 512 | 事件结果队列 |
+| CC00–CD9F | 416 | 事件结果队列（v2 编码：尾部 96B 让给调试区） |
+| CDA0–CDFF | 96 | 测试/调试钩子（固定地址，供模拟器测试读取；发行构建可回收） |
 | CE00–CFFF | 512 | 栈（`-Wl-g.STACK=0xD000`），CE00–CE0F 为金丝雀区 |
 
 **切换 WRAM D000–DFFF（SVBK 1..7）**

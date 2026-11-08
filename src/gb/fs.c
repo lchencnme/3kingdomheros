@@ -1,5 +1,6 @@
 #pragma bank 5
 #include <gb/gb.h>
+#include "debug.h"
 #include <gb/cgb.h>
 #include <string.h>
 #include "fs.h"
@@ -30,8 +31,6 @@
 #define HUD_TOP_ID 160u
 #define HUD_BOT_ID 196u
 
-volatile uint8_t dbg_fs_count, dbg_fs_ly_max, dbg_fs_skipped;
-volatile uint16_t dbg_fs_frames, dbg_fs_bytes_max;
 
 static uint8_t shown_map;          /* 0: 9800 shown, 1: 9C00 shown */
 static uint8_t buf_sel;            /* composite buffer for the NEXT frame: 0 = A, 1 = B */
