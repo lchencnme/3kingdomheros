@@ -112,6 +112,38 @@ class Emu:
         Path(path).write_bytes(data)
 
 
+# ------------------------------------------------------------------ BG map consistency helper
+import json as _json
+import re as _re
+_B = _json.load(open(ROM.resolve().parents[2] / "content/battles/BT_TECH01.json"))
+_W, _H, _TERR = _B["map"]["width"], _B["map"]["height"], _B["map"]["terrain"]
+_IDX = (ROM.resolve().parents[2] / "src/gen/tech01_index.c").read_text()
+_META = [list(map(int, m.split(","))) for m in _re.findall(r"\{(\d+, \d+, \d+, \d+)\}",
+         _re.search(r"tech01_meta\[10\]\[4\] = \{(.*?)\};", _IDX).group(1))]
+_TPAL = list(map(int, _re.search(r"tech01_terrain_pal\[10\] = \{(.*?)\}", _IDX).group(1).split(",")))
+_BLANK = 40
+
+
+def view_mismatches(em):
+    """visible BG hardware tiles (ids + palette bits) vs terrain data; highlight bit ignored"""
+    cx, cy = em.r16("_dbg_cam_x"), em.r16("_dbg_cam_y")
+    bad = 0
+    for j in range(15):
+        for i in range(21):
+            wx, wy = cx // 8 + i, cy // 8 + j
+            if wy * 8 - cy >= 112 or wx * 8 - cx >= 160:
+                continue
+            if wx < 0 or wy < 0 or wx >= _W * 2 or wy >= _H * 2:
+                exp = (_BLANK, 0)
+            else:
+                tt = _TERR[(wy >> 1) * _W + (wx >> 1)]
+                exp = (_META[tt][((wy & 1) << 1) | (wx & 1)], _TPAL[tt])
+            a = 0x9800 + ((wy & 31) << 5) + (wx & 31)
+            if (em.m[0, a], em.m[1, a] & 3) != exp:
+                bad += 1
+    return bad
+
+
 # ------------------------------------------------------------------ basic flow
 e = Emu()
 check("boot: main loop running", e.r8("_dbg_frame_lo") != 0)
@@ -164,9 +196,11 @@ check("camera clamps at 32*16-160=352", e.r16("_dbg_cam_x") == 352, f"cam_x={e.r
 check("SCX = cam_x low byte", e.m[0xFF43] == (e.r16("_dbg_cam_x") & 0xFF))
 e.hold("down", 200)
 check("camera clamps at 24*16-112=272", e.r16("_dbg_cam_y") == 272)
+check("BG map matches terrain at far corner", view_mismatches(e) == 0)
 e.png(ROM.parent / "shot_far_corner.png")
 e.hold("left", 400); e.hold("up", 300)
 check("camera returns to origin", e.r16("_dbg_cam_x") == 0 and e.r16("_dbg_cam_y") == 0)
+check("BG map matches terrain after round trip", view_mismatches(e) == 0)
 check("stack canary intact", e.canary_ok())
 e.pb.stop(save=False)
 
@@ -201,10 +235,11 @@ def play_battle(shots=False, max_frames=60 * 60 * 20):
                 em.wait_state([G_TARGET, G_IDLE, G_BANNER, G_SHOW], 12)
                 if em.state() == G_TARGET:
                     if shots and not shot_done:
+                        em.frames(10)         # HUD pipeline flips a few frames later
                         em.png(ROM.parent / "shot_target.png")
                     em.press("a")
                     if shots and not shot_done:
-                        em.frames(4)
+                        em.frames(10)
                         em.png(ROM.parent / "shot_result.png")
                         shot_done = True
                 em.wait_state([G_IDLE, G_BANNER, G_ENEMY, G_OUTCOME], 200)
@@ -226,6 +261,7 @@ def play_battle(shots=False, max_frames=60 * 60 * 20):
                worst_ai=worst_ai, worst_range=worst_range, enemy_attacked=saw_enemy_attack,
                hp_ok=hp_ok, canary=em.canary_ok(), state=em.state())
     if shots:
+        em.frames(10)
         em.png(ROM.parent / "shot_outcome.png")
     em.press("a")            # restart from the outcome screen
     em.wait_state([G_IDLE], 200)

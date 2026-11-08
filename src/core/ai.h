@@ -17,17 +17,19 @@
 #define AI_MAX_TARGET_CELLS 96u
 
 typedef struct {
-    uint8_t id, x, y, cls, move, rmax, terrain;
+    uint8_t id, x, y, move, rmin, rmax, can_counter, kill;
     uint16_t hp;
-    uint16_t threat[10];      /* expected dmg vs actor by actor terrain; 0xFFFF = not computed */
-} AiOpp;                      /* 28 bytes */
+    uint16_t e_att;           /* actor -> opp expected damage (independent of the endpoint); 0xFFFF = lazy */
+    uint16_t threat[10];      /* opp -> actor expected damage by actor terrain; 0xFFFF = lazy.
+                                 Also used as the expected counter (approximation: opp at current hp). */
+} AiOpp;                      /* 34 bytes */
 
 typedef struct {              /* lives in WRAM bank7 0xDC00..0xDFFF on GB (same bank as MoveRange) */
     uint8_t n_opp;
     AiOpp opp[AI_MAX_OPP];
     uint16_t cells[AI_MAX_TARGET_CELLS];   /* field sources (kept off the 512B stack) */
-    uint8_t field_mtype, field_valid, field_side;
-    uint16_t field_epoch;
+    uint8_t field_mtype, field_state, field_side;   /* field_state: 0 invalid, 1 building, 2 valid */
+    FieldJob job;
 } AiScratch;
 
 typedef struct {
@@ -35,8 +37,13 @@ typedef struct {
     int32_t score;
 } AiCommand;
 
-/* invalidate the cached approach field (call at phase start and when any unit retreats/moves sides) */
+/* invalidate the cached approach field (phase start). Retreats inside a phase keep the stale field:
+ * a dead unit's cell stays a source until the next phase (heuristic only, never a rule). */
 void ai_invalidate(AiScratch *s) CORE_API;
+/* start building the approach field for (mtype, side) as a cooperative job */
+void ai_field_request(Battle *b, AiScratch *s, uint8_t mtype, uint8_t side) CORE_API;
+/* advance the job by up to 'budget' pops; returns 1 when the field is valid */
+uint8_t ai_field_pump(AiScratch *s, uint16_t budget) CORE_API;
 /* decide for actor; mr and s must be addressable together (GB: both in bank7) */
 void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mode, AiCommand *out) CORE_API;
 #endif

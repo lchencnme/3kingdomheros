@@ -5,6 +5,16 @@
 #include "grid.h"
 #include "types.h"
 
+#ifdef __SDCC
+#include <gb/gb.h>
+extern volatile uint16_t dbg_ai_t_range, dbg_ai_t_field, dbg_ai_t_cand;
+#define PROF_T() (sys_time)
+#define PROF_SET(v, x) ((v) = (x))
+#else
+#define PROF_T() 0u
+#define PROF_SET(v, x) ((void)(x))
+#endif
+
 #define W_KILL 1000000l
 #define W_DMG 100l
 #define W_COUNTER 80l
@@ -18,27 +28,31 @@ static uint8_t manhattan(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
     return (uint8_t)(dx + dy);
 }
 
-void ai_invalidate(AiScratch *s) CORE_API { s->field_valid = 0; }
+void ai_invalidate(AiScratch *s) CORE_API { s->field_state = 0; }
 
-static void build_field(Battle *b, AiScratch *s, uint8_t mtype, uint8_t side)
+void ai_field_request(Battle *b, AiScratch *s, uint8_t mtype, uint8_t side) CORE_API
 {
     uint16_t *cells = s->cells;
     uint8_t i, n = 0, k;
-    FieldJob j;
     ActiveUnit u;
     for (i = 0; i < b->n_units; i++) {
         uint16_t c;
         unit_load(i, &u);
         if (!unit_alive(&u) || faction_side(u.faction) == side) continue;
         c = (uint16_t)u.y * grid_w + u.x;
-        /* insertion sort, unique ascending */
-        for (k = n; k > 0 && cells[k - 1] > c; k--) cells[k] = cells[k - 1];
+        for (k = n; k > 0 && cells[k - 1] > c; k--) cells[k] = cells[k - 1];   /* unique ascending */
         cells[k] = c;
         n++;
     }
-    field_begin(&j, mtype, side, cells, n);
-    while (!field_step(&j, 512)) {}
-    s->field_mtype = mtype; s->field_side = side; s->field_valid = 1;
+    s->field_mtype = mtype; s->field_side = side; s->field_state = 1;
+    field_begin(&s->job, mtype, side, cells, n);
+    if (s->job.done) s->field_state = 2;
+}
+
+uint8_t ai_field_pump(AiScratch *s, uint16_t budget) CORE_API
+{
+    if (s->field_state == 1 && field_step(&s->job, budget)) s->field_state = 2;
+    return s->field_state == 2;
 }
 
 /* expected damage of opp o attacking actor a standing on terrain t (cached) */
@@ -73,26 +87,49 @@ static uint8_t better(int32_t sc, uint16_t cnt, uint8_t cost, uint8_t tgt, uint1
     return act < best->action;
 }
 
+static uint16_t attack_value(AiScratch *s, uint8_t oi, const ActiveUnit *a, uint8_t weather)
+{
+    AiOpp *o = &s->opp[oi];
+    if (o->e_att == 0xFFFF) {
+        ActiveUnit t;
+        AttackPreview p;
+        uint32_t e;
+        unit_load(o->id, &t);
+        battle_preview(a, a->x, a->y, &t, weather, &p);   /* endpoint only matters for range/LOS/counter */
+        e = ((uint32_t)p.dmg * p.hit_pct) / 100u;
+        if (e > t.hp) e = t.hp;
+        o->e_att = (uint16_t)e;
+        o->kill = p.dmg >= t.hp && p.hit_pct >= 50;
+    }
+    return o->e_att;
+}
+
 void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mode, AiCommand *out) CORE_API
 {
     ActiveUnit a, t;
-    uint8_t i, side, mtype, ly, lx, have = 0;
+    uint8_t i, side, mtype, ly, lx, have = 0, armin, armax;
     uint16_t here_field, bcnt = 0, bcell = 0;
     uint8_t bcost = 0;
+    uint16_t pt0;
     unit_load(actor, &a);
     side = faction_side(a.faction);
     mtype = class_defs[a.class_id].move_type;
+    armin = class_defs[a.class_id].range_min;
+    armax = class_defs[a.class_id].range_max;
 
     out->x = a.x; out->y = a.y; out->action = ACT_WAIT; out->target = 0xFF; out->score = 0;
     if (!battle_can_act(&a)) return;
 
+    pt0 = PROF_T();
     path_move_range(mr, a.x, a.y, (a.status_mask & (1u << ST_ROOT)) ? 0 : a.move, mtype, side);
+    PROF_SET(dbg_ai_t_range, PROF_T() - pt0); pt0 = PROF_T();
 
     /* opponent list: alive hostiles, nearest first (deterministic: distance, then id) */
     s->n_opp = 0;
     for (i = 0; i < b->n_units; i++) {
-        uint8_t k, d;
+        uint8_t k, d, q;
         AiOpp *o;
+        const ClassDef *c;
         unit_load(i, &t);
         if (!unit_alive(&t) || !factions_hostile(a.faction, t.faction)) continue;
         d = manhattan(a.x, a.y, t.x, t.y);
@@ -103,27 +140,36 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
         } else s->n_opp++;
         while (k > 0 && manhattan(a.x, a.y, s->opp[k - 1].x, s->opp[k - 1].y) > d) { s->opp[k] = s->opp[k - 1]; k--; }
         o = &s->opp[k];
-        o->id = i; o->x = t.x; o->y = t.y; o->cls = t.class_id; o->move = t.move; o->hp = t.hp;
-        o->rmax = class_defs[t.class_id].range_max;
-        o->terrain = grid_terrain(t.x, t.y) & 0x0F;
-        { uint8_t q; for (q = 0; q < 10; q++) o->threat[q] = 0xFFFF; }
+        c = &class_defs[t.class_id];
+        o->id = i; o->x = t.x; o->y = t.y; o->move = t.move; o->hp = t.hp;
+        o->rmin = c->range_min; o->rmax = c->range_max;
+        o->can_counter = c->counter && !(t.action_flags & AF_COUNTER) && !(t.status_mask & (1u << ST_CONFUSE));
+        o->e_att = 0xFFFF; o->kill = 0;
+        for (q = 0; q < 10; q++) o->threat[q] = 0xFFFF;
     }
 
-    if (!s->field_valid || s->field_mtype != mtype || s->field_side != side) build_field(b, s, mtype, side);
+    if (s->field_state == 0 || s->field_mtype != mtype || s->field_side != side) ai_field_request(b, s, mtype, side);
+    while (!ai_field_pump(s, 1024)) {}             /* finish synchronously if the phase-start job is not done */
+    PROF_SET(dbg_ai_t_field, PROF_T() - pt0); pt0 = PROF_T();
     here_field = fld_get((uint16_t)a.y * grid_w + a.x);
 
     for (ly = 0; ly < MR_DIM; ly++) {
+        int16_t gy = mr->by + ly;
+        if (gy < 0 || gy >= grid_h) continue;
         for (lx = 0; lx < MR_DIM; lx++) {
-            int16_t gx = mr->bx + lx, gy = mr->by + ly;
+            int16_t gx = mr->bx + lx;
             uint8_t ex, ey, cost, et, oi;
             uint16_t ef, cell;
             int32_t base;
             uint32_t danger = 0;
-            if (gx < 0 || gy < 0 || gx >= grid_w || gy >= grid_h) continue;
+            if (gx < 0 || gx >= grid_w) continue;
+            cost = mr->dist[(uint16_t)ly * MR_DIM + lx];
+            if (cost == MR_INF) continue;
             ex = (uint8_t)gx; ey = (uint8_t)gy;
-            if (!path_endpoint_ok(mr, ex, ey)) continue;
-            if (mode == AI_HOLD && !(ex == a.x && ey == a.y)) continue;
-            cost = path_dist(mr, ex, ey);
+            if (!(ex == a.x && ey == a.y)) {
+                if (mode == AI_HOLD) continue;
+                if (grid_occ(ex, ey)) continue;              /* allies may be crossed, not ended on */
+            }
             cell = (uint16_t)ey * grid_w + ex;
             et = grid_terrain(ex, ey) & 0x0F;
 
@@ -151,30 +197,29 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
                 out->x = ex; out->y = ey; out->action = ACT_WAIT; out->target = 0xFF; out->score = base;
                 bcnt = 0; bcost = cost; bcell = cell; have = 1;
             }
-            /* ATTACK candidates */
+            /* ATTACK candidates: cheap range filter first, LOS only for ranged shots */
+            if (armax == 0) continue;
             for (oi = 0; oi < s->n_opp; oi++) {
                 AiOpp *o = &s->opp[oi];
-                AttackPreview p;
+                uint8_t d = manhattan(ex, ey, o->x, o->y);
                 int32_t sc;
-                uint32_t e, ce = 0;
-                if (class_defs[a.class_id].range_max == 0) break;
-                unit_load(o->id, &t);
-                if (!battle_in_range(&a, ex, ey, &t)) continue;
-                battle_preview(&a, ex, ey, &t, b->weather, &p);
-                e = ((uint32_t)p.dmg * p.hit_pct) / 100u;
-                if (e > t.hp) e = t.hp;
-                sc = base + W_DMG * (int32_t)(e > 9999u ? 9999u : e);
-                if (p.dmg >= t.hp && p.hit_pct >= 50) sc += W_KILL;
-                if (p.counter) {
-                    ce = ((uint32_t)p.c_dmg * p.c_hit_pct) / 100u;
+                uint16_t e, ce = 0;
+                if (d < armin || d > armax) continue;
+                if (d > 1 && !los_clear(ex, ey, o->x, o->y)) continue;
+                e = attack_value(s, oi, &a, b->weather);
+                sc = base + W_DMG * (int32_t)e;
+                if (o->kill) sc += W_KILL;
+                else if (o->can_counter && d >= o->rmin && d <= o->rmax) {
+                    ce = threat(s, oi, &a, et, b->weather);
                     if (ce > a.hp) ce = a.hp;
                     sc -= W_COUNTER * (int32_t)ce;
                 }
-                if (better(sc, (uint16_t)ce, cost, o->id, cell, ACT_ATTACK, out, bcnt, bcost, bcell)) {
+                if (better(sc, ce, cost, o->id, cell, ACT_ATTACK, out, bcnt, bcost, bcell)) {
                     out->x = ex; out->y = ey; out->action = ACT_ATTACK; out->target = o->id; out->score = sc;
-                    bcnt = (uint16_t)ce; bcost = cost; bcell = cell;
+                    bcnt = ce; bcost = cost; bcell = cell;
                 }
             }
         }
     }
+    PROF_SET(dbg_ai_t_cand, PROF_T() - pt0);
 }

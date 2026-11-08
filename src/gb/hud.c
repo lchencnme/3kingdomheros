@@ -58,55 +58,44 @@ void hud_tx(uint8_t line, uint8_t tx, uint16_t var)
     }
 }
 
+/* hud_bits is tile-major: tile k (0..35) = 8 bytes, tile row 0 holds pixel rows 0..7 (k = 0..17),
+ * tile row 1 pixel rows 8..15 (k = 18..35). Glyph rows sit at pixel rows 2..13. */
+#define OR3(D, A, B, C) do { (D)[0] |= (A); (D)[8] |= (B); if (last) (D)[16] |= (C); } while (0)
+
+static void blit_rows(uint8_t *d, const uint8_t *src, uint8_t n, uint8_t sh, uint8_t last)
+{
+    for (; n; n--, d++, src += 2) {
+        uint8_t a = src[0], b = src[1];
+        switch (sh) {
+        case 0: d[0] |= a; d[8] |= b; break;
+        case 2: OR3(d, (uint8_t)(a >> 2), (uint8_t)((a << 6) | (b >> 2)), (uint8_t)(b << 6)); break;
+        case 4: OR3(d, (uint8_t)(a >> 4), (uint8_t)((a << 4) | (b >> 4)), (uint8_t)(b << 4)); break;
+        default: OR3(d, (uint8_t)(a >> 6), (uint8_t)((a << 2) | (b >> 6)), (uint8_t)(b << 2)); break;
+        }
+    }
+}
+
 static void raster_line(uint8_t line)
 {
     uint8_t i, x = 0;
     memset(hud_bits, 0, sizeof hud_bits);
     for (i = 0; i < nglyph[line]; i++) {
         uint16_t g = glyphs[line][i];
-        uint8_t w = glyph_width[g], r;
+        uint8_t w = glyph_width[g], col, sh, last;
         uint8_t rows[24];
         if ((uint16_t)x + w > LINE_TILES * 8u) break;
         rom_copy(TEXT_BANK, rows, &glyph_rows[(uint16_t)g * 24u], 24);
-        {
-            uint8_t *dst = &hud_bits[2 * LINE_TILES + (x >> 3)];   /* glyph rows start at pixel row 2 */
-            uint8_t last = (uint8_t)((x >> 3) + 2 < LINE_TILES);
-            uint8_t *src = rows;
-            /* x is always even (widths 6/12): only 4 shift cases, all constant shifts */
-            switch (x & 7) {
-            case 0:
-                for (r = 0; r < 12; r++, dst += LINE_TILES, src += 2) { dst[0] |= src[0]; dst[1] |= src[1]; }
-                break;
-            case 2:
-                for (r = 0; r < 12; r++, dst += LINE_TILES, src += 2) {
-                    dst[0] |= (uint8_t)(src[0] >> 2); dst[1] |= (uint8_t)((src[0] << 6) | (src[1] >> 2));
-                    if (last) dst[2] |= (uint8_t)(src[1] << 6);
-                }
-                break;
-            case 4:
-                for (r = 0; r < 12; r++, dst += LINE_TILES, src += 2) {
-                    dst[0] |= (uint8_t)(src[0] >> 4); dst[1] |= (uint8_t)((src[0] << 4) | (src[1] >> 4));
-                    if (last) dst[2] |= (uint8_t)(src[1] << 4);
-                }
-                break;
-            default:
-                for (r = 0; r < 12; r++, dst += LINE_TILES, src += 2) {
-                    dst[0] |= (uint8_t)(src[0] >> 6); dst[1] |= (uint8_t)((src[0] << 2) | (src[1] >> 6));
-                    if (last) dst[2] |= (uint8_t)(src[1] << 2);
-                }
-                break;
-            }
-        }
+        col = (uint8_t)(x >> 3); sh = (uint8_t)(x & 7);
+        last = (uint8_t)(col + 2u < LINE_TILES);
+        blit_rows(&hud_bits[(uint16_t)col * 8u + 2u], rows, 6, sh, last);                     /* rows 2..7 */
+        blit_rows(&hud_bits[(uint16_t)(col + LINE_TILES) * 8u], rows + 12, 6, sh, last);      /* rows 8..13 */
         x = (uint8_t)(x + w);
     }
-    /* 1bpp -> 2bpp ink (colour 3); tile order: row0 tiles 0..17, row1 tiles 18..35 */
-    {
-        uint8_t tc, y;
+    {   /* 1bpp -> 2bpp ink (colour 3): linear duplication */
         uint8_t *o = hud_tiles;
-        for (tc = 0; tc < 2 * LINE_TILES; tc++) {
-            const uint8_t *s = &hud_bits[(tc >= LINE_TILES ? 8 * LINE_TILES : 0) + (tc % LINE_TILES)];
-            for (y = 0; y < 8; y++, s += LINE_TILES) { *o++ = *s; *o++ = *s; }
-        }
+        const uint8_t *s = hud_bits;
+        uint16_t n = sizeof hud_bits;
+        for (; n; n--) { uint8_t v = *s++; *o++ = v; *o++ = v; }
     }
 }
 
@@ -146,7 +135,10 @@ static void gdma_line(uint8_t line)
 
 void hud_commit(void)
 {
-    if (LY_REG < 144u || LY_REG > 148u) return;   /* design doc 12.1 LY gate: never DMA late */
+    uint8_t ly = LY_REG;
+    /* design doc 12.1 LY gate: a 576B GDMA takes ~2.5 lines, the 128B flip < 1 line (VBlank = LY 144..153) */
+    if (ly < 144u || ly > 152u) return;
+    if ((job == 2 || job == 4) && ly > 150u) return;
     if (job == 2) { gdma_line(0); job = 3; }
     else if (job == 4) { gdma_line(1); job = 5; }
     else if (job == 6) {

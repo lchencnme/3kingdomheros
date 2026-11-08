@@ -18,12 +18,30 @@ uint8_t grid_occ(uint8_t x, uint8_t y) PLATFORM_API;       /* 0, SIDE_A or SIDE_
    one bank switch per row instead of per cell */
 void grid_row(uint8_t y, uint8_t x0, uint8_t n, uint8_t *ter, uint8_t *occ) PLATFORM_API;
 
-/* full-map approach field (u16 x 4096) and its SPFA ring queue (u16 x 4096) + inqueue bits */
+/* full-map approach field (design doc 4.2, 11.4): one 2-byte record per cell
+ *   [0] dist u8 (255 = unreached, saturates at 254)   [1] entry cost (FC_BLOCK = cannot stand/enter) | FC_INQ
+ * GB: cells in WRAM banks 3-4, ring queue of (x,y) byte pairs in banks 5-6. fc_ptr/fq_ptr SWITCH SVBK
+ * and return a pointer valid until the next switch; callers save/restore SVBK around the whole job. */
+#define FC_INQ 0x80u
+#define FC_BLOCK 0x7Fu
+#define FC_UNREACHED 255u
+#define FC_SATURATE 254u
+#ifdef __SDCC
+#include <gb/gb.h>
+static inline uint8_t *fc_ptr(uint16_t i)
+{
+    SVBK_REG = (uint8_t)(3u + ((uint8_t)(i >> 8) >> 3));
+    return (uint8_t *)(0xD000u + ((i & 0x7FFu) << 1));
+}
+static inline uint8_t *fq_ptr(uint16_t k)
+{
+    SVBK_REG = (uint8_t)(5u + ((uint8_t)(k >> 8) >> 3));
+    return (uint8_t *)(0xD000u + ((k & 0x7FFu) << 1));
+}
+#else
+uint8_t *fc_ptr(uint16_t i);
+uint8_t *fq_ptr(uint16_t k);
+#endif
+/* field distance of cell i (FIELD_INF when unreached); saves/restores SVBK */
 uint16_t fld_get(uint16_t i) PLATFORM_API;
-void fld_set(uint16_t i, uint16_t v) PLATFORM_API;
-uint16_t fq_get(uint16_t i) PLATFORM_API;
-void fq_set(uint16_t i, uint16_t v) PLATFORM_API;
-uint8_t fin_test(uint16_t i) PLATFORM_API;
-void fin_set(uint16_t i) PLATFORM_API;
-void fin_clear(uint16_t i) PLATFORM_API;
 #endif

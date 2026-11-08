@@ -45,46 +45,48 @@ static void hw_tile(int16_t wx, int16_t wy, uint8_t *id, uint8_t *at)
     *at = pal;
 }
 
-/* build one hardware row: bulk terrain read (one bank switch) + direct highlight lookup */
+/* build one hardware row: bulk terrain read (one bank switch) + direct highlight lookup.
+ * Iterates per 16px cell (two hardware tiles per step) to keep 16-bit arithmetic out of the loop. */
 static void build_row(int16_t wy, int16_t wx0, uint8_t n, uint8_t *ids, uint8_t *ats)
 {
     uint8_t ter[CACHE_W / 2 + 2], occ[CACHE_W / 2 + 2], hl[CACHE_W / 2 + 2];
-    int16_t cx0 = wx0 >> 1, cy = wy >> 1, c0 = cx0, c1 = (wx0 + n - 1) >> 1;
-    uint8_t i, nc, q2;
-    int16_t wx;
-    if (wy < 0 || cy >= (int16_t)grid_h) {
+    int16_t cy = wy >> 1, c0 = wx0 >> 1, c1 = (wx0 + n - 1) >> 1;
+    int16_t v0 = c0 < 0 ? 0 : c0, v1 = c1 >= (int16_t)grid_w ? (int16_t)grid_w - 1 : c1;
+    uint8_t i, nc, k, q2, out = 0, skip;
+    if (wy < 0 || cy >= (int16_t)grid_h || v1 < v0) {
         for (i = 0; i < n; i++) { ids[i] = BLANK_TILE; ats[i] = 0; }
         return;
     }
-    if (c0 < 0) c0 = 0;
-    if (c1 >= (int16_t)grid_w) c1 = (int16_t)grid_w - 1;
-    nc = c1 >= c0 ? (uint8_t)(c1 - c0 + 1) : 0;
-    if (nc) grid_row((uint8_t)cy, (uint8_t)c0, nc, ter, occ);
-    for (i = 0; i < nc; i++) hl[i] = 0;
-    if (hl_on && nc) {
+    nc = (uint8_t)(v1 - v0 + 1);
+    grid_row((uint8_t)cy, (uint8_t)v0, nc, ter, occ);
+    for (k = 0; k < nc; k++) hl[k] = 0;
+    if (hl_on) {
         uint8_t o = SVBK_REG;
-        MoveRange *mr = W7_MR;
+        const MoveRange *mr = W7_MR;
         int16_t ly;
         SVBK_REG = WB_SCRATCH;
         ly = cy - mr->by;
         if (ly >= 0 && ly < (int16_t)MR_DIM) {
-            for (i = 0; i < nc; i++) {
-                int16_t lx = c0 + i - mr->bx;
-                if (lx >= 0 && lx < (int16_t)MR_DIM) hl[i] = mr->dist[(uint16_t)ly * MR_DIM + (uint16_t)lx] != MR_INF;
-            }
+            const uint8_t *drow = &mr->dist[(uint16_t)ly * MR_DIM];
+            int16_t lx = v0 - mr->bx;
+            for (k = 0; k < nc; k++, lx++)
+                if (lx >= 0 && lx < (int16_t)MR_DIM) hl[k] = drow[lx] != MR_INF;
         }
         SVBK_REG = o;
     }
     q2 = (uint8_t)((wy & 1) << 1);
-    for (i = 0, wx = wx0; i < n; i++, wx++) {
-        int16_t cx = wx >> 1;
-        if (wx < 0 || cx < c0 || cx > c1) { ids[i] = BLANK_TILE; ats[i] = 0; continue; }
-        {
-            uint8_t k = (uint8_t)(cx - c0), tt = ter[k] & 0x0F;
-            ids[i] = meta[(uint8_t)(tt << 2) + (q2 | (uint8_t)(wx & 1))];
-            ats[i] = (uint8_t)(tpal[tt] | (hl[k] ? 4 : 0));
-        }
+    /* blank tiles left of the map */
+    for (; out < n && wx0 + out < v0 * 2; out++) { ids[out] = BLANK_TILE; ats[out] = 0; }
+    skip = (uint8_t)((wx0 + out) & 1);          /* first visible tile may be a right half */
+    for (k = 0; k < nc && out < n; k++) {
+        uint8_t tt = ter[k] & 0x0F;
+        const uint8_t *m = &meta[(uint8_t)(tt << 2) + q2];
+        uint8_t at = (uint8_t)(tpal[tt] | (hl[k] ? 4 : 0));
+        if (!skip) { ids[out] = m[0]; ats[out] = at; out++; }
+        skip = 0;
+        if (out < n) { ids[out] = m[1]; ats[out] = at; out++; }
     }
+    for (; out < n; out++) { ids[out] = BLANK_TILE; ats[out] = 0; }
 }
 
 static void write_row_vram(int16_t wy, int16_t wx0, const uint8_t *buf, uint8_t n)

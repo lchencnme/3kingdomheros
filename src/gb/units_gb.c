@@ -39,3 +39,20 @@ void units_clear(void)
     memset(W1_UNITS, 0, 96u * sizeof(ActiveUnit));
     SVBK_REG = o;
 }
+
+/* Per-frame render/UI snapshot of the first n units (temporary OBJ placeholders need it every frame).
+ * One SVBK switch, direct field reads: ~20x cheaper than n unit_load() copies. */
+uint8_t snap_x[8], snap_y[8], snap_fac[8], snap_flags[8];
+uint16_t snap_hp[8];
+
+void units_snapshot(uint8_t n)
+{
+    uint8_t o = SVBK_REG, i;
+    const ActiveUnit *u = W1_UNITS;
+    SVBK_REG = WB_UNITS;
+    for (i = 0; i < n; i++, u++) {
+        snap_x[i] = u->x; snap_y[i] = u->y; snap_fac[i] = u->faction;
+        snap_flags[i] = u->action_flags; snap_hp[i] = u->hp;
+    }
+    SVBK_REG = o;
+}

@@ -64,63 +64,9 @@ void occ_clear(uint8_t x, uint8_t y)
 
 uint16_t fld_get(uint16_t i) PLATFORM_API
 {
-    uint8_t o = SVBK_REG;
-    uint16_t v;
-    SVBK_REG = (uint8_t)(WB_FIELD + (i >> 11));
-    v = ((uint16_t *)0xD000)[i & 0x7FF];
+    uint8_t o = SVBK_REG, d = fc_ptr(i)[0];
     SVBK_REG = o;
-    return v;
-}
-
-void fld_set(uint16_t i, uint16_t v) PLATFORM_API
-{
-    uint8_t o = SVBK_REG;
-    SVBK_REG = (uint8_t)(WB_FIELD + (i >> 11));
-    ((uint16_t *)0xD000)[i & 0x7FF] = v;
-    SVBK_REG = o;
-}
-
-uint16_t fq_get(uint16_t i) PLATFORM_API
-{
-    uint8_t o = SVBK_REG;
-    uint16_t v;
-    SVBK_REG = (uint8_t)(WB_QUEUE + (i >> 11));
-    v = ((uint16_t *)0xD000)[i & 0x7FF];
-    SVBK_REG = o;
-    return v;
-}
-
-void fq_set(uint16_t i, uint16_t v) PLATFORM_API
-{
-    uint8_t o = SVBK_REG;
-    SVBK_REG = (uint8_t)(WB_QUEUE + (i >> 11));
-    ((uint16_t *)0xD000)[i & 0x7FF] = v;
-    SVBK_REG = o;
-}
-
-uint8_t fin_test(uint16_t i) PLATFORM_API
-{
-    uint8_t o = SVBK_REG, v;
-    SVBK_REG = WB_SCRATCH;
-    v = (uint8_t)((W7_INQ[i >> 3] >> (i & 7)) & 1u);
-    SVBK_REG = o;
-    return v;
-}
-
-void fin_set(uint16_t i) PLATFORM_API
-{
-    uint8_t o = SVBK_REG;
-    SVBK_REG = WB_SCRATCH;
-    W7_INQ[i >> 3] |= (uint8_t)(1u << (i & 7));
-    SVBK_REG = o;
-}
-
-void fin_clear(uint16_t i) PLATFORM_API
-{
-    uint8_t o = SVBK_REG;
-    SVBK_REG = WB_SCRATCH;
-    W7_INQ[i >> 3] &= (uint8_t)~(1u << (i & 7));
-    SVBK_REG = o;
+    return d == FC_UNREACHED ? FIELD_INF : d;
 }
 
 void wram_init_grid(uint8_t w, uint8_t h, const uint8_t *terrain)

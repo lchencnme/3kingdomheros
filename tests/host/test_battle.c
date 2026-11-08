@@ -238,7 +238,6 @@ static uint32_t self_play(uint8_t *rounds_out, uint8_t *outcome_out)
                 if (c.action == ACT_ATTACK) {
                     CHECK(battle_in_range(&host_units[i], c.x, c.y, &host_units[c.target]), "AI target in range");
                     battle_attack(&B, i, c.target, &r);
-                    if (r.killed || r.c_killed) ai_invalidate(&AS);
                 } else host_units[i].action_flags |= AF_ACTED;
                 occupancy_consistent("self_play");
             }

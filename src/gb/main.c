@@ -21,6 +21,10 @@
 typedef char ai_fits_bank7[(sizeof(AiScratch) <= 0x400u) ? 1 : -1];
 
 void units_clear(void);
+void units_snapshot(uint8_t n);
+extern uint8_t snap_x[8], snap_y[8], snap_fac[8], snap_flags[8];
+extern uint16_t snap_hp[8];
+#define SNAP_ALIVE(i) (snap_hp[i] && !(snap_flags[i] & (AF_RETREAT | AF_DEAD | AF_AWAY)))
 
 enum {
     G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME
@@ -30,7 +34,7 @@ static Battle B;
 static uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
 static uint8_t targets[8];
 static uint8_t enemy_i;
-static uint8_t hud_dirty, last_hx, last_hy;
+static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 static const uint8_t blank16[16];
 
 /* debug/test hooks (read by tests/emu/test_rom.py through the .noi symbol file) */
@@ -39,6 +43,7 @@ volatile uint16_t dbg_cam_x, dbg_cam_y, dbg_round, dbg_t_range, dbg_t_ai;
 volatile uint8_t dbg_unit_xy[TECH01_UNITS * 2];
 volatile uint16_t dbg_unit_hp[TECH01_UNITS];
 volatile uint32_t dbg_rng, dbg_draws;
+volatile uint16_t dbg_ai_t_range, dbg_ai_t_field, dbg_ai_t_cand;
 
 /* ---------------------------------------------------------------- helpers */
 static void load(uint8_t i, ActiveUnit *u) { unit_load(i, u); }
@@ -46,11 +51,9 @@ static void load(uint8_t i, ActiveUnit *u) { unit_load(i, u); }
 static int8_t unit_at(uint8_t x, uint8_t y)
 {
     uint8_t i;
-    ActiveUnit u;
-    for (i = 0; i < B.n_units; i++) {
-        load(i, &u);
-        if (unit_alive(&u) && u.x == x && u.y == y) return (int8_t)i;
-    }
+    units_snapshot(TECH01_UNITS);
+    for (i = 0; i < TECH01_UNITS; i++)
+        if (SNAP_ALIVE(i) && snap_x[i] == x && snap_y[i] == y) return (int8_t)i;
     return -1;
 }
 
@@ -65,18 +68,17 @@ static uint8_t unit_name_tx(const ActiveUnit *u)
 static void place_sprites(void)
 {
     uint8_t i, s = 0;
-    ActiveUnit u;
+    units_snapshot(TECH01_UNITS);
     for (i = 0; i < TECH01_UNITS; i++, s += 2) {
         int16_t ux, uy, sx, sy;
         uint8_t base, pal;
-        load(i, &u);
-        if (!unit_alive(&u)) { move_sprite(s, 0, 0); move_sprite(s + 1, 0, 0); continue; }
-        ux = u.x; uy = u.y;
+        if (!SNAP_ALIVE(i)) { move_sprite(s, 0, 0); move_sprite(s + 1, 0, 0); continue; }
+        ux = snap_x[i]; uy = snap_y[i];
         if ((state == G_MENU || state == G_TARGET) && i == sel) { ux = tent_x; uy = tent_y; }
         sx = ux * 16 - (int16_t)cam_x + 8;
         sy = uy * 16 - (int16_t)cam_y + 16;
-        base = u.faction == FAC_ENEMY ? OBJT_ENEMY : OBJT_PLAYER;
-        pal = u.faction == FAC_ENEMY ? 1 : ((u.action_flags & AF_ACTED) ? 3 : 0);
+        base = snap_fac[i] == FAC_ENEMY ? OBJT_ENEMY : OBJT_PLAYER;
+        pal = snap_fac[i] == FAC_ENEMY ? 1 : ((snap_flags[i] & AF_ACTED) ? 3 : 0);
         set_sprite_tile(s, base); set_sprite_tile(s + 1, (uint8_t)(base + 2));
         set_sprite_prop(s, pal); set_sprite_prop(s + 1, pal);
         if (sx < -8 || sx > 168 || sy < 0 || sy >= (int16_t)VIEW_H + 16) {
@@ -212,7 +214,10 @@ static void begin_enemy_phase(void)
     battle_phase_end(&B);
     if (B.outcome) return;
     battle_phase_start(&B, FAC_ENEMY);
-    SVBK_REG = WB_SCRATCH; ai_invalidate(W7_AI); SVBK_REG = o;
+    SVBK_REG = WB_SCRATCH;
+    ai_invalidate(W7_AI);
+    ai_field_request(&B, W7_AI, MT_FOOT, SIDE_E);     /* pre-warm the most common move type */
+    SVBK_REG = o;
     enemy_i = 0;
     state = G_BANNER; timer = 45; next_state = G_ENEMY;
     hud_banner(FAC_ENEMY);
@@ -369,7 +374,6 @@ static void enemy_step(void)
     cur_x = c.x; cur_y = c.y;                  /* camera follows the actor */
     if (c.action == ACT_ATTACK) {
         battle_attack(&B, enemy_i, c.target, &r);
-        if (r.killed || r.c_killed) { SVBK_REG = WB_SCRATCH; ai_invalidate(W7_AI); SVBK_REG = o; }
         hud_result(&r);
         timer = 50;
     } else {
@@ -392,6 +396,13 @@ static void logic(void)
     case G_SHOW:
     case G_BANNER:
         if (timer) timer--;
+        {   /* cooperative AI field job (design doc 4.2/8.4): runs while banners/results are shown */
+            uint8_t ready, o = SVBK_REG;
+            SVBK_REG = WB_SCRATCH;
+            ready = ai_field_pump(W7_AI, 12);
+            SVBK_REG = o;
+            if (state == G_BANNER && next_state == G_ENEMY && !ready) break;   /* "敌军思考中" */
+        }
         if (!timer || (in_pressed & (J_A | J_B))) {
             state = next_state;
             if (state == G_IDLE) { hud_dirty = 1; after_action(); }
@@ -406,23 +417,23 @@ static void logic(void)
     default:
         logic_player();
     }
-    if (state == G_IDLE && (hud_dirty || cur_x != last_hx || cur_y != last_hy)) {
-        hud_unit_or_terrain();
-        hud_dirty = 0; last_hx = cur_x; last_hy = cur_y;
+    /* cursor info HUD: refresh once the cursor has rested 3 frames (no re-raster on every step while scrolling) */
+    if (state == G_IDLE) {
+        if (cur_x != last_hx || cur_y != last_hy) { last_hx = cur_x; last_hy = cur_y; hud_settle = 3; hud_dirty = 1; }
+        else if (hud_settle) hud_settle--;
+        if (hud_dirty && !hud_settle) { hud_unit_or_terrain(); hud_dirty = 0; }
     }
 }
 
 static void publish_debug(void)
 {
     uint8_t i;
-    ActiveUnit u;
     dbg_state = state; dbg_sel = sel; dbg_cur_x = cur_x; dbg_cur_y = cur_y;
     dbg_cam_x = cam_x; dbg_cam_y = cam_y;
     dbg_outcome = B.outcome; dbg_round = B.round; dbg_phase = B.phase;
     dbg_rng = B.rng.state; dbg_draws = B.rng.draws;
-    for (i = 0; i < TECH01_UNITS; i++) {
-        load(i, &u);
-        dbg_unit_xy[i * 2] = u.x; dbg_unit_xy[i * 2 + 1] = u.y; dbg_unit_hp[i] = u.hp;
+    for (i = 0; i < TECH01_UNITS; i++) {          /* snapshot taken by place_sprites this frame */
+        dbg_unit_xy[i * 2] = snap_x[i]; dbg_unit_xy[i * 2 + 1] = snap_y[i]; dbg_unit_hp[i] = snap_hp[i];
     }
     dbg_frame_lo++;
 }
@@ -465,7 +476,7 @@ void main(void)
         place_sprites();
         publish_debug();
         wait_vbl_done();
+        hud_commit();          /* GDMA first: short and atomic */
         mapview_commit();
-        hud_commit();
     }
 }

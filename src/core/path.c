@@ -160,54 +160,87 @@ uint8_t path_backtrack(const MoveRange *mr, uint8_t ex, uint8_t ey, uint16_t *ou
 
 /* ---- reverse approach field: dist[v] = min(dist[v], dist[u] + cost[u]) ---- */
 
+static uint8_t f_ter[64], f_occ[64];   /* row snapshot (fixed RAM: grid_row needs a non-banked buffer) */
+
+/* NOTE (GB): FieldJob may live in a banked WRAM page (AI scratch, bank 7). It is only read/written
+ * while SVBK is the caller's bank; all work in between uses locals (fc_ptr/fq_ptr switch SVBK). */
 void field_begin(FieldJob *j, uint8_t mtype, uint8_t side, const uint16_t *targets, uint8_t ntargets) CORE_API
 {
-    uint16_t i, cells = (uint16_t)grid_w * grid_h;
-    j->mtype = mtype; j->side = side; j->done = 0;
-    j->head = 0; j->count = 0;
-    for (i = 0; i < cells; i++) { fld_set(i, FIELD_INF); fin_clear(i); }
-    for (i = 0; i < ntargets; i++) {
-        uint16_t t = targets[i];
-        if (fld_get(t) == 0) continue;
-        fld_set(t, 0);
-        fq_set((j->head + j->count) % FIELD_MAX_CELLS, t);
-        j->count++;
-        fin_set(t);
+    uint8_t lut[16], x, y, k;
+    uint16_t idx = 0, count = 0;
+    SVBK_SAVE(o);
+    for (k = 0; k < 16; k++) lut[k] = k < NUM_TERRAIN ? terrain_defs[k].cost[mtype] : 255;
+    for (y = 0; y < grid_h; y++) {
+        grid_row(y, 0, grid_w, f_ter, f_occ);
+        for (x = 0; x < grid_w; x++, idx++) {
+            uint8_t c = lut[f_ter[x] & 0x0F];
+            uint8_t *p;
+            if (c == 255 || hostile(f_occ[x], side)) c = FC_BLOCK;
+            p = fc_ptr(idx);
+            p[0] = FC_UNREACHED; p[1] = c;
+        }
+        SVBK_RESTORE(o);
     }
-    if (!j->count) j->done = 1;
+    for (k = 0; k < ntargets; k++) {
+        uint16_t tc;
+        uint8_t tx, ty, c, *p;
+        SVBK_RESTORE(o);
+        tc = targets[k];                               /* targets may live in the caller's bank */
+        ty = (uint8_t)(tc / grid_w); tx = (uint8_t)(tc - (uint16_t)ty * grid_w);
+        c = lut[grid_terrain(tx, ty) & 0x0F];          /* targets ignore their own occupancy */
+        p = fc_ptr(tc);
+        if (p[0] == 0) continue;
+        p[0] = 0;
+        p[1] = (uint8_t)((c == 255 ? FC_BLOCK : c) | FC_INQ);
+        p = fq_ptr(count);
+        p[0] = tx; p[1] = ty;
+        count++;
+    }
+    SVBK_RESTORE(o);
+    j->mtype = mtype; j->side = side;
+    j->head = 0; j->count = count;
+    j->done = count ? 0 : 1;
 }
+
+#define F_RELAX(VX, VY, V) do {                                              \
+        uint8_t *pv = fc_ptr(V), cv = pv[1];                                    \
+        if ((cv & 0x7Fu) != FC_BLOCK && nd < pv[0]) {                           \
+            pv[0] = nd;                                                         \
+            if (!(cv & FC_INQ)) {                                               \
+                uint8_t *qq;                                                    \
+                pv[1] = (uint8_t)(cv | FC_INQ);                                 \
+                qq = fq_ptr((uint16_t)((head + count) & (FIELD_MAX_CELLS - 1u))); \
+                qq[0] = (VX); qq[1] = (VY);                                     \
+                count++;                                                        \
+            }                                                                   \
+        }                                                                       \
+    } while (0)
 
 uint8_t field_step(FieldJob *j, uint16_t budget) CORE_API
 {
-    while (j->count && budget) {
-        uint16_t u = fq_get(j->head);
-        uint8_t ux = (uint8_t)(u % grid_w), uy = (uint8_t)(u / grid_w), k;
-        uint8_t cu = cost_of(ux, uy, j->mtype);
-        uint16_t du = fld_get(u);
-        j->head = (uint16_t)((j->head + 1) % FIELD_MAX_CELLS);
-        j->count--;
+    uint8_t w = grid_w, h = grid_h;
+    uint16_t head = j->head, count = j->count;
+    SVBK_SAVE(o);
+    while (count && budget) {
+        uint8_t *q = fq_ptr(head), ux = q[0], uy = q[1], cu, nd, *p;
+        uint16_t u = (uint16_t)uy * w + ux;
+        head = (uint16_t)((head + 1u) & (FIELD_MAX_CELLS - 1u));
+        count--;
         budget--;
-        fin_clear(u);
-        if (cu == 255) continue;               /* cannot enter u: no predecessor uses it */
-        for (k = 0; k < 4; k++) {
-            int16_t vx = (int16_t)ux + NDX[k], vy = (int16_t)uy + NDY[k];
-            uint16_t v, nd;
-            if (vx < 0 || vy < 0 || vx >= grid_w || vy >= grid_h) continue;
-            if (cost_of((uint8_t)vx, (uint8_t)vy, j->mtype) == 255) continue;   /* mover cannot stand on v */
-            if (hostile(grid_occ((uint8_t)vx, (uint8_t)vy), j->side)) continue;
-            v = (uint16_t)vy * grid_w + (uint16_t)vx;
-            nd = du + cu;
-            if (nd < fld_get(v)) {
-                fld_set(v, nd);
-                if (!fin_test(v)) {
-                    fq_set((j->head + j->count) % FIELD_MAX_CELLS, v);
-                    j->count++;
-                    fin_set(v);
-                }
-            }
-        }
+        p = fc_ptr(u);
+        cu = (uint8_t)(p[1] & (uint8_t)~FC_INQ);
+        p[1] = cu;
+        if (cu == FC_BLOCK) continue;                  /* cannot enter u: no predecessor uses it */
+        nd = (uint8_t)(p[0] + cu);
+        if (nd > FC_SATURATE || nd < p[0]) nd = FC_SATURATE;
+        if (uy) F_RELAX(ux, (uint8_t)(uy - 1u), u - w);          /* N */
+        if (ux) F_RELAX((uint8_t)(ux - 1u), uy, u - 1u);         /* W */
+        if (ux + 1u < w) F_RELAX((uint8_t)(ux + 1u), uy, u + 1u); /* E */
+        if (uy + 1u < h) F_RELAX(ux, (uint8_t)(uy + 1u), u + w); /* S */
     }
-    if (!j->count) j->done = 1;
+    SVBK_RESTORE(o);                                  /* back to the caller's bank before touching j */
+    j->head = head; j->count = count;
+    if (!count) j->done = 1;
     return j->done;
 }
 
