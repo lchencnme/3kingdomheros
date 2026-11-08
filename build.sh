@@ -12,7 +12,7 @@ cc -std=c99 -Wall -Wextra -O1 -o build/host/test_core tests/host/test_core.c tes
    src/core/rng.c src/core/rules.c src/core/path.c src/gen/rules_data.c
 build/host/test_core build/host/ref_cases.txt
 cc -std=c99 -Wall -Wextra -O1 -o build/host/test_battle tests/host/test_battle.c tests/host/host_units.c \
-   tests/host/host_grid.c src/core/battle.c src/core/ai.c src/core/save.c src/core/rng.c src/core/rules.c src/core/path.c \
+   tests/host/host_grid.c src/core/battle.c src/core/ai.c src/core/rng.c src/core/rules.c src/core/path.c \
    src/gen/rules_data.c
 build/host/test_battle
 cc -std=c99 -Wall -Wextra -O2 -o build/host/test_save tests/host/test_save.c tests/host/host_sram.c \
