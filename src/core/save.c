@@ -220,7 +220,12 @@ uint8_t save_battle(uint8_t slot, const Battle *b, const SaveUi *ui) CORE_API
         memcpy(buf, &u, 40);
         w_bytes(&w, buf, 40);
     }
-    w_tlv(&w, 5, 512); w_fill(&w, 0, 512);              /* battle flags */
+    w_tlv(&w, 5, 512);                                  /* battle flags: SRAM12 runtime area @6400 */
+    {
+        uint8_t fb[32];
+        uint16_t k;
+        for (k = 0; k < 512u; k += 32u) { sram_read(12, (uint16_t)(6400u + k), fb, 32); w_bytes(&w, fb, 32); }
+    }
     w_tlv(&w, 6, 2); w_fill(&w, 0, 2);                  /* terrain diffs: count 0 */
     w_tlv(&w, 7, 512);
     c.w = &w; c.at = 0;
@@ -344,6 +349,11 @@ uint8_t load_battle(uint8_t slot, Battle *b, SaveUi *ui) CORE_API
         if (unit_alive(&u)) grid_occ_set(u.x, u.y, faction_side(u.faction));
     }
     off = (uint16_t)(off + 4u + (uint16_t)n * 40u);
+    {                                                    /* battle flags back to the SRAM12 runtime area */
+        uint8_t fb[32];
+        uint16_t k;
+        for (k = 0; k < 512u; k += 32u) { img_read(base, (uint16_t)(off + 3u + k), fb, 32); sram_write(12, (uint16_t)(6400u + k), fb, 32); }
+    }
     off = (uint16_t)(off + 3u + 512u + 3u + 2u);         /* skip battle flags, terrain diffs */
     img_read(base, (uint16_t)(off + 3u), core, sizeof core);
     memset(b, 0, sizeof *b);

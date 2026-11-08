@@ -19,6 +19,9 @@
 #include "rom.h"
 #include "audio.h"
 #include "fs.h"
+#include "dialog.h"
+#include "dialogq.h"
+#include "../core/vm.h"
 #include "../gen/tech01_data.h"
 #include "../gen/text_data.h"
 
@@ -27,8 +30,10 @@ typedef char ai_fits_bank7[(sizeof(AiScratch) <= 0x400u) ? 1 : -1];
 
 void units_clear(void);
 void units_snapshot(uint8_t n);
-extern uint8_t snap_x[8], snap_y[8], snap_fac[8], snap_flags[8];
-extern uint16_t snap_hp[8];
+#define MAX_SHOWN 10u               /* OBJ placeholders: up to 10 units (20 OBJ + cursor) */
+extern uint8_t snap_x[MAX_SHOWN], snap_y[MAX_SHOWN], snap_fac[MAX_SHOWN], snap_flags[MAX_SHOWN];
+extern uint16_t snap_hp[MAX_SHOWN];
+void vm_clear_battle_flags(void);
 #define SNAP_ALIVE(i) (snap_hp[i] && !(snap_flags[i] & (AF_RETREAT | AF_DEAD | AF_AWAY)))
 
 enum {
@@ -40,7 +45,7 @@ enum {
 static Battle B;
 static uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
 static uint8_t targets[8];
-static uint8_t enemy_i, options, autosave_pending;   /* no initialised statics: set in main() */
+static uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
 static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 static const uint8_t blank16[16];
 
@@ -52,8 +57,8 @@ static void load(uint8_t i, ActiveUnit *u) { unit_load(i, u); }
 static int8_t unit_at(uint8_t x, uint8_t y)
 {
     uint8_t i;
-    units_snapshot(TECH01_UNITS);
-    for (i = 0; i < TECH01_UNITS; i++)
+    units_snapshot(B.n_units);
+    for (i = 0; i < B.n_units && i < MAX_SHOWN; i++)
         if (SNAP_ALIVE(i) && snap_x[i] == x && snap_y[i] == y) return (int8_t)i;
     return -1;
 }
@@ -69,11 +74,11 @@ static uint8_t unit_name_tx(const ActiveUnit *u)
 static void place_sprites(void)
 {
     uint8_t i, s = 0;
-    units_snapshot(TECH01_UNITS);
-    for (i = 0; i < TECH01_UNITS; i++, s += 2) {
+    units_snapshot(B.n_units);
+    for (i = 0; i < MAX_SHOWN; i++, s += 2) {
         int16_t ux, uy, sx, sy;
         uint8_t base, pal;
-        if (!SNAP_ALIVE(i)) { move_sprite(s, 0, 0); move_sprite(s + 1, 0, 0); continue; }
+        if (i >= B.n_units || !SNAP_ALIVE(i)) { move_sprite(s, 0, 0); move_sprite(s + 1, 0, 0); continue; }
         ux = snap_x[i]; uy = snap_y[i];
         if ((state == G_MENU || state == G_TARGET) && i == sel) { ux = tent_x; uy = tent_y; }
         sx = ux * 16 - (int16_t)cam_x + 8;
@@ -186,6 +191,30 @@ static void map_mode_restore(void)
     DISPLAY_ON;
 }
 
+static uint8_t count_alive(void)
+{
+    uint8_t i, n = 0;
+    units_snapshot(B.n_units);
+    for (i = 0; i < B.n_units && i < MAX_SHOWN; i++) if (SNAP_ALIVE(i)) n++;
+    return n;
+}
+
+/* run the event VM for one fact; play queued dialogue (design doc 9) */
+static void fire(uint8_t trig, uint8_t phase, uint8_t actor, uint8_t target, uint8_t unit)
+{
+    VmFact f;
+    uint8_t r;
+    uint8_t n_before = B.n_units, alive_before = count_alive();
+    f.trigger = trig; f.phase = phase; f.actor = actor; f.target = target; f.unit = unit;
+    r = vm_fire(&B, &f);
+    if (r != VM_OK) { dbg_vm_err = r; B.outcome = OUT_LOSE; }   /* BAD_SCRIPT: safe stop (9.3) */
+    if (B.n_units != n_before || count_alive() != alive_before) {
+        uint8_t o = SVBK_REG;                   /* spawns/retreats change the approach-field sources */
+        SVBK_REG = WB_SCRATCH; ai_invalidate(W7_AI); SVBK_REG = o;
+    }
+    if (DQ->n) { dialog_run(); map_mode_restore(); }
+}
+
 static void side_of_unit(uint8_t i, FsSide *s)
 {
     ActiveUnit u;
@@ -202,6 +231,8 @@ static void attack_and_present(uint8_t ai, uint8_t di, AttackResult *r)
     battle_attack(&B, ai, di, r);           /* logic sealed before any presentation (design doc 4.4) */
     fs_present(&sa, &sd, r);
     map_mode_restore();
+    if (r->killed) fire(TR_UNIT_RETREAT, B.phase, ai, di, di);
+    if (r->c_killed) fire(TR_UNIT_RETREAT, B.phase, di, ai, ai);
 }
 
 /* ---------------------------------------------------------------- save (design doc 11.6) */
@@ -224,6 +255,7 @@ static uint8_t do_suspend_load(void)
     wram_init_grid_rom(TECH01_W, TECH01_H, TECH01_BANK, tech01_terrain);
     r = load_battle(SAVE_SLOT_SUSPEND, &B, &ui);
     if (r != SAVE_OK) return r;
+    pending_start = 0; end_fired = 0; DQ->n = 0;
     B.turn_limit = 30;                          /* from the battle definition, not the save */
     options = ui.options;
     cam_x = ui.cam_x; cam_y = ui.cam_y; cur_x = ui.cur_x; cur_y = ui.cur_y;
@@ -243,6 +275,9 @@ static void start_battle(void)
     B.round = 1; B.turn_limit = 30; B.leader = 0;
     units_clear();
     wram_init_grid_rom(TECH01_W, TECH01_H, TECH01_BANK, tech01_terrain);
+    vm_clear_battle_flags();                   /* once bits + battle-scope flags are per battle */
+    DQ->n = 0;
+    end_fired = 0;
     {
         uint8_t o = SVBK_REG;
         SVBK_REG = WB_SCRATCH;
@@ -258,6 +293,7 @@ static void start_battle(void)
     state = G_BANNER; timer = 45; next_state = G_IDLE;
     hud_banner(FAC_PLAYER);
     autosave_pending = (uint8_t)(options & OPT_AUTOSAVE);
+    pending_start = 1;                         /* BATTLE_START + PHASE_START fire once the LCD is on */
 }
 
 static uint8_t player_can_act(void)
@@ -277,9 +313,13 @@ static void begin_enemy_phase(void)
     battle_phase_end(&B);                      /* PLAYER end */
     if (B.outcome) return;
     battle_phase_start(&B, FAC_ALLY);          /* no allies in TECH01: start/end still run */
+    fire(TR_PHASE_START, FAC_ALLY, 0xFF, 0xFF, 0xFF);
+    if (B.outcome) return;
     battle_phase_end(&B);
     if (B.outcome) return;
     battle_phase_start(&B, FAC_ENEMY);
+    fire(TR_PHASE_START, FAC_ENEMY, 0xFF, 0xFF, 0xFF);
+    if (B.outcome) return;
     SVBK_REG = WB_SCRATCH;
     ai_invalidate(W7_AI);
     ai_field_request(&B, W7_AI, MT_FOOT, SIDE_E);     /* pre-warm the most common move type */
@@ -325,11 +365,18 @@ static void do_preview(uint8_t u)
     hud_begin(); hud_tx(0, TX_MOVE_HINT, 0); hud_end();
 }
 
-static void commit_move_if_needed(void)
+/* 4.3 confirm boundary: commit the move, run POST_MOVE; returns 0 if the action must not happen */
+static uint8_t commit_move_if_needed(void)
 {
     ActiveUnit a;
     load(sel, &a);
-    if (a.x != tent_x || a.y != tent_y) battle_move(sel, tent_x, tent_y);
+    if (a.x != tent_x || a.y != tent_y) {
+        battle_move(sel, tent_x, tent_y);
+        fire(TR_POST_MOVE, FAC_PLAYER, sel, 0xFF, 0xFF);
+        load(sel, &a);
+        if (B.outcome || !unit_alive(&a)) return 0;
+    }
+    return 1;
 }
 
 static void logic_player(void)
@@ -387,7 +434,8 @@ static void logic_player(void)
             else {
                 ActiveUnit a;
                 commit_move_if_needed();
-                load(sel, &a); a.action_flags |= AF_ACTED; unit_store(sel, &a);
+                load(sel, &a);
+                if (unit_alive(&a)) { a.action_flags |= AF_ACTED; unit_store(sel, &a); }
                 cur_x = tent_x; cur_y = tent_y;
                 state = G_IDLE; hud_dirty = 1;
                 after_action();
@@ -400,8 +448,9 @@ static void logic_player(void)
         else if (in_pressed & J_B) { state = G_MENU; hud_menu(); }
         else if (in_pressed & J_A) {
             AttackResult r;
-            commit_move_if_needed();           /* 4.3 confirm boundary */
-            attack_and_present(sel, targets[tsel], &r);
+            if (commit_move_if_needed())       /* 4.3 confirm boundary */
+                attack_and_present(sel, targets[tsel], &r);
+            else { r.hit = 0; r.killed = 0; r.countered = 0; r.levels = 0; r.dmg = 0; }
             cur_x = tent_x; cur_y = tent_y;
             hud_result(&r);
             state = G_SHOW; timer = 50; next_state = G_IDLE;
@@ -428,9 +477,12 @@ static void enemy_step(void)
         enemy_i++;
     }
     if (enemy_i >= B.n_units) {
-        battle_phase_end(&B);                  /* ENEMY end: ROUND_END, round++ */
+        fire(TR_ROUND_END, FAC_ENEMY, 0xFF, 0xFF, 0xFF);   /* round number of the round that ends */
+        if (B.outcome) return;
+        battle_phase_end(&B);                  /* ENEMY end: TTL, round-limit check, round++ */
         if (B.outcome) return;
         battle_phase_start(&B, FAC_PLAYER);
+        fire(TR_PHASE_START, FAC_PLAYER, 0xFF, 0xFF, 0xFF);
         if (B.outcome) return;
         state = G_BANNER; timer = 45; next_state = G_IDLE;
         hud_banner(FAC_PLAYER);
@@ -443,7 +495,12 @@ static void enemy_step(void)
     ai_decide(&B, W7_AI, W7_MR, enemy_i, AI_AGGRESSIVE, &c);
     SVBK_REG = o;
     dbg_t_ai = sys_time - t0;
-    if (c.x != u.x || c.y != u.y) battle_move(enemy_i, c.x, c.y);
+    if (c.x != u.x || c.y != u.y) {
+        battle_move(enemy_i, c.x, c.y);
+        fire(TR_POST_MOVE, FAC_ENEMY, enemy_i, 0xFF, 0xFF);
+        load(enemy_i, &u);
+        if (B.outcome || !unit_alive(&u)) c.action = ACT_WAIT;   /* 4.3: the move's event ended the action */
+    }
     cur_x = c.x; cur_y = c.y;                  /* camera follows the actor */
     if (c.action == ACT_ATTACK) {
         attack_and_present(enemy_i, c.target, &r);
@@ -460,6 +517,15 @@ static void enemy_step(void)
 
 static void logic(void)
 {
+    if (pending_start && state == G_BANNER) {
+        pending_start = 0;
+        fire(TR_BATTLE_START, FAC_PLAYER, 0xFF, 0xFF, 0xFF);
+        fire(TR_PHASE_START, FAC_PLAYER, 0xFF, 0xFF, 0xFF);
+    }
+    if (B.outcome && !end_fired && state != G_TITLE) {
+        end_fired = 1;
+        fire(TR_BATTLE_END, B.phase, 0xFF, 0xFF, 0xFF);
+    }
     if (B.outcome && state != G_OUTCOME && state != G_SHOW && state != G_TITLE) {
         state = G_OUTCOME;
         save_invalidate(SAVE_SLOT_SUSPEND);     /* never "continue" a finished battle */
@@ -495,7 +561,11 @@ static void logic(void)
         enemy_step();
         break;
     case G_OUTCOME:
-        if (in_pressed & J_A) { start_battle(); mapview_init(&tech01_meta[0][0], tech01_terrain_pal); }
+        if (in_pressed & J_A) {
+            DISPLAY_OFF;
+            start_battle(); mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
+            DISPLAY_ON;
+        }
         break;
     case G_TITLE:
         if (in_pressed & J_START) {
@@ -525,9 +595,12 @@ static void publish_debug(void)
     dbg_cam_x = cam_x; dbg_cam_y = cam_y;
     dbg_outcome = B.outcome; dbg_round = B.round; dbg_phase = B.phase;
     dbg_rng = B.rng.state; dbg_draws = B.rng.draws;
-    for (i = 0; i < TECH01_UNITS; i++) {          /* snapshot taken by place_sprites this frame */
-        dbg_unit_xy[i * 2] = snap_x[i]; dbg_unit_xy[i * 2 + 1] = snap_y[i]; dbg_unit_hp[i] = snap_hp[i];
+    for (i = 0; i < MAX_SHOWN; i++) {             /* snapshot taken by place_sprites this frame */
+        uint8_t live = i < B.n_units;
+        dbg_unit_xy[i * 2] = live ? snap_x[i] : 0; dbg_unit_xy[i * 2 + 1] = live ? snap_y[i] : 0;
+        dbg_unit_hp[i] = live ? snap_hp[i] : 0;
     }
+    dbg_n_units = B.n_units;
     dbg_frame_lo++;
 }
 

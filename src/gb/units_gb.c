@@ -3,6 +3,7 @@
 #include <string.h>
 #include "../core/battle.h"
 #include "wram.h"
+#define SNAP_MAX 10u
 
 #define W1_UNITS ((ActiveUnit *)0xD000)
 
@@ -42,14 +43,15 @@ void units_clear(void)
 
 /* Per-frame render/UI snapshot of the first n units (temporary OBJ placeholders need it every frame).
  * One SVBK switch, direct field reads: ~20x cheaper than n unit_load() copies. */
-uint8_t snap_x[8], snap_y[8], snap_fac[8], snap_flags[8];
-uint16_t snap_hp[8];
+uint8_t snap_x[SNAP_MAX], snap_y[SNAP_MAX], snap_fac[SNAP_MAX], snap_flags[SNAP_MAX];
+uint16_t snap_hp[SNAP_MAX];
 
 void units_snapshot(uint8_t n)
 {
     uint8_t o = SVBK_REG, i;
     const ActiveUnit *u = W1_UNITS;
     SVBK_REG = WB_UNITS;
+    if (n > SNAP_MAX) n = SNAP_MAX;
     for (i = 0; i < n; i++, u++) {
         snap_x[i] = u->x; snap_y[i] = u->y; snap_fac[i] = u->faction;
         snap_flags[i] = u->action_flags; snap_hp[i] = u->hp;

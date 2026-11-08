@@ -1,4 +1,3 @@
-#pragma bank 5   /* game logic, HUD and map view: code bank 5 (design doc 11.3) */
 #include <gb/gb.h>
 #include "debug.h"
 #include <string.h>
@@ -13,6 +12,10 @@
  * The shown page is never written, so there is no tearing; a newer request simply restarts the job. */
 
 #define LINE_TILES 18u
+/* text fetch buffers live in the event region (CC40..CCFF) to keep them off the 512 B stack */
+#define PAGE_BUF ((uint16_t *)0xCC40u)       /* 64 codes = 128 B */
+#define LINE_BUF ((uint16_t *)0xCCC0u)       /* 25 codes = 50 B */
+
 #define LINE_GLYPHS 24u
 #define LINE_BYTES (2u * LINE_TILES * 16u)   /* 576 */
 
@@ -20,8 +23,8 @@
 __at(0xC800) uint8_t hud_tiles[LINE_BYTES];
 __at(0xCA40) uint8_t hud_bits[16 * LINE_TILES];
 
-static uint16_t glyphs[2][LINE_GLYPHS];
-static uint8_t nglyph[2];
+static uint16_t glyphs[3][LINE_GLYPHS];   /* 0/1 = HUD lines (dialogue text), 2 = dialogue name */
+static uint8_t nglyph[3];
 static uint8_t shown, blank;
 static uint8_t job;            /* 0 idle, 1 raster L0, 2 dma L0, 3 raster L1, 4 dma L1, 5 prep ids, 6 flip */
 static uint8_t job_page;       /* page being drawn */
@@ -29,7 +32,7 @@ static uint8_t job_page;       /* page being drawn */
 
 static uint8_t page_base(uint8_t pg) { return pg ? 128u : 0u; }
 
-void hud_begin(void) { nglyph[0] = nglyph[1] = 0; }
+void hud_begin(void) { nglyph[0] = nglyph[1] = nglyph[2] = 0; }
 
 static void add(uint8_t line, uint16_t g)
 {
@@ -48,7 +51,7 @@ void hud_glyph(uint8_t line, uint16_t g) { add(line, g); }
 
 void hud_tx(uint8_t line, uint8_t tx, uint16_t var)
 {
-    uint16_t buf[LINE_GLYPHS + 1];
+    uint16_t *buf = LINE_BUF;
     uint16_t n = (uint16_t)(text_offset[tx + 1] - text_offset[tx]);
     uint8_t i;
     if (n > LINE_GLYPHS + 1) n = LINE_GLYPHS + 1;           /* HUD lines never exceed 24 glyphs */
@@ -80,6 +83,31 @@ static void raster_line(uint8_t line)
 {
     hud_raster(line);
 }
+
+/* page p of a paginated TXD_* string into lists 0 and 1; returns 1 if more pages follow */
+uint8_t hud_tx_page(uint8_t tx, uint8_t page)
+{
+    uint16_t *buf = PAGE_BUF;
+    uint16_t n = (uint16_t)(text_offset[tx + 1] - text_offset[tx]), i;
+    uint8_t p = 0, line = 0;
+    if (n > 64u) n = 64u;
+    rom_copy(TEXT_BANK, buf, &text_pool[text_offset[tx]], (uint16_t)(n * 2u));
+    for (i = 0; i < n && buf[i] != TXC_END; i++) {
+        if (buf[i] == TXC_PAGE) { if (p == page) return 1; p++; line = 0; continue; }
+        if (p != page) continue;
+        if (buf[i] == TXC_NL) { line = 1; continue; }
+        add(line, buf[i]);
+    }
+    return 0;
+}
+
+/* append text tx + k (k selects one of consecutive TX ids) to glyph list 'list' */
+void hud_tx_list(uint8_t list, uint8_t tx, uint16_t var, uint8_t k)
+{
+    hud_tx(list, (uint8_t)(tx + k), var);
+}
+
+void hud_raster_list(uint8_t list) { hud_raster(list); }
 
 void hud_raster(uint8_t line)
 {

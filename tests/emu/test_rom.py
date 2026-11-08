@@ -32,12 +32,15 @@ def check(name, cond, detail=""):
 
 
 class Emu:
-    def __init__(self, ram=None, sound=False):
+    def __init__(self, ram=None, sound=False, auto_dialog=True):
         import io
         kw = {"ram_file": io.BytesIO(ram)} if ram is not None else {}
         self.pb = PyBoy(str(ROM), window="null", cgb=True, sound_emulated=sound, **kw)
         self.m = self.pb.memory
         self.fc = 0
+        self.auto_dialog = auto_dialog   # story dialogue (modal) is advanced with A automatically
+        self._dlg_t = 0
+        self.dialog_pages_seen = 0
         self.frames(120)  # PyBoy plays the ~77-frame CGB boot animation first
         # the first player banner performs the phase-start autosave (~40 frames, blocking by design)
         n = 0
@@ -48,7 +51,16 @@ class Emu:
     def frames(self, n):
         for _ in range(n):
             self.pb.tick()
-        self.fc += n
+            self.fc += 1
+            if self.auto_dialog and self.m[SYMS["_dbg_dialog_active"]] == 1:
+                self._dlg_t += 1
+                if self._dlg_t % 10 == 4:
+                    self.pb.button_press("a")
+                elif self._dlg_t % 10 == 7:
+                    self.pb.button_release("a")
+            elif self._dlg_t:
+                self.pb.button_release("a")
+                self._dlg_t = 0
 
     def r8(self, s):
         return self.m[SYMS[s]]
@@ -88,8 +100,14 @@ class Emu:
         self.frames(4)
 
     def wait_state(self, states, limit=600):
+        """wait until the main loop has run >= 2 iterations (debug hooks are stale during blocking
+        dialogue / save / presentation) and reports one of the states"""
         n = 0
-        while self.state() not in states and n < limit:
+        f0 = self.m[SYMS["_dbg_frame_lo"]]
+        while n < limit:
+            if ((self.m[SYMS["_dbg_frame_lo"]] - f0) & 0xFF) >= 2 and self.state() in states \
+                    and self.m[SYMS["_dbg_dialog_active"]] != 1:
+                break
             self.frames(1)
             n += 1
         return n
@@ -339,6 +357,63 @@ except Exception as ex:  # pragma: no cover
     check(f"audio samples readable ({ex})", False)
 # keep time while the LCD is off is covered by the timer-driven design: tick rate is independent of frames
 a.pb.stop(save=False)
+
+# ------------------------------------------------------------------ story events (design doc 9, TECH01 script)
+v = Emu(auto_dialog=False)
+n = 0
+while v.r8("_dbg_dialog_active") != 1 and n < 400:
+    v.frames(1); n += 1
+check("opening dialogue starts after boot (BATTLE_START)", v.r8("_dbg_dialog_active") == 1)
+v.frames(12)
+v.png(ROM.parent / "shot_dialog_open.png")
+pages = 0
+while v.r8("_dbg_dialog_active") == 1 and pages < 20:
+    v.press("a", after=14); pages += 1
+check(f"opening dialogue: 3 speakers, 4 pages ({v.r8('_dbg_dialog_pages')})", v.r8("_dbg_dialog_pages") == 4)
+v.wait_state([G_IDLE], 200)
+check("map restored after dialogue", view_mismatches(v) == 0 and v.state() == G_IDLE)
+# 刘备 walks into the village (7,10) over two turns: one-shot supply event on POST_MOVE
+v.auto_dialog = True
+
+
+def move_unit(em, i, x, y):
+    em.goto(*em.unit(i)); em.press("a"); em.wait_state([G_MOVE], 20)
+    em.goto(x, y); em.press("a"); em.wait_state([G_MENU], 30)
+    if em.state() == G_MENU:
+        em.press("right")          # select 待命 when attack is offered
+        em.press("a")
+    em.wait_state([G_IDLE, G_BANNER, G_ENEMY], 300)
+
+
+move_unit(v, 0, 6, 11)
+pages_before = v.r8("_dbg_dialog_pages")
+v.press("start")
+v.wait_state([G_IDLE], 2000)
+move_unit(v, 0, 7, 10)
+check(f"POST_MOVE village event ran ({v.r8('_dbg_dialog_pages')} pages)", v.r8("_dbg_dialog_pages") == pages_before + 1
+      and v.unit(0) == (7, 10) and v.hp(0) == 300)
+# end turns until round 3 enemy phase: reinforcements appear in reserved slots 7 and 8
+while v.r16("_dbg_round") < 4 and v.fc < 30000 and v.state() != G_OUTCOME:
+    if v.state() == G_IDLE:
+        v.press("start")
+    v.frames(1)
+check(f"round-3 reinforcements spawned (units {v.r8('_dbg_n_units')})", v.r8("_dbg_n_units") == 9)
+check("no VM error", v.r8("_dbg_vm_err") == 0)
+v.wait_state([G_IDLE], 3000)
+v.press("select"); v.frames(90)
+ram_story = v.power_off()
+w = Emu(ram_story)
+w.wait_state([G_TITLE], 300)
+w.press("start"); w.wait_state([G_IDLE], 300)
+pages0 = w.r8("_dbg_dialog_pages")
+check("continue: opening dialogue does not replay", pages0 == 0, f"pages={pages0}")
+while w.r16("_dbg_round") < 6 and w.fc < 40000 and w.state() != G_OUTCOME:
+    if w.state() == G_IDLE:
+        w.press("start")
+    w.frames(1)
+check("battle flags restored: no duplicate spawn / BAD_SCRIPT after load",
+      w.r8("_dbg_vm_err") == 0 and w.r8("_dbg_n_units") == 9)
+w.pb.stop(save=False)
 
 # ------------------------------------------------------------------ in-game save: SELECT -> power off -> cold boot
 s = Emu()

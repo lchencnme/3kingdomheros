@@ -1,0 +1,73 @@
+/* GB platform hooks for the event VM (called from code bank 8: must be NONBANKED / bank 0).
+ * Battle flags live in the SRAM12 runtime area (design doc 11.5: offset 6400, 512 B);
+ * global flags in WRAM bank1 DF00 (campaign area); the dialogue queue in the event region CC00. */
+#include <gb/gb.h>
+#include <string.h>
+#include "../core/vm.h"
+#include "../core/save.h"
+#include "../gen/tech01_events.h"
+#include "rom.h"
+#include "wram.h"
+#include "dialogq.h"
+
+#define SRAM_RUNTIME_BANK 12u
+#define SRAM_BATTLE_FLAGS 6400u
+#define W1_CAMPAIGN ((uint8_t *)0xDF00u)
+
+uint8_t vm_event_count(void) PLATFORM_API { return TECH01_EVENT_COUNT; }
+
+void vm_event_header(uint8_t i, VmEvent *e) PLATFORM_API { memcpy(e, &tech01_events[i], sizeof *e); }
+
+void vm_read(uint16_t off, uint8_t *dst, uint8_t n) PLATFORM_API
+{
+    rom_copy(TECH01_SCRIPT_BANK, dst, tech01_script + off, n);
+}
+
+uint8_t vm_flag_get(uint8_t scope, uint16_t id) PLATFORM_API
+{
+    uint8_t b, o;
+    if (scope == SCOPE_BATTLE) {
+        sram_read(SRAM_RUNTIME_BANK, (uint16_t)(SRAM_BATTLE_FLAGS + (id >> 3)), &b, 1);
+    } else {
+        o = SVBK_REG; SVBK_REG = WB_UNITS; b = W1_CAMPAIGN[(id >> 3) & 0xFF]; SVBK_REG = o;
+    }
+    return (uint8_t)((b >> (id & 7u)) & 1u);
+}
+
+void vm_flag_set(uint8_t scope, uint16_t id, uint8_t v) PLATFORM_API
+{
+    uint8_t b, o, m = (uint8_t)(1u << (id & 7u));
+    if (scope == SCOPE_BATTLE) {
+        uint16_t off = (uint16_t)(SRAM_BATTLE_FLAGS + (id >> 3));
+        sram_read(SRAM_RUNTIME_BANK, off, &b, 1);
+        b = v ? (uint8_t)(b | m) : (uint8_t)(b & ~m);
+        sram_write(SRAM_RUNTIME_BANK, off, &b, 1);
+    } else {
+        o = SVBK_REG; SVBK_REG = WB_UNITS;
+        if (v) W1_CAMPAIGN[(id >> 3) & 0xFF] |= m; else W1_CAMPAIGN[(id >> 3) & 0xFF] &= (uint8_t)~m;
+        SVBK_REG = o;
+    }
+}
+
+void vm_text(uint8_t speaker, uint16_t text_id) PLATFORM_API
+{
+    DialogQ *q = DQ;
+    if (q->n < DQ_MAX) { q->speaker[q->n] = speaker; q->text[q->n] = text_id; q->n++; }
+}
+
+uint8_t vm_template(uint8_t idx, VmTemplate *t) PLATFORM_API
+{
+    if (idx >= TECH01_TEMPLATE_COUNT) return 0;
+    memcpy(t, &tech01_templates[idx], sizeof *t);
+    return 1;
+}
+
+void vm_gold(uint16_t amount) PLATFORM_API { (void)amount; }
+
+void vm_clear_battle_flags(void)
+{
+    uint8_t z[32];
+    uint16_t off;
+    memset(z, 0, sizeof z);
+    for (off = 0; off < 512u; off += 32u) sram_write(SRAM_RUNTIME_BANK, (uint16_t)(SRAM_BATTLE_FLAGS + off), z, 32);
+}

@@ -1729,28 +1729,178 @@
  ],
  "treasures": [],
  "zones": [],
+ "reinforcements": [
+  {
+   "template": 0,
+   "character": "ANON",
+   "class": 6,
+   "level": 2,
+   "faction": "ENEMY",
+   "instance_id": 7
+  },
+  {
+   "template": 1,
+   "character": "ANON",
+   "class": 3,
+   "level": 2,
+   "faction": "ENEMY",
+   "instance_id": 8
+  }
+ ],
  "events": [
   {
-   "id": 0,
+   "id": 1,
    "trigger": "BATTLE_START",
+   "param": null,
+   "priority": 0,
+   "once": true,
+   "condition": null,
+   "code": [
+    [
+     "TEXT",
+     "P0001",
+     "TXD_T01_OPEN_LIUBEI"
+    ],
+    [
+     "TEXT",
+     "P0002",
+     "TXD_T01_OPEN_GUANYU"
+    ],
+    [
+     "TEXT",
+     "P0003",
+     "TXD_T01_OPEN_ZHANGFEI"
+    ]
+   ]
+  },
+  {
+   "id": 2,
+   "trigger": "PHASE_START",
+   "param": "ENEMY",
    "priority": 0,
    "once": true,
    "condition": {
-    "all": []
+    "leaf": "turn_cmp",
+    "op": "eq",
+    "n": 3
    },
    "code": [
-    {
-     "op": "TEXT",
-     "args": [
-      "TX_TECH01_INTRO",
-      "ANON",
-      0
-     ]
-    },
-    {
-     "op": "END",
-     "args": []
-    }
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_T01_REINF"
+    ],
+    [
+     "SPAWN",
+     0,
+     30,
+     10
+    ],
+    [
+     "SPAWN",
+     1,
+     30,
+     14
+    ]
+   ]
+  },
+  {
+   "id": 3,
+   "trigger": "UNIT_RETREAT",
+   "param": null,
+   "priority": 0,
+   "once": true,
+   "condition": {
+    "any": [
+     {
+      "leaf": "target_eq",
+      "unit": 3
+     },
+     {
+      "leaf": "target_eq",
+      "unit": 4
+     },
+     {
+      "leaf": "target_eq",
+      "unit": 5
+     },
+     {
+      "leaf": "target_eq",
+      "unit": 6
+     },
+     {
+      "leaf": "target_eq",
+      "unit": 7
+     },
+     {
+      "leaf": "target_eq",
+      "unit": 8
+     }
+    ]
+   },
+   "code": [
+    [
+     "TEXT",
+     "P0003",
+     "TXD_T01_FIRST_KILL"
+    ]
+   ]
+  },
+  {
+   "id": 4,
+   "trigger": "POST_MOVE",
+   "param": 0,
+   "priority": 0,
+   "once": true,
+   "condition": {
+    "leaf": "unit_in_rect",
+    "unit": 0,
+    "rect": [
+     7,
+     10,
+     7,
+     10
+    ]
+   },
+   "code": [
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_T01_VILLAGE"
+    ],
+    [
+     "HP_SET",
+     0,
+     9999
+    ],
+    [
+     "HP_SET",
+     1,
+     9999
+    ],
+    [
+     "HP_SET",
+     2,
+     9999
+    ]
+   ]
+  },
+  {
+   "id": 5,
+   "trigger": "BATTLE_END",
+   "param": null,
+   "priority": 0,
+   "once": true,
+   "condition": {
+    "leaf": "unit_alive",
+    "unit": 0
+   },
+   "code": [
+    [
+     "TEXT",
+     "P0001",
+     "TXD_T01_WIN"
+    ]
    ]
   }
  ],
