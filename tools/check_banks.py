@@ -19,11 +19,17 @@ for name, (start, size) in areas.items():
     m = re.match(r"_CODE_(\d+)$", name)
     if m and size > 0x4000:
         bad.append(f"{name}: {size} bytes > 16384")
+ram_end = 0
+for name in ("_DATA", "_INITIALIZED", "_BSS", "_HEAP"):
+    if name in areas and areas[name][1]:
+        ram_end = max(ram_end, areas[name][0] + areas[name][1])
+if ram_end > 0xC800:
+    bad.append(f"C globals/runtime end at 0x{ram_end:04X} > 0xC7FF (design doc 11.4 budget C600..C7FF)")
 if fixed_end > 0x4000:
     bad.append(f"fixed bank 0 ends at 0x{fixed_end:04X} > 0x4000")
 used = {n: s for n, (_, s) in areas.items() if n.startswith("_CODE")}
 report = ", ".join(f"{n}={s}" for n, s in sorted(used.items()))
-print(f"check_banks: bank0 end 0x{fixed_end:04X}; {report}")
+print(f"check_banks: bank0 end 0x{fixed_end:04X}; RAM globals end 0x{ram_end:04X}; {report}")
 if bad:
     print("check_banks: FAIL\n  " + "\n  ".join(bad))
     sys.exit(1)

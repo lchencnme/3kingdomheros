@@ -160,7 +160,8 @@ uint8_t path_backtrack(const MoveRange *mr, uint8_t ex, uint8_t ey, uint16_t *ou
 
 /* ---- reverse approach field: dist[v] = min(dist[v], dist[u] + cost[u]) ---- */
 
-static uint8_t f_ter[64], f_occ[64];   /* row snapshot (fixed RAM: grid_row needs a non-banked buffer) */
+#define f_ter grid_rowbuf_ter                /* row snapshot: grid_row needs a non-banked buffer */
+#define f_occ grid_rowbuf_occ
 
 /* NOTE (GB): FieldJob may live in a banked WRAM page (AI scratch, bank 7). It is only read/written
  * while SVBK is the caller's bank; all work in between uses locals (fc_ptr/fq_ptr switch SVBK). */

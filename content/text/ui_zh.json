@@ -24,5 +24,11 @@
   "TX_NAME_GUANYU": "关羽",
   "TX_NAME_ZHANGFEI": "张飞",
   "TX_DIGITS": "0123456789/%+-",
-  "TX_ARROW": "▶"
+  "TX_ARROW": "▶",
+  "TX_SAVED": "中断存档完成",
+  "TX_SAVE_FAIL": "保存失败",
+  "TX_AUTOSAVE": "自动存档中",
+  "TX_CONTINUE_Q": "发现中断存档",
+  "TX_CONTINUE_KEYS": "START继续  A新开",
+  "TX_LOAD_FAIL": "读取失败"
 }

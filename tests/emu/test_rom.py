@@ -22,7 +22,7 @@ for line in ROM.with_suffix(".noi").read_text().splitlines():
     if len(p) == 3 and p[0] == "DEF":
         SYMS[p[1]] = int(p[2], 16)
 
-G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME = range(8)
+G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE = range(9)
 N_UNITS = 7
 results = []
 
@@ -32,11 +32,18 @@ def check(name, cond, detail=""):
 
 
 class Emu:
-    def __init__(self):
-        self.pb = PyBoy(str(ROM), window="null", cgb=True, sound_emulated=False)
+    def __init__(self, ram=None):
+        import io
+        kw = {"ram_file": io.BytesIO(ram)} if ram is not None else {}
+        self.pb = PyBoy(str(ROM), window="null", cgb=True, sound_emulated=False, **kw)
         self.m = self.pb.memory
         self.fc = 0
         self.frames(120)  # PyBoy plays the ~77-frame CGB boot animation first
+        # the first player banner performs the phase-start autosave (~40 frames, blocking by design)
+        n = 0
+        while self.m[SYMS["_dbg_frame_lo"]] == 0 and n < 200:
+            self.frames(1)
+            n += 1
 
     def frames(self, n):
         for _ in range(n):
@@ -96,6 +103,13 @@ class Emu:
                 self.press("right" if x > cx else "left")
             else:
                 self.press("down" if y > cy else "up")
+
+    def power_off(self):
+        """stop the emulator and return the battery RAM image (like pulling the cartridge)"""
+        import io
+        bio = io.BytesIO()
+        self.pb.stop(ram_file=bio)
+        return bio.getvalue()
 
     def canary_ok(self):
         return all(self.m[0xCE00 + i] == 0xA5 for i in range(16))
@@ -282,6 +296,50 @@ check("stack canary intact after full battle", r1["canary"])
 check("restart from outcome resets the battle", r1["restart_ok"])
 check("replay: identical outcome/round/RNG/draws/hp",
       all(r1[k] == r2[k] for k in ("outcome", "round", "rng", "draws", "hps")), f"{r1} vs {r2}")
+
+# ------------------------------------------------------------------ in-game save: SELECT -> power off -> cold boot
+s = Emu()
+s.wait_state([G_IDLE])
+s.frames(30)
+check("autosave at player phase start", s.r8("_dbg_saves") >= 1 and s.r8("_dbg_save_result") == 0,
+      f"saves={s.r8('_dbg_saves')} r={s.r8('_dbg_save_result')}")
+s.press("a"); s.wait_state([G_MOVE], 20)
+s.press("right"); s.press("right"); s.press("a"); s.wait_state([G_MENU], 20); s.press("a")
+s.wait_state([G_IDLE], 30)
+n0 = s.r8("_dbg_saves")
+s.press("select"); s.frames(90)
+check("SELECT writes the suspend save", s.r8("_dbg_saves") == n0 + 1 and s.r8("_dbg_save_result") == 0)
+saved = dict(units=[s.unit(i) for i in range(N_UNITS)], hp=[s.hp(i) for i in range(N_UNITS)],
+             rng=s.r32("_dbg_rng"), draws=s.r32("_dbg_draws"), cur=s.cur(), round=s.r16("_dbg_round"))
+ram = s.power_off()
+c = Emu(ram)
+c.wait_state([G_TITLE], 200)
+check("cold boot finds the suspend save (continue prompt)", c.state() == G_TITLE)
+c.press("start")
+c.wait_state([G_IDLE], 100)
+got = dict(units=[c.unit(i) for i in range(N_UNITS)], hp=[c.hp(i) for i in range(N_UNITS)],
+           rng=c.r32("_dbg_rng"), draws=c.r32("_dbg_draws"), cur=c.cur(), round=c.r16("_dbg_round"))
+check("continue restores units/hp/RNG/draws/cursor/round exactly", got == saved, f"{got} vs {saved}")
+check("restored 刘备 keeps its acted move (6,12)", c.unit(0) == (6, 12))
+check("BG map consistent after load", view_mismatches(c) == 0)
+c.pb.stop(save=False)
+n = Emu(ram)
+n.wait_state([G_TITLE], 200)
+n.press("a"); n.wait_state([G_IDLE], 200)
+check("A at the prompt starts a new battle", n.unit(0) == (4, 12) and n.r16("_dbg_round") == 1)
+n.pb.stop(save=False)
+# a finished battle must not be offered for continue
+f = Emu(ram)
+f.wait_state([G_TITLE], 200); f.press("a"); f.wait_state([G_IDLE], 200)
+while f.state() != G_OUTCOME and f.fc < 40000:
+    if f.state() == G_IDLE:
+        f.press("start")
+    f.frames(1)
+ram2 = f.power_off()
+g = Emu(ram2)
+g.frames(60)
+check("suspend invalidated after the battle ended", g.state() != G_TITLE)
+g.pb.stop(save=False)
 
 ok = sum(1 for _, c, _ in results if c)
 for name, c, d in results:

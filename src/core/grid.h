@@ -11,6 +11,13 @@
 #define SIDE_E 2u   /* ENEMY */
 
 extern uint8_t grid_w, grid_h;
+/* 2 x 64-byte row buffers in non-banked RAM (GB: UI arena tail 0xCB60..0xCBDF, design doc 11.4) */
+#ifdef __SDCC
+#define grid_rowbuf_ter ((uint8_t *)0xCB60u)
+#define grid_rowbuf_occ ((uint8_t *)0xCBA0u)
+#else
+extern uint8_t grid_rowbuf_ter[64], grid_rowbuf_occ[64];
+#endif
 
 uint8_t grid_terrain(uint8_t x, uint8_t y) PLATFORM_API;   /* low nibble: effective terrain id */
 uint8_t grid_occ(uint8_t x, uint8_t y) PLATFORM_API;       /* 0, SIDE_A or SIDE_E */

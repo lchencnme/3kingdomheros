@@ -8,6 +8,7 @@
 #include "../core/battle.h"
 #include "../core/ai.h"
 #include "../core/path.h"
+#include "../core/save.h"
 #include "../core/rules.h"
 #include "wram.h"
 #include "input.h"
@@ -27,13 +28,15 @@ extern uint16_t snap_hp[8];
 #define SNAP_ALIVE(i) (snap_hp[i] && !(snap_flags[i] & (AF_RETREAT | AF_DEAD | AF_AWAY)))
 
 enum {
-    G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME
+    G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE
 };
+
+#define OPT_AUTOSAVE 0x01u        /* design doc 11.6: autosave at player phase start, default on */
 
 static Battle B;
 static uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
 static uint8_t targets[8];
-static uint8_t enemy_i;
+static uint8_t enemy_i, options, autosave_pending;   /* no initialised statics: set in main() */
 static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 static const uint8_t blank16[16];
 
@@ -43,6 +46,8 @@ volatile uint16_t dbg_cam_x, dbg_cam_y, dbg_round, dbg_t_range, dbg_t_ai;
 volatile uint8_t dbg_unit_xy[TECH01_UNITS * 2];
 volatile uint16_t dbg_unit_hp[TECH01_UNITS];
 volatile uint32_t dbg_rng, dbg_draws;
+volatile uint8_t dbg_save_result, dbg_saves;
+volatile uint16_t dbg_sv[4], dbg_sv_probe;
 volatile uint16_t dbg_ai_t_range, dbg_ai_t_field, dbg_ai_t_cand;
 
 /* ---------------------------------------------------------------- helpers */
@@ -169,6 +174,37 @@ static void hud_banner(uint8_t phase)
     hud_end();
 }
 
+/* ---------------------------------------------------------------- save (design doc 11.6) */
+static uint8_t do_suspend_save(void)
+{
+    SaveUi ui;
+    uint8_t r;
+    ui.battle_id = 0xFFFEu; ui.cam_x = cam_x; ui.cam_y = cam_y; ui.cur_x = cur_x; ui.cur_y = cur_y;
+    ui.presentation = 0; ui.text_speed = 0; ui.options = options; ui.gold = 0;
+    { uint8_t c; uint32_t q; uint16_t t0 = sys_time; save_probe(SAVE_SLOT_SUSPEND, &c, &q); dbg_sv_probe = sys_time - t0; }
+    r = save_battle(SAVE_SLOT_SUSPEND, &B, &ui);
+    dbg_save_result = r; dbg_saves++;
+    return r;
+}
+
+static uint8_t do_suspend_load(void)
+{
+    SaveUi ui;
+    uint8_t r;
+    units_clear();
+    wram_init_grid_rom(TECH01_W, TECH01_H, TECH01_BANK, tech01_terrain);
+    r = load_battle(SAVE_SLOT_SUSPEND, &B, &ui);
+    if (r != SAVE_OK) return r;
+    B.turn_limit = 30;                          /* from the battle definition, not the save */
+    options = ui.options;
+    cam_x = ui.cam_x; cam_y = ui.cam_y; cur_x = ui.cur_x; cur_y = ui.cur_y;
+    {
+        uint8_t o = SVBK_REG;
+        SVBK_REG = WB_SCRATCH; ai_invalidate(W7_AI); SVBK_REG = o;
+    }
+    return SAVE_OK;
+}
+
 /* ---------------------------------------------------------------- flow */
 static void start_battle(void)
 {
@@ -192,6 +228,7 @@ static void start_battle(void)
     battle_phase_start(&B, FAC_PLAYER);
     state = G_BANNER; timer = 45; next_state = G_IDLE;
     hud_banner(FAC_PLAYER);
+    autosave_pending = (uint8_t)(options & OPT_AUTOSAVE);
 }
 
 static uint8_t player_can_act(void)
@@ -284,6 +321,10 @@ static void logic_player(void)
             }
         } else if (in_pressed & J_START) {
             begin_enemy_phase();               /* end turn */
+        } else if (in_pressed & J_SELECT) {
+            uint8_t r = do_suspend_save();     /* only in the stable player idle state (11.6) */
+            hud_begin(); hud_tx(0, r == SAVE_OK ? TX_SAVED : TX_SAVE_FAIL, 0); hud_end();
+            hud_settle = 90; hud_dirty = 1;    /* keep the message up for a moment */
         }
         break;
     case G_MOVE:
@@ -362,6 +403,7 @@ static void enemy_step(void)
         if (B.outcome) return;
         state = G_BANNER; timer = 45; next_state = G_IDLE;
         hud_banner(FAC_PLAYER);
+        autosave_pending = (uint8_t)(options & OPT_AUTOSAVE);
         return;
     }
     o = SVBK_REG;
@@ -387,10 +429,20 @@ static void enemy_step(void)
 
 static void logic(void)
 {
-    if (B.outcome && state != G_OUTCOME && state != G_SHOW) {
+    if (B.outcome && state != G_OUTCOME && state != G_SHOW && state != G_TITLE) {
         state = G_OUTCOME;
+        save_invalidate(SAVE_SLOT_SUSPEND);     /* never "continue" a finished battle */
         hud_begin(); hud_tx(0, B.outcome == OUT_WIN ? TX_WIN : TX_LOSE, 0); hud_end();
         return;
+    }
+    if (autosave_pending && state == G_BANNER) {
+        /* design doc 11.6: autosave at player phase start, performed while the phase banner is shown
+         * (the player is waiting anyway); the banner time already spent is deducted. ~0.6 s blocking. */
+        uint16_t t0 = sys_time, el;
+        autosave_pending = 0;
+        do_suspend_save();
+        el = sys_time - t0;
+        timer = el >= 35u ? 10u : (uint8_t)(45u - el);
     }
     switch (state) {
     case G_SHOW:
@@ -413,6 +465,16 @@ static void logic(void)
         break;
     case G_OUTCOME:
         if (in_pressed & J_A) { start_battle(); mapview_init(&tech01_meta[0][0], tech01_terrain_pal); }
+        break;
+    case G_TITLE:
+        if (in_pressed & J_START) {
+            if (do_suspend_load() == SAVE_OK) {
+                state = G_IDLE; hud_dirty = 1;
+                DISPLAY_OFF; mapview_init(&tech01_meta[0][0], tech01_terrain_pal); DISPLAY_ON;
+            } else { hud_begin(); hud_tx(0, TX_LOAD_FAIL, 0); hud_end(); start_battle(); }
+        } else if (in_pressed & J_A) {
+            start_battle();
+        }
         break;
     default:
         logic_player();
@@ -444,6 +506,7 @@ void main(void)
     DISPLAY_OFF;
     if (_cpu == CGB_TYPE) cpu_fast();          /* design doc 11.2: double speed */
     memset((void *)0xCE00, 0xA5, 16);          /* stack canary (11.4) */
+    options = OPT_AUTOSAVE;
 
     set_bkg_palette(0, 8, tech01_bg_pals);
     set_sprite_palette(0, 4, tech01_obj_pals);
@@ -461,6 +524,15 @@ void main(void)
     start_battle();
     cam_x = 0; cam_y = (uint16_t)(cur_y * 16u + 8u - 56u);
     mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
+    {
+        uint8_t copy;
+        uint32_t seq;
+        if (save_probe(SAVE_SLOT_SUSPEND, &copy, &seq) == SAVE_OK) {
+            state = G_TITLE;
+            autosave_pending = 0;               /* never overwrite the found save before the choice */
+            hud_begin(); hud_tx(0, TX_CONTINUE_Q, 0); hud_tx(1, TX_CONTINUE_KEYS, 0); hud_end();
+        }
+    }
 
     input_init();
     SPRITES_8x16;

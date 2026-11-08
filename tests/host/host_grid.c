@@ -2,6 +2,7 @@
 #include "../../src/core/path.h"
 
 uint8_t grid_w, grid_h;
+uint8_t grid_rowbuf_ter[64], grid_rowbuf_occ[64];
 uint8_t host_terrain[4096];
 uint8_t host_occ[4096];
 
