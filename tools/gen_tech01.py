@@ -42,6 +42,26 @@ OBJ_PALS = [
 ]
 
 
+def remap_table():
+    """design doc 12.2: for every (terrain palette, unit palette) pair, map the terrain colours under a unit
+    to the unit palette: paper -> paper, ink -> ink, others -> nearest RGB (ties: lower index). Packed
+    per pair as one byte: bits 0-2 = low plane set for colours 1..3, bits 4-6 = high plane set."""
+    out = []
+    for src in range(8):
+        for dst in range(4, 8):
+            m = [0, None, None, 3]
+            for c in (1, 2):
+                col = BG_PALS[src][c]
+                d = [sum((a - b) ** 2 for a, b in zip(col, BG_PALS[dst][k])) for k in range(4)]
+                m[c] = min(range(4), key=lambda k: (d[k], k))
+            lo = sum(((m[c] & 1) << (c - 1)) for c in (1, 2, 3))
+            hi = sum((((m[c] >> 1) & 1) << (c - 1)) for c in (1, 2, 3))
+            out.append(lo | (hi << 4))
+    # unit art check: the unit tiles use colours 1..3 of their own palette directly, so the three
+    # visible colours map one-to-one by construction; report the remap for review
+    return out
+
+
 def rgb555(c):
     r, g, b = (v >> 3 for v in c)
     return r | (g << 5) | (b << 10)
@@ -231,6 +251,8 @@ UNITS = [  # (name, char_tag, class, faction, x, y)
     ("简雍", "CH_JIANYONG", 9, "PLAYER", 3, 13),   # 文士: strategies (design doc 6.3)
 ]
 CAMP = json.loads((Path(__file__).resolve().parent.parent / "content/camps/CAMP_TECH01.json").read_text(encoding="utf-8"))
+# treasures (design doc 7.4): (x, y, item); taken flags are battle-scope VM flags 0x100 + i
+TREASURES = [(10, 6, 0x60), (11, 19, 0x50)]         # 的卢 by the north woods, 孙子兵法 below the south hills
 # starting inventory (design doc 7.1): (unit index, item id from content/items.json)
 # AI groups (design doc 8.2): group 0 attacks; group 1 (the east archer) holds its post until threatened
 AI_GROUPS = [{"id": 0, "mode": "AGGRESSIVE", "target": None, "leash": 3},
@@ -273,7 +295,8 @@ def main():
          "extern const uint8_t tech01_unit_tiles[];",
          "typedef struct { uint8_t cls, faction, x, y, ai; } Tech01Unit;",
          f"#define TECH01_AI_GROUPS {len(AI_GROUPS)}u",
-         "extern const uint8_t tech01_shop[];", "extern const uint8_t tech01_council[][2];",
+         "extern const uint8_t tech01_shop[];", "extern const uint8_t tech01_remap[8][4];", f"#define TECH01_TREASURES {len(TREASURES)}u",
+         "#define TECH01_TREASURE_FLAG0 0x100u", "extern const uint8_t tech01_treasures[][3];", "extern const uint8_t tech01_council[][2];",
          "extern const uint8_t tech01_deploy_forced;   /* bit k = player officer k must deploy */",
          f"#define TECH01_SHOP_N {len(CAMP['shop'])}u", f"#define TECH01_COUNCIL_N {len(CAMP['council'])}u",
          f"#define TECH01_DEPLOY_MAX {CAMP['deploy']['max_count']}u", "extern const uint8_t tech01_ai_groups[];   /* {id, mode, target lo, hi, leash} */",
@@ -300,6 +323,9 @@ def main():
     ci += arr("tech01_bg_pals", "uint16_t", [rgb555(col) for p in BG_PALS for col in p], 4)
     ci += arr("tech01_obj_pals", "uint16_t", [rgb555(col) for p in OBJ_PALS for col in p], 4)
     ci.append("const uint8_t tech01_meta[10][4] = {" + ", ".join("{" + ", ".join(map(str, m)) + "}" for m in meta) + "};")
+    rt = remap_table()
+    ci.append("const uint8_t tech01_remap[8][4] = {" + ", ".join("{" + ", ".join(map(str, rt[i:i + 4])) + "}" for i in range(0, 32, 4))
+              + "};   /* [src pal][unit pal - 4] */")
     ci.append("const uint8_t tech01_terrain_pal[10] = {" + ", ".join(str(TERRAIN_PAL[i]) for i in range(10)) + "};")
     fac = {"PLAYER": 0, "ALLY": 1, "ENEMY": 2}
     ci.append("const uint8_t tech01_start_items[][2] = {" + ", ".join(f"{{{u}, {i}}}" for u, i in START_ITEMS) + "};")
@@ -320,6 +346,10 @@ def main():
     for tag in camp["deploy"]["forced"]:
         forced |= 1 << [u[1] for u in players].index(tag)
     ci.insert(1, '#include "text_data.h"')
+    for x, y, it in TREASURES:
+        if not (0 <= x < W and 0 <= y < H) or it not in items:
+            raise SystemExit(f"gen_tech01: bad treasure {(x, y, it)}")
+    ci.append("const uint8_t tech01_treasures[][3] = {" + ", ".join(f"{{{x}, {y}, {it}}}" for x, y, it in TREASURES) + "};")
     ci.append("const uint8_t tech01_shop[] = {" + ", ".join(map(str, camp["shop"])) + "};")
     ci.append("const uint8_t tech01_council[][2] = {" + ", ".join(f"{{{spk[s]}, {tx}}}" for s, tx in camp["council"]) + "};")
     ci.append(f"const uint8_t tech01_deploy_forced = {forced};")
@@ -372,7 +402,8 @@ def main():
              "code": [["TEXT", "P0002", "TXD_T01_DUEL_GUANYU"], ["DUEL", 1, 3, 0], ["TEXT", "NARRATOR", "TXD_T01_DUEL_DONE"]]},
             {"id": 5, "trigger": "BATTLE_END", "param": None, "priority": 0, "once": True,
              "condition": {"leaf": "unit_alive", "unit": 0},
-             "code": [["TEXT", "P0001", "TXD_T01_WIN"]]},
+             "code": [["TEXT", "P0001", "TXD_T01_WIN"], ["TEXT", "NARRATOR", "TXD_T01_PRIZE"],
+                      ["GIVE_ITEM", 0x70], ["GIVE_ITEM", 4]]},          # 传国玉玺 (plot) + 美酒 (7.4)
         ],
         "victory": {"leaf": "all_enemy_removed"},
         "defeat": {"leaf": "unit_removed", "unit": 0},

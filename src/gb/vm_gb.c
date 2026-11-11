@@ -5,6 +5,8 @@
 #include <string.h>
 #include "../core/vm.h"
 #include "../core/save.h"
+#include "../core/item.h"
+#include "../gen/tech01_data.h"
 #include "../gen/tech01_events.h"
 #include "rom.h"
 #include "wram.h"
@@ -64,7 +66,17 @@ uint8_t vm_template(uint8_t idx, VmTemplate *t) PLATFORM_API
     return 1;
 }
 
-void vm_gold(uint16_t amount) PLATFORM_API { (void)amount; }
+uint16_t gold;                                  /* campaign gold (GIVE_GOLD, battle rewards, shop) */
+void vm_gold(uint16_t amount) PLATFORM_API { gold = (uint16_t)(gold + amount < gold ? 0xFFFFu : gold + amount); }
+
+/* treasures of the current battle (design doc 7.4) */
+uint8_t treasure_def(uint8_t i, TreasureDef *t) PLATFORM_API
+{
+    if (i >= TECH01_TREASURES) return 0;
+    t->x = tech01_treasures[i][0]; t->y = tech01_treasures[i][1]; t->item = tech01_treasures[i][2];
+    t->flag = (uint16_t)(TECH01_TREASURE_FLAG0 + i);
+    return 1;
+}
 
 /* called by OP_DUEL after the state change: the queue entry is played in order with the text pages */
 void vm_duel(uint8_t winner, uint8_t loser, uint8_t retreated) PLATFORM_API

@@ -94,5 +94,20 @@
   "TX_DEP_MARK": "出",
   "TX_FORCED": "必",
   "TX_FORCED_MSG": "必须出阵",
-  "TX_DEPLOY_HINT": "A选 SELECT前移 START开战"
+  "TX_DEPLOY_HINT": "A选 SELECT前移 START开战",
+  "TX_TREASURE": "宝物",
+  "TX_TREASURE_STAYS": "携带已满，宝物留在原地",
+  "TX_GOT": "得到",
+  "TX_PICK_HINT": "左右选人 A确定",
+  "TX_CMD_PRIZE": "战利品",
+  "TX_PRIZE_FIRST": "请先分配战利品",
+  "TX_PRIZE_HINT": "A交给 SELECT卖 B舍弃",
+  "TX_NO_DISCARD": "剧情物不能舍弃",
+  "TX_DISCARDED": "已舍弃",
+  "TX_PRIZE_LEFT": "START先去整备",
+  "TX_XOWN_HINT": "选自己的格 A确定 B返回",
+  "TX_XRECV_HINT": "左右换人 上下选格 A交换",
+  "TX_IR_6": "已装备的物品不能交换",
+  "TX_DANGER_CALC": "敌军危险区计算中……",
+  "TX_DANGER_ON": "危险区（×）  B关闭"
 }

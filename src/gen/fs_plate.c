@@ -1,4 +1,4 @@
-#pragma bank 2   /* asset bank: read only through the rom.c gateway */
+#pragma bank 15  /* asset bank: read only through the rom.c gateway */
 #include "fs_data.h"
 const uint8_t fs_plate_tiles[] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

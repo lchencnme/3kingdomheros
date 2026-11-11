@@ -3,6 +3,7 @@
 #endif
 #include "vm.h"
 #include "ai.h"
+#include "item.h"
 #include "grid.h"
 #include "path.h"
 
@@ -190,6 +191,11 @@ static uint8_t run_code(Battle *b, const VmFact *f, uint16_t off, uint16_t len)
                     unit_store(a[0], &u);
                 }
             }
+            break;
+        case OP_GIVE_ITEM:
+            vm_read((uint16_t)(off + 1u), a, 1);
+            off += 2;
+            if (!prize_push(a[0])) return VM_BAD_SCRIPT;   /* queue full / unknown id: compiler should prevent */
             break;
         case OP_SET_AI:
             vm_read((uint16_t)(off + 1u), a, 6);

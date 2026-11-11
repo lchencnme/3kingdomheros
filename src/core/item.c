@@ -6,6 +6,7 @@
 #include "grid.h"
 #include "path.h"
 #include "save.h"
+#include "vm.h"
 
 #define EQ_OFF 16u            /* record: 8 x u16 items, then 3 equip slot indices (FF = none), 1 pad */
 
@@ -324,3 +325,70 @@ uint8_t item_exchange_camp(uint8_t a, uint8_t sa, uint8_t b, uint8_t sb) CORE_AP
     if (eb) item_rederive(b);
     return IR_OK;
 }
+
+/* ---------------------------------------------------------------- treasures (7.4) */
+uint8_t treasure_at(uint8_t x, uint8_t y) CORE_API
+{
+    TreasureDef d;
+    uint8_t i;
+    for (i = 0; treasure_def(i, &d); i++)
+        if (d.x == x && d.y == y && !vm_flag_get(SCOPE_BATTLE, d.flag)) return i;
+    return 0xFF;
+}
+
+uint8_t treasure_take(uint8_t i, uint8_t receiver) CORE_API
+{
+    TreasureDef d;
+    if (!treasure_def(i, &d) || vm_flag_get(SCOPE_BATTLE, d.flag)) return IR_NO_TARGET;
+    if (inv_count(receiver) >= INV_SLOTS) return IR_FULL;
+    vm_flag_set(SCOPE_BATTLE, d.flag, 1);                /* taken first (7.4), then the item */
+    inv_add(receiver, d.item);
+    return IR_OK;
+}
+
+uint8_t inv_first_free(const Battle *b, uint8_t faction) CORE_API
+{
+    ActiveUnit u;
+    uint8_t i;
+    for (i = 0; i < b->n_units; i++) {
+        unit_load(i, &u);
+        if (unit_alive(&u) && u.faction == faction && inv_count(i) < INV_SLOTS) return i;
+    }
+    return 0xFF;
+}
+
+/* ---------------------------------------------------------------- prize queue (7.4) */
+static uint8_t pq_n(void) { uint8_t n; sram_read(12, PRIZE_SRAM_OFF, &n, 1); return n <= PRIZE_MAX ? n : 0u; }
+static void pq_set_n(uint8_t n) { sram_write(12, PRIZE_SRAM_OFF, &n, 1); }
+
+uint8_t prize_count(void) CORE_API { return pq_n(); }
+
+uint8_t prize_get(uint8_t i) CORE_API
+{
+    uint8_t v;
+    if (i >= pq_n()) return ITEM_NONE;
+    sram_read(12, (uint16_t)(PRIZE_SRAM_OFF + 1u + i), &v, 1);
+    return v;
+}
+
+uint8_t prize_push(uint8_t item) CORE_API
+{
+    uint8_t n = pq_n();
+    if (n >= PRIZE_MAX || !item_known(item)) return 0;
+    sram_write(12, (uint16_t)(PRIZE_SRAM_OFF + 1u + n), &item, 1);
+    pq_set_n((uint8_t)(n + 1u));
+    return 1;
+}
+
+void prize_remove(uint8_t i) CORE_API
+{
+    uint8_t n = pq_n(), k, v;
+    if (i >= n) return;
+    for (k = i; k + 1u < n; k++) {
+        sram_read(12, (uint16_t)(PRIZE_SRAM_OFF + 2u + k), &v, 1);
+        sram_write(12, (uint16_t)(PRIZE_SRAM_OFF + 1u + k), &v, 1);
+    }
+    pq_set_n((uint8_t)(n - 1u));
+}
+
+void prize_clear(void) CORE_API { pq_set_n(0); }

@@ -39,4 +39,6 @@ volatile __at(0xCDF0) uint16_t dbg_gold;
 volatile __at(0xCDF2) uint8_t dbg_item_uses;
 volatile __at(0xCDF3) uint8_t dbg_ai_strats;
 volatile __at(0xCDF4) uint8_t dbg_ai_items;
-volatile __at(0xCDF5) uint8_t dbg_inv[8];         /* unit 0 (刘备) inventory, refreshed after item actions */
+volatile __at(0xCDF5) uint8_t dbg_inv[8];
+volatile __at(0xCDFD) uint8_t dbg_treasures;       /* treasures picked up */
+volatile __at(0xCDFE) uint8_t dbg_treasure_mask;   /* bit i: treasure i still on the map */         /* unit 0 (刘备) inventory, refreshed after item actions */

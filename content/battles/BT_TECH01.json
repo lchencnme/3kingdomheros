@@ -1971,6 +1971,19 @@
      "TEXT",
      "P0001",
      "TXD_T01_WIN"
+    ],
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_T01_PRIZE"
+    ],
+    [
+     "GIVE_ITEM",
+     112
+    ],
+    [
+     "GIVE_ITEM",
+     4
     ]
    ]
   }

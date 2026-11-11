@@ -71,4 +71,24 @@ void item_rederive(uint8_t unit) CORE_API;
 uint8_t item_heal_bonus(uint8_t unit) CORE_API;
 /* shop (7.3): sell price floor(price/2); 0 = cannot be sold */
 uint16_t item_sell_price(uint8_t item) CORE_API;
+
+/* ---- treasures and the prize queue (7.4) ---- */
+typedef struct { uint8_t x, y, item; uint16_t flag; } TreasureDef;   /* flag: battle-scope VM flag "taken" */
+uint8_t treasure_def(uint8_t i, TreasureDef *t) PLATFORM_API;         /* 0 = no such treasure */
+/* untaken treasure on (x, y), or 0xFF */
+uint8_t treasure_at(uint8_t x, uint8_t y) CORE_API;
+/* claim treasure i for receiver: IR_FULL if the receiver has no free slot (nothing changes, never swallowed);
+ * the taken flag is written before the item is given */
+uint8_t treasure_take(uint8_t i, uint8_t receiver) CORE_API;
+/* any alive unit of 'faction' with a free slot (first by instance id), or 0xFF */
+uint8_t inv_first_free(const Battle *b, uint8_t faction) CORE_API;
+
+#define PRIZE_MAX 16u
+#define PRIZE_SRAM_OFF 7872u        /* SRAM12 runtime area (11.5 reserve): count + 16 item ids */
+/* scripted rewards (GIVE_ITEM) wait here until distributed, sold or discarded after the battle */
+uint8_t prize_push(uint8_t item) CORE_API;            /* 0 = queue full (the script is told, never silent) */
+uint8_t prize_count(void) CORE_API;
+uint8_t prize_get(uint8_t i) CORE_API;
+void prize_remove(uint8_t i) CORE_API;
+void prize_clear(void) CORE_API;
 #endif

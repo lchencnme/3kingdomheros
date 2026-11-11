@@ -341,6 +341,42 @@ void ai_field_prepare(Battle *b, AiScratch *s, uint8_t unit) CORE_API
     else field_request_cell(s, mtype, side, src);
 }
 
+void ai_danger_add(Battle *b, MoveRange *mr, uint8_t unit, uint8_t *bits) CORE_API
+{
+    const ClassDef *c;
+    uint8_t ly, lx, mv;
+    (void)b;
+    unit_load(unit, &ai_t);
+    if (!unit_alive(&ai_t)) return;
+    c = &class_defs[ai_t.class_id];
+    if (c->range_max == 0) return;
+    mv = (ai_t.status_mask & (1u << ST_ROOT)) ? 0 : ai_t.move;
+    path_move_range(mr, ai_t.x, ai_t.y, mv, c->move_type, faction_side(ai_t.faction));
+    for (ly = 0; ly < MR_DIM; ly++) {
+        int16_t gy = mr->by + ly;
+        if (gy < 0 || gy >= grid_h) continue;
+        for (lx = 0; lx < MR_DIM; lx++) {
+            int16_t gx = mr->bx + lx, dy;
+            if (gx < 0 || gx >= grid_w || mr->dist[(uint16_t)ly * MR_DIM + lx] == MR_INF) continue;
+            if (!path_endpoint_ok(mr, (uint8_t)gx, (uint8_t)gy)) continue;
+            for (dy = -(int16_t)c->range_max; dy <= (int16_t)c->range_max; dy++) {
+                int16_t ty = gy + dy, span = (int16_t)c->range_max - (dy < 0 ? -dy : dy), dx;
+                if (ty < 0 || ty >= grid_h) continue;
+                for (dx = -span; dx <= span; dx++) {
+                    int16_t tx = gx + dx;
+                    uint8_t d = (uint8_t)((dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy));
+                    uint16_t cell;
+                    if (tx < 0 || tx >= grid_w || d < c->range_min) continue;
+                    cell = (uint16_t)ty * grid_w + (uint16_t)tx;
+                    if (bits[cell >> 3] & (1u << (cell & 7u))) continue;
+                    if (d > 1 && !los_clear((uint8_t)gx, (uint8_t)gy, (uint8_t)tx, (uint8_t)ty)) continue;
+                    bits[cell >> 3] |= (uint8_t)(1u << (cell & 7u));
+                }
+            }
+        }
+    }
+}
+
 uint8_t ai_hold_update(Battle *b, MoveRange *mr, uint8_t unit) CORE_API
 {
     AiMode m;

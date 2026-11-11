@@ -265,6 +265,11 @@ uint8_t save_battle(uint8_t slot, const Battle *b, const SaveUi *ui) CORE_API
     c_u8(&c, 39, ui->presentation); c_u8(&c, 40, ui->text_speed); c_u8(&c, 42, ui->options);
     c_u8(&c, 43, 1); c_u32(&c, 44, ui->gold); c_u32(&c, 52, RULES_PROFILE_CRC);
     c_u8(&c, 80, b->weather);
+    {                                                   /* prize queue (7.4): count + 16 ids @96 */
+        uint8_t pq[17], k;
+        sram_read(12, 7872u, pq, 17);
+        for (k = 0; k < 17u; k++) c_u8(&c, (uint16_t)(96u + k), pq[k]);
+    }
     c_seek(&c, 512);
     w_tlv(&w, 9, 1920);                                 /* unit items: SRAM15 runtime block 0..1919 (7.1) */
     {
@@ -404,6 +409,12 @@ uint8_t load_battle(uint8_t slot, Battle *b, SaveUi *ui) CORE_API
     ui->cam_x = get16(core + 32); ui->cam_y = get16(core + 34); ui->cur_x = core[36]; ui->cur_y = core[37];
     ui->presentation = core[39]; ui->text_speed = core[40]; ui->options = core[42]; ui->gold = get32(core + 44);
     img_read(base, (uint16_t)(off + 3u + 80u), &b->weather, 1);
+    {
+        uint8_t pq[17];
+        img_read(base, (uint16_t)(off + 3u + 96u), pq, 17);
+        if (pq[0] > 16u) pq[0] = 0;
+        sram_write(12, 7872u, pq, 17);
+    }
     off = (uint16_t)(off + 3u + 512u);                   /* tag 9: unit items back to SRAM15 */
     {
         uint8_t fb[32];

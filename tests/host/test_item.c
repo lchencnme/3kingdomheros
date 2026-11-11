@@ -7,11 +7,14 @@
 #include "../../src/core/save.h"
 #include "../../src/core/grid.h"
 #include "../../src/core/rules.h"
+#include "../../src/core/vm.h"
 
 extern uint8_t host_terrain[4096], host_occ[4096];
 extern ActiveUnit host_units[MAX_UNITS];
 extern UnitBase host_base[MAX_UNITS];
 extern uint8_t host_sram[16][8192];
+extern TreasureDef host_treasures[8];
+extern uint8_t host_n_treasures;
 
 static int fails = 0, checks = 0;
 #define CHECK(cond, ...) do { checks++; if (!(cond)) { fails++; printf("FAIL %s:%d ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
@@ -388,6 +391,58 @@ int main(void)
         CHECK(load_battle(SAVE_SLOT_SUSPEND, &B, &ui) == SAVE_OK, "load");
         ai_resolve(4, &m);
         CHECK(m.mode == AI_ESCORT && m.target == 2 && m.leash == 2, "override restored");
+    }
+
+    /* treasures and the prize queue (7.4) */
+    reset();
+    {
+        uint8_t s;
+        host_n_treasures = 2;
+        host_treasures[0].x = 7; host_treasures[0].y = 7; host_treasures[0].item = 0x60; host_treasures[0].flag = 0x100;
+        host_treasures[1].x = 8; host_treasures[1].y = 7; host_treasures[1].item = 0x50; host_treasures[1].flag = 0x101;
+        CHECK(treasure_at(7, 7) == 0 && treasure_at(8, 7) == 1 && treasure_at(6, 7) == 0xFF, "treasure lookup");
+        for (s = 0; s < INV_SLOTS; s++) inv_set(0, s, 0);
+        CHECK(treasure_take(0, 0) == IR_FULL && treasure_at(7, 7) == 0 && !vm_flag_get(SCOPE_BATTLE, 0x100),
+              "full receiver: nothing taken, nothing marked");
+        CHECK(inv_first_free(&B, FAC_PLAYER) == 1, "first free officer");
+        CHECK(treasure_take(0, 1) == IR_OK && inv_get(1, 0) == 0x60 && treasure_at(7, 7) == 0xFF, "claimed by another officer");
+        CHECK(treasure_take(0, 1) == IR_NO_TARGET && inv_count(1) == 1, "only once");
+        host_n_treasures = 0;
+        prize_clear();
+        for (s = 0; s < PRIZE_MAX; s++) CHECK(prize_push((uint8_t)(s & 3)), "push %u", s);
+        CHECK(!prize_push(1) && prize_count() == PRIZE_MAX, "17th prize refused");
+        prize_remove(0);
+        CHECK(prize_count() == 15 && prize_get(0) == 1 && prize_get(14) == 3, "remove keeps order");
+        CHECK(!prize_push(0x0F), "unknown item id refused");
+        {
+            SaveUi ui;
+            memset(&ui, 0, sizeof ui);
+            save_cache_reset();
+            CHECK(save_battle(SAVE_SLOT_SUSPEND, &B, &ui) == SAVE_OK, "save with prizes");
+            prize_clear();
+            CHECK(load_battle(SAVE_SLOT_SUSPEND, &B, &ui) == SAVE_OK && prize_count() == 15 && prize_get(0) == 1, "prize queue restored");
+        }
+    }
+
+    /* danger view (8.4): exact reach + range */
+    reset();
+    {
+        static uint8_t bits[512];
+        uint8_t x, y, n = 0, ok = 1;
+        memset(bits, 0, sizeof bits);
+        ai_danger_add(&B, &MR, 2, bits);                    /* enemy infantry at (4,5), move 4, range 1 */
+        for (y = 0; y < 12; y++) for (x = 0; x < 12; x++) {
+            uint16_t c = (uint16_t)y * 12 + x;
+            uint8_t on = (bits[c >> 3] >> (c & 7)) & 1, dd = (uint8_t)((x > 4 ? x - 4 : 4 - x) + (y > 5 ? y - 5 : 5 - y));
+            n += on;
+            if (dd > 5 && on) ok = 0;                            /* never beyond move + range */
+            if (x == 9 && y == 5 && !on) ok = 0;                  /* open plain east: full reach */
+        }
+        CHECK(ok && n >= 45, "danger = move 4 + range 1 on open ground (%u cells)", n);
+        host_terrain[5 * 12 + 6] = 8; host_terrain[4 * 12 + 6] = 8; host_terrain[6 * 12 + 6] = 8;   /* wall */
+        memset(bits, 0, sizeof bits);
+        ai_danger_add(&B, &MR, 2, bits);
+        CHECK(!((bits[(5 * 12 + 9) >> 3] >> ((5 * 12 + 9) & 7)) & 1), "walls shorten the danger zone");
     }
 
     /* battle save carries the inventory block (tag 9) */

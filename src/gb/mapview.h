@@ -16,4 +16,6 @@ void mapview_camera_follow(uint8_t cx, uint8_t cy) BANKED;  /* dead-zone target,
 void mapview_prepare(void) BANKED;     /* outside VBlank: unit diff, dirty/edge tile composition */
 void mapview_commit(void) BANKED;      /* inside VBlank: GDMA + map/attr writes only */
 void mapview_set_units(uint8_t n) BANKED;
+void mapview_treasures(void) BANKED;
+void mapview_danger(uint8_t on) BANKED;  /* show the danger bitmap at WRAM7 DC00 (X marks), sweep redraw */   /* re-read the untaken treasures (7.4); redraws changed cells */
 #endif

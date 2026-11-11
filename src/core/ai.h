@@ -85,6 +85,9 @@ typedef struct {
 void ai_invalidate(AiScratch *s) CORE_API;
 /* start building the approach field for (mtype, side) as a cooperative job */
 void ai_field_request(Battle *b, AiScratch *s, uint8_t mtype, uint8_t side) CORE_API;
+/* player-visible danger view (8.4, UI only): set the bit (y*w+x) of every cell 'unit' could attack after a
+ * legal move (exact SPFA + range + LOS). bits: w*h bits (<= 512 B). mr: scratch */
+void ai_danger_add(Battle *b, MoveRange *mr, uint8_t unit, uint8_t *bits) CORE_API;
 /* start (as a cooperative job) the approach field this unit's next decision needs, unless cached */
 void ai_field_prepare(Battle *b, AiScratch *s, uint8_t unit) CORE_API;
 /* advance the job by up to 'budget' pops; returns 1 when the field is valid */

@@ -2,7 +2,7 @@
 #ifndef FS_DATA_H
 #define FS_DATA_H
 #include <stdint.h>
-#define FS_PLATE_BANK 2u
+#define FS_PLATE_BANK 15u
 #define FS_PLATE_TILES 47u
 #define FS_PLATE_W 20u
 #define FS_PLATE_H 13u

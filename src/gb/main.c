@@ -42,7 +42,7 @@ void vm_clear_battle_flags(void);
 
 enum {
     G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE, G_SLIST, G_SAIM,
-    G_ILIST, G_IAIM, G_XLIST, G_CAMP, G_SHOP
+    G_ILIST, G_IAIM, G_XLIST, G_CAMP, G_SHOP, G_XRECV, G_DANGER
 };
 
 #define MI_ATTACK 0u
@@ -62,10 +62,13 @@ enum {
 
 static Battle B;
 static uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
-static uint8_t mitems[6], isel, xrecv, keep_inv, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
+static uint8_t xr_list[4], n_xr, xri, rslot;
+static uint8_t danger_on, dz_i;                /* enemy danger view (8.4): shown / next unit to add */
+#define W7_DANGER ((uint8_t *)0xDC00u)          /* overlays the AI scratch: invalidate when hiding */  /* battle exchange (7.3): adjacent allies, chosen one, its slot */
+static uint8_t mitems[6], isel, keep_inv, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
 static uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
 static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
-static uint16_t gold;
+extern uint16_t gold;                          /* vm_gb.c (GIVE_GOLD) */
 static CampDeploy deploy;                      /* officer order chosen in the camp (2.3); n = 0: default */
 static AiMode ai_mode;                         /* static: enemy_step sits above the deepest call chain */
 static const uint8_t blank16[16];
@@ -100,7 +103,7 @@ static void place_sprites(void)
     uint8_t i;
     for (i = 0; i < 2 * MAX_SHOWN; i++) move_sprite(i, 0, 0);
     if ((state == G_MENU || state == G_TARGET || state == G_SLIST || state == G_SAIM || state == G_ILIST
-         || state == G_IAIM || state == G_XLIST) && sel < MAX_SHOWN) {
+         || state == G_IAIM || state == G_XLIST || state == G_XRECV) && sel < MAX_SHOWN) {
         int16_t sx = (int16_t)tent_x * 16 - (int16_t)cam_x + 8;
         int16_t sy = (int16_t)tent_y * 16 - (int16_t)cam_y + 16;
         uint8_t base = OBJT_PLAYER;
@@ -168,10 +171,11 @@ static void build_menu(void)
         }
         if (n_talk) mitems[n_mitems++] = MI_TALK;
         /* 道具 / 交换 (design doc 7.3): exchange = hand an item to an adjacent ally with a free slot */
-        xrecv = 0xFF;
-        if (inv_count(sel)) {
-            mitems[n_mitems++] = MI_ITEM;
-            for (k = 0; k < 4 && xrecv == 0xFF; k++) {
+        n_xr = 0;
+        {
+            uint8_t mine = inv_count(sel), theirs = 0;
+            if (mine) mitems[n_mitems++] = MI_ITEM;
+            for (k = 0; k < 4; k++) {
                 int16_t x = (int16_t)tent_x + DX[k], y = (int16_t)tent_y + DY[k];
                 int8_t u;
                 ActiveUnit r;
@@ -179,9 +183,11 @@ static void build_menu(void)
                 u = unit_at((uint8_t)x, (uint8_t)y);
                 if (u < 0 || (uint8_t)u == sel) continue;
                 load((uint8_t)u, &r);
-                if (r.faction == a.faction && inv_count((uint8_t)u) < INV_SLOTS) xrecv = (uint8_t)u;
+                if (factions_hostile(r.faction, a.faction)) continue;
+                xr_list[n_xr++] = (uint8_t)u;
+                theirs |= inv_count((uint8_t)u);
             }
-            if (xrecv != 0xFF) mitems[n_mitems++] = MI_EXCH;
+            if (n_xr && (mine || theirs)) mitems[n_mitems++] = MI_EXCH;
         }
     }
     mitems[n_mitems++] = MI_WAIT;
@@ -233,6 +239,36 @@ static uint8_t next_item(uint8_t from, int8_t dir)
         if (inv_get(sel, s) != ITEM_NONE) return s;
     }
     return from;
+}
+
+static void hud_msg(uint8_t tx) { hud_begin(); hud_tx(1, tx, 0); hud_end(); }
+
+static void hud_slot(uint8_t line, uint8_t unit, uint8_t s)
+{
+    uint8_t it = inv_get(unit, s);
+    hud_tx(line, TX_ARROW, 0);
+    if (it == ITEM_NONE) hud_tx(line, TX_EMPTY, 0); else hud_tx(line, item_name_tx[it], 0);
+    if (inv_slot_equipped(unit, s)) { hud_space(line); hud_tx(line, TX_EQ_MARK, 0); }
+    hud_space(line); hud_num(line, (uint16_t)(s + 1u)); hud_glyph(line, GLYPH_SLASH); hud_num(line, INV_SLOTS);
+}
+
+static void hud_xown(void)
+{
+    hud_begin();
+    hud_slot(0, sel, isel);
+    hud_tx(1, TX_XOWN_HINT, 0);
+    hud_end();
+}
+
+static void hud_xrecv(void)
+{
+    ActiveUnit r;
+    uint8_t u = xr_list[xri];
+    load(u, &r);
+    hud_begin();
+    hud_tx(0, unit_name_tx(&r), 0); hud_space(0); hud_slot(0, u, rslot);
+    hud_tx(1, TX_XRECV_HINT, 0);
+    hud_end();
 }
 
 static void hud_ilist(uint8_t hint)
@@ -488,9 +524,20 @@ static uint8_t do_suspend_load(void)
 }
 
 /* ---------------------------------------------------------------- flow */
+static void publish_treasures(void);
+static void danger_hide(void)
+{
+    uint8_t o;
+    if (!danger_on) return;
+    danger_on = 0;
+    mapview_danger(0);
+    o = SVBK_REG; SVBK_REG = WB_SCRATCH; ai_invalidate(W7_AI); SVBK_REG = o;
+}
+
 static void start_battle(void)
 {
     uint8_t i;
+    danger_hide();
     memset(&B, 0, sizeof B);
     rng_seed(&B.rng, 1);
     B.round = 1; B.turn_limit = 30; B.leader = 0;
@@ -539,6 +586,8 @@ static void start_battle(void)
     }
     if (B.n_units < TECH01_UNITS) B.n_units = TECH01_UNITS;   /* undeployed slots stay empty records */
     publish_inv();
+    publish_treasures();
+    prize_clear();                             /* the queue is per battle; the camp empties it first */
 
     cur_x = tech01_units[0].x; cur_y = tech01_units[0].y;
     battle_phase_start(&B, FAC_PLAYER);
@@ -562,6 +611,7 @@ static uint8_t player_can_act(void)
 static void begin_enemy_phase(void)
 {
     uint8_t o = SVBK_REG;
+    danger_hide();
     battle_phase_end(&B);                      /* PLAYER end */
     if (B.outcome) return;
     battle_phase_start(&B, FAC_ALLY);          /* no allies in TECH01: start/end still run */
@@ -624,8 +674,89 @@ static void do_preview(uint8_t u)
     dbg_t_range = sys_time - t0;
     sel = u;
     state = G_MOVE;
+    danger_hide();
     mapview_highlight(1);
     hud_begin(); hud_tx(0, TX_MOVE_HINT, 0); hud_end();
+}
+
+/* one main-loop frame without game logic (blocking prompts keep scrolling, HUD and the map alive) */
+static void frame_tick(void)
+{
+    input_update();
+    mapview_camera_follow(cur_x, cur_y);
+    mapview_prepare();
+    hud_service();
+    place_sprites();
+    publish_debug();
+    wait_vbl_done();
+    hud_commit();
+    mapview_commit();
+}
+
+static void hold_frames(uint8_t n) { while (n--) { frame_tick(); if (in_pressed & (J_A | J_B)) break; } }
+
+/* 7.4: the mover is full -> the player picks any officer with a free slot (left/right, A) */
+static uint8_t choose_receiver(uint8_t item, uint8_t who)
+{
+    ActiveUnit u;
+    for (;;) {
+        load(who, &u);
+        hud_begin();
+        hud_tx(0, TX_TREASURE, 0); hud_tx(0, item_name_tx[item], 0); hud_space(0); hud_tx(0, TX_GIVE, 0);
+        hud_tx(1, TX_ARROW, 0); hud_tx(1, unit_name_tx(&u), 0); hud_space(1);
+        hud_num(1, inv_count(who)); hud_glyph(1, GLYPH_SLASH); hud_num(1, INV_SLOTS); hud_space(1); hud_tx(1, TX_PICK_HINT, 0);
+        hud_end();
+        for (;;) {
+            frame_tick();
+            if (in_pressed & J_A) { sfx_play(SFX_CONFIRM); return who; }
+            if (in_dx || in_dy) {
+                uint8_t k, n = who;
+                for (k = 0; k < B.n_units; k++) {
+                    n = (uint8_t)((n + (in_dx < 0 || in_dy < 0 ? B.n_units - 1u : 1u)) % B.n_units);
+                    load(n, &u);
+                    if (unit_alive(&u) && u.faction == FAC_PLAYER && inv_count(n) < INV_SLOTS) break;
+                }
+                who = n;
+                break;
+            }
+        }
+    }
+}
+
+static void publish_treasures(void)
+{
+    uint8_t i, m = 0;
+    TreasureDef d;
+    for (i = 0; treasure_def(i, &d) && i < 8; i++) if (treasure_at(d.x, d.y) == i) m |= (uint8_t)(1u << i);
+    dbg_treasure_mask = m;
+}
+
+/* 7.4: a player unit that logically enters a treasure cell (POST_MOVE) claims it once */
+static void treasure_pickup(uint8_t x, uint8_t y)
+{
+    uint8_t t = treasure_at(x, y), who;
+    TreasureDef d;
+    ActiveUnit u;
+    if (t == 0xFF) return;
+    treasure_def(t, &d);
+    who = inv_count(sel) < INV_SLOTS ? sel : inv_first_free(&B, FAC_PLAYER);
+    if (who != sel && who != 0xFF) who = choose_receiver(d.item, who);
+    hud_begin();
+    if (who == 0xFF) {                         /* everyone full: the treasure stays, nothing is marked */
+        hud_tx(0, TX_TREASURE, 0); hud_tx(0, item_name_tx[d.item], 0); hud_tx(1, TX_TREASURE_STAYS, 0);
+        sfx_play(SFX_ERROR);
+    } else {
+        treasure_take(t, who);
+        load(who, &u);
+        hud_tx(0, TX_GOT, 0); hud_tx(0, item_name_tx[d.item], 0); hud_tx(1, TX_GIVE, 0); hud_tx(1, unit_name_tx(&u), 0);
+        sfx_play(SFX_CONFIRM);
+        dbg_treasures++;
+        mapview_treasures();
+        publish_inv();
+    }
+    hud_end();
+    publish_treasures();
+    hold_frames(45);
 }
 
 /* 4.3 confirm boundary: commit the move, run POST_MOVE; returns 0 if the action must not happen */
@@ -638,6 +769,7 @@ static uint8_t commit_move_if_needed(void)
         fire(TR_POST_MOVE, FAC_PLAYER, sel, 0xFF, 0xFF);
         load(sel, &a);
         if (B.outcome || !unit_alive(&a)) return 0;
+        treasure_pickup(tent_x, tent_y);
     }
     return 1;
 }
@@ -659,16 +791,18 @@ static void do_item_use(void)
 static void do_exchange(void)
 {
     ActiveUnit r;
-    uint8_t s, it = inv_get(sel, isel);
+    uint8_t recv = xr_list[xri], ia = inv_get(sel, isel), ib = inv_get(recv, rslot);
     if (commit_move_if_needed()) {
-        for (s = 0; s < INV_SLOTS && inv_get(xrecv, s) != ITEM_NONE; s++) {}
-        if (s < INV_SLOTS && item_exchange(sel, isel, xrecv, s) == IR_OK) {
-            load(xrecv, &r);
-            hud_begin(); hud_tx(0, TX_GIVE, 0); hud_tx(0, unit_name_tx(&r), 0); hud_space(0);
-            hud_tx(0, item_name_tx[it], 0); hud_end();
+        if (item_exchange(sel, isel, recv, rslot) == IR_OK) {
+            load(recv, &r);
+            hud_begin();
+            hud_tx(0, TX_ACT_EXCH, 0); hud_space(0); hud_tx(0, unit_name_tx(&r), 0);
+            if (ia != ITEM_NONE) { hud_tx(1, TX_GIVE, 0); hud_tx(1, item_name_tx[ia], 0); hud_space(1); }
+            if (ib != ITEM_NONE) { hud_tx(1, TX_GOT, 0); hud_tx(1, item_name_tx[ib], 0); }
+            hud_end();
             sfx_play(SFX_CONFIRM);
             publish_inv();
-        } else { load(sel, &r); r.action_flags |= AF_ACTED; unit_store(sel, &r); }
+        } else { load(sel, &r); r.action_flags |= AF_ACTED; unit_store(sel, &r); }   /* POST_MOVE changed things */
         cur_x = tent_x; cur_y = tent_y;
         state = G_SHOW; timer = 40; next_state = G_IDLE;
     } else { cur_x = tent_x; cur_y = tent_y; state = G_IDLE; hud_dirty = 1; after_action(); }
@@ -690,12 +824,39 @@ static void logic_player(void)
                 load((uint8_t)u, &a);
                 if (a.faction == FAC_PLAYER && battle_can_act(&a)) { sfx_play(SFX_CONFIRM); do_preview((uint8_t)u); }
             }
+        } else if ((in_pressed & J_B) && danger_on) {
+            danger_hide(); hud_dirty = 1;
+        } else if (in_pressed & J_B) {          /* 8.4: exact enemy danger view, one enemy per frame */
+            uint8_t o = SVBK_REG;
+            SVBK_REG = WB_SCRATCH; memset(W7_DANGER, 0, 512); SVBK_REG = o;
+            dz_i = 0; state = G_DANGER;
+            hud_begin(); hud_tx(0, TX_DANGER_CALC, 0); hud_end();
         } else if (in_pressed & J_START) {
             begin_enemy_phase();               /* end turn */
         } else if (in_pressed & J_SELECT) {
             uint8_t r = do_suspend_save();     /* only in the stable player idle state (11.6) */
             hud_begin(); hud_tx(0, r == SAVE_OK ? TX_SAVED : TX_SAVE_FAIL, 0); hud_end();
             hud_settle = 90; hud_dirty = 1;    /* keep the message up for a moment */
+        }
+        break;
+    case G_DANGER:
+        while (dz_i < B.n_units) {
+            ActiveUnit e;
+            load(dz_i, &e);
+            dz_i++;
+            if (!unit_alive(&e) || e.faction != FAC_ENEMY) continue;
+            {
+                uint8_t o = SVBK_REG;
+                SVBK_REG = WB_SCRATCH;
+                ai_danger_add(&B, W7_MR, (uint8_t)(dz_i - 1u), W7_DANGER);
+                SVBK_REG = o;
+            }
+            break;                             /* one enemy per frame: the map keeps scrolling */
+        }
+        if (dz_i >= B.n_units) {
+            danger_on = 1; mapview_danger(1); state = G_IDLE;
+            hud_begin(); hud_tx(0, TX_DANGER_ON, 0); hud_end();
+            hud_settle = 90; hud_dirty = 1;
         }
         break;
     case G_MOVE:
@@ -730,7 +891,7 @@ static void logic_player(void)
             if (it == MI_ATTACK) { tsel = 0; state = G_TARGET; cur_x = tent_x; cur_y = tent_y; hud_target(); }
             else if (it == MI_STRAT) { ssel = 0; state = G_SLIST; hud_slist(); }
             else if (it == MI_ITEM) { isel = next_item(INV_SLOTS - 1, 1); state = G_ILIST; hud_ilist(TX_ITEM_HINT); }
-            else if (it == MI_EXCH) { isel = next_item(INV_SLOTS - 1, 1); state = G_XLIST; hud_ilist(TX_GIVE_HINT); }
+            else if (it == MI_EXCH) { isel = 0; state = G_XLIST; hud_xown(); }
             else if (it == MI_TALK) {
                 ActiveUnit a;
                 uint8_t ok = commit_move_if_needed();
@@ -784,13 +945,30 @@ static void logic_player(void)
         if (state == G_SAIM) { cur_x = aim_x; cur_y = aim_y; if (aim_dirty) { hud_aim(); aim_dirty = 0; } }
         break;
     case G_ILIST:
-    case G_XLIST:
-        if (in_dx > 0 || in_dy > 0) { isel = next_item(isel, 1); hud_ilist(state == G_ILIST ? TX_ITEM_HINT : TX_GIVE_HINT); }
-        else if (in_dx < 0 || in_dy < 0) { isel = next_item(isel, -1); hud_ilist(state == G_ILIST ? TX_ITEM_HINT : TX_GIVE_HINT); }
+        if (in_dx > 0 || in_dy > 0) { isel = next_item(isel, 1); hud_ilist(TX_ITEM_HINT); }
+        else if (in_dx < 0 || in_dy < 0) { isel = next_item(isel, -1); hud_ilist(TX_ITEM_HINT); }
         else if (in_pressed & J_B) { state = G_MENU; hud_menu(); }
-        else if ((in_pressed & J_A) && state == G_ILIST) {
-            aim_x = tent_x; aim_y = tent_y; state = G_IAIM; aim_dirty = 1; sfx_play(SFX_CONFIRM);
-        } else if (in_pressed & J_A) do_exchange();   /* 交换: hand the item to the adjacent ally */
+        else if (in_pressed & J_A) { aim_x = tent_x; aim_y = tent_y; state = G_IAIM; aim_dirty = 1; sfx_play(SFX_CONFIRM); }
+        break;
+    case G_XLIST:                                  /* 交换 1/2: own slot (may be empty: take an item) */
+        if (in_dx > 0 || in_dy > 0) { isel = (uint8_t)((isel + 1u) & 7u); hud_xown(); }
+        else if (in_dx < 0 || in_dy < 0) { isel = (uint8_t)((isel + 7u) & 7u); hud_xown(); }
+        else if (in_pressed & J_B) { state = G_MENU; hud_menu(); }
+        else if (in_pressed & J_A) {
+            if (inv_slot_equipped(sel, isel)) { sfx_play(SFX_ERROR); hud_msg(TX_IR_6); }
+            else { xri = 0; rslot = 0; state = G_XRECV; sfx_play(SFX_CONFIRM); hud_xrecv(); }
+        }
+        break;
+    case G_XRECV:                                  /* 交换 2/2: left/right ally, up/down its slot */
+        if (in_dx) { xri = (uint8_t)((xri + (in_dx > 0 ? 1u : n_xr - 1u)) % n_xr); hud_xrecv(); }
+        else if (in_dy) { rslot = (uint8_t)((rslot + (in_dy > 0 ? 1u : 7u)) & 7u); hud_xrecv(); }
+        else if (in_pressed & J_B) { state = G_XLIST; hud_xown(); }
+        else if (in_pressed & J_A) {
+            uint8_t r = xr_list[xri];
+            if (inv_get(sel, isel) == ITEM_NONE && inv_get(r, rslot) == ITEM_NONE) sfx_play(SFX_ERROR);
+            else if (inv_slot_equipped(r, rslot)) { sfx_play(SFX_ERROR); hud_msg(TX_IR_6); }
+            else do_exchange();
+        }
         break;
     case G_IAIM:
         if (in_dx || in_dy) {

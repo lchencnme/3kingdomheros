@@ -163,6 +163,10 @@ _META = [list(map(int, m.split(","))) for m in _re.findall(r"\{(\d+, \d+, \d+, \
          _re.search(r"tech01_meta\[10\]\[4\] = \{(.*?)\};", _IDX).group(1))]
 _TPAL = list(map(int, _re.search(r"tech01_terrain_pal\[10\] = \{(.*?)\}", _IDX).group(1).split(",")))
 _BLANK = 40
+_TRE = [tuple(map(int, m)) for m in _re.findall(r"\{(\d+), (\d+), (\d+)\}",
+        _re.search(r"tech01_treasures\[\]\[3\] = \{(.*?)\};", _IDX).group(1))]
+_CHEST = [0x00, 0x00, 0x7E, 0x42, 0x7E, 0x5A, 0x7E, 0x00]
+_REMAP = list(map(int, _re.findall(r"\d+", _re.search(r"tech01_remap\[8\]\[4\] = \{(.*?)\};", _IDX).group(1))))
 
 
 _DATA_C = (ROM.resolve().parents[2] / "src/gen/tech01_data.c").read_text()
@@ -193,7 +197,7 @@ def _slot_vram(s):
     return bank, tid, (0x9000 + tid * 16 if tid < 128 else 0x8800 + (tid - 128) * 16)
 
 
-def view_mismatches(em, highlight=False):
+def view_mismatches(em, highlight=False, danger=False):
     """independent re-implementation of the 352-slot compositor (design doc 12.2): every visible
     hardware position must point at its own slot and hold exactly terrain + units in draw order"""
     cx, cy = em.r16("_dbg_cam_x"), em.r16("_dbg_cam_y")
@@ -221,6 +225,12 @@ def view_mismatches(em, highlight=False):
     def put_ink(d, row, bits):
         d[2 * row] |= bits
         d[2 * row + 1] |= bits
+    dbits = [em.m[7, 0xDC00 + k] for k in range(512)] if danger else None
+    def in_danger(cx_, cy_):
+        c_ = cy_ * _W + cx_
+        return dbits is not None and (dbits[c_ >> 3] >> (c_ & 7)) & 1
+    tmask = em.r8("_dbg_treasure_mask")
+    chests = {(x, y) for k, (x, y, _) in enumerate(_TRE) if tmask & (1 << k)}
     bad = 0
     for j in range(15):
         for i in range(21):
@@ -234,12 +244,32 @@ def view_mismatches(em, highlight=False):
                 tid = _META[tt][((wy & 1) << 1) | (wx & 1)]
                 data, pal = list(_BGT[tid * 16:tid * 16 + 16]), _TPAL[tt]
                 q = ((wy & 1) << 1) | (wx & 1)
+                if q == 3 and (wx >> 1, wy >> 1) in chests:      # treasure chest (7.4)
+                    for y in range(8):
+                        put_ink(data, y, _CHEST[y])
+                if in_danger(wx >> 1, wy >> 1):                  # danger view: X at the cell centre
+                    r0 = (5, 5, 0, 0)[q]
+                    arms = ((0x04, 0x02, 0x01), (0x20, 0x40, 0x80), (0x01, 0x02, 0x04), (0x80, 0x40, 0x20))[q]
+                    for y in range(3):
+                        put_ink(data, r0 + y, arms[y])
                 if highlight and in_range(wx >> 1, wy >> 1):      # corner ticks + range palette 6
                     pal = 6
                     put_ink(data, (0, 0, 7, 7)[q], (0xE0, 0x07, 0xE0, 0x07)[q])
                     put_ink(data, (1, 1, 6, 6)[q], (0x80, 0x01, 0x80, 0x01)[q])
                     put_ink(data, (2, 2, 5, 5)[q], (0x80, 0x01, 0x80, 0x01)[q])
-            under = False
+            top = None
+            for un in units:
+                if 0 <= wx - un[2] * 2 <= 1 and 0 <= wy - (un[0] * 2 - 1) <= 2:
+                    top = un
+            if top is not None:                          # 12.2 remap of the terrain into the top unit's palette
+                rm = _REMAP[pal * 4 + top[3] - 4]
+                ls, hs = rm & 7, rm >> 4
+                for y in range(8):
+                    lo, hi = data[2 * y], data[2 * y + 1]
+                    m1, m2, m3 = lo & ~hi & 0xFF, ~lo & hi & 0xFF, lo & hi
+                    data[2 * y] = (m1 if ls & 1 else 0) | (m2 if ls & 2 else 0) | (m3 if ls & 4 else 0)
+                    data[2 * y + 1] = (m1 if hs & 1 else 0) | (m2 if hs & 2 else 0) | (m3 if hs & 4 else 0)
+            under = True
             for (uy, ui, ux, upal, body, ufac, uacted) in units:
                 lx, ly = wx - ux * 2, wy - (uy * 2 - 1)
                 if not (0 <= lx <= 1 and 0 <= ly <= 2):
@@ -285,6 +315,15 @@ e.wait_state([G_IDLE])
 check("player phase idle, round 1", e.state() == G_IDLE and e.r16("_dbg_round") == 1)
 check("cursor starts on 刘备 (4,12)", e.cur() == (4, 12))
 e.png(ROM.parent / "shot_start.png")
+# enemy danger view (8.4 / 12.2): B in idle computes it (one enemy per frame), B again hides it
+e.press("b")
+e.wait_state([G_IDLE], 120)
+e.frames(60)
+dz_cells = sum(bin(e.m[7, 0xDC00 + k]).count("1") for k in range(96))
+check(f"danger view: X marks on every attackable cell ({dz_cells} cells)", dz_cells > 0 and view_mismatches(e, danger=True) == 0)
+e.png(ROM.parent / "shot_danger.png")
+e.press("b"); e.frames(60)
+check("danger view hidden again", view_mismatches(e) == 0)
 
 # select 刘备 -> move 2 east -> menu (no targets: 待命 only) -> A = wait
 e.press("a")
@@ -404,10 +443,15 @@ def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
         em.frames(10)
         em.png(ROM.parent / "shot_outcome.png")
     em.press("a")            # restart from the outcome screen (a win goes through the camp: 出阵)
-    for _ in range(200):                     # a win opens the camp screen (state 20): 军议, then 出阵
-        if em.state() in (G_IDLE, 20):
+    for _ in range(200):                     # a win opens the camp: spoils (25), then 军议, then 出阵
+        if em.state() in (G_IDLE, 20, 25):
             break
         em.frames(1)
+    for _ in range(16):
+        if em.state() != 25:
+            break
+        em.press("a", after=16)              # hand each prize to 刘备
+    em.frames(20)
     if em.state() == 20:
         p0 = em.r8("_dbg_dialog_pages")
         em.press("a")
@@ -659,10 +703,13 @@ it.press("up"); it.press("a"); it.wait_state([G_MENU], 30)
 check("menu offers 交换 next to an ally", menu_to(it, 5))
 it.press("a"); it.wait_state([G_XLIST], 20)
 check("exchange list opens", it.state() == G_XLIST)
+it.press("a"); it.wait_state([16], 20)                   # G_XRECV: 关羽's slots
+check("exchange: choose the receiver's slot", it.state() == 16)
+it.press("down")                                          # 关羽 slot 2 (empty): a pure hand-over
 it.press("a"); it.wait_state([G_IDLE, G_SHOW], 60)
 it.wait_state([G_IDLE], 120)
 inv1 = [it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
-check(f"exchange: 军粮 handed over, move committed ({inv1[:2]}, {it.unit(0)})",
+check(f"exchange: 军粮 into 关羽's empty slot, move committed ({inv1[:2]}, {it.unit(0)})",
       inv1[0] == 0xFF and inv1[1] == 7 and it.unit(0) == (4, 11))
 # 道具: 张飞 (5,13), wounded, eats his 干粮 (+100)
 set_hp(it, 2, 50)
@@ -675,6 +722,20 @@ check("item aim mode", it.state() == G_IAIM)
 it.press("a"); it.wait_state([G_IDLE, G_SHOW], 60)
 check(f"干粮 restores 100 hp ({it.hp(2)}), 0 RNG draws", it.hp(2) == 150 and it.r8("_dbg_item_uses") == 1)
 it.wait_state([G_IDLE], 120)
+# treasure (7.4): 关羽 walks onto the 的卢 chest at (10,6) and claims it once
+a1 = 0xD000 + 40 * 1
+it.m[1, a1 + 7] = 10; it.m[1, a1 + 8] = 8                # place 关羽 two cells south of the chest
+it.frames(4)
+check("treasure listed on the map at battle start", it.r8("_dbg_treasure_mask") & 1)
+it.goto(10, 8); it.press("a"); it.wait_state([G_MOVE], 20)
+it.goto(10, 6); it.press("a")
+it.wait_state([G_MENU], 120)
+check("nothing claimed before the move is committed (4.3)", it.r8("_dbg_treasures") == 0)
+menu_to(it, 2); it.press("a"); it.wait_state([G_IDLE], 200)
+check(f"treasure claimed by the mover on commit ({it.r8('_dbg_treasures')})",
+      it.r8("_dbg_treasures") == 1 and not it.r8("_dbg_treasure_mask") & 1 and it.unit(1) == (10, 6))
+it.frames(60)
+check("chest gone from the map", view_mismatches(it) == 0)
 # camp + shop: clear the enemies, let 简雍 use 祈雨符 (outcome check), then visit the camp
 for i in range(3, 7):
     set_hp(it, i, 0)
@@ -705,7 +766,13 @@ def u_atk(em, i):
 
 C_MAIN, C_EQUIP, C_EXCH, C_SHOP, C_DEPLOY = 20, 21, 22, 23, 24
 it.press("a", after=16)
-check("win -> camp screen", camp_wait(it, C_MAIN))
+check("win -> the spoils come first (prize screen)", camp_wait(it, 25))
+it.press("b", after=16)
+check("plot item 传国玉玺 cannot be discarded", it.state() == 25 and camp_cur(it) == 0)
+it.press("a", after=16)                                  # 传国玉玺 -> 刘备
+it.press("select", after=16)                             # 美酒 sold for 40
+check(f"prizes distributed / sold, back to the menu (gold {it.r16('_dbg_gold')})",
+      camp_wait(it, C_MAIN) and it.r16("_dbg_gold") == 540 and 0x70 in [it.m[SYMS["_dbg_inv"] + k] for k in range(8)])
 it.frames(10); it.png(ROM.parent / "shot_camp.png")
 for _ in range(4):
     it.press("down", after=16)
@@ -730,14 +797,14 @@ for _ in range(3):
 check(f"cursor on 铁脊矛 ({camp_cur(it)})", camp_cur(it) == 15)
 it.press("a", after=16); it.frames(4)
 inv2 = [it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
-check(f"buy: gold 500 -> {it.r16('_dbg_gold')}, 铁脊矛 to 刘备 ({inv2[:3]})", it.r16("_dbg_gold") == 0 and 0x47 in inv2)
+check(f"buy: gold 540 -> {it.r16('_dbg_gold')}, 铁脊矛 to 刘备 ({inv2[:3]})", it.r16("_dbg_gold") == 40 and 0x47 in inv2)
 it.press("up", after=16); it.press("a", after=16); it.frames(4)
-check("no gold -> nothing bought", it.r16("_dbg_gold") == 0 and [it.m[SYMS["_dbg_inv"] + k] for k in range(8)] == inv2)
+check("no gold -> nothing bought", it.r16("_dbg_gold") == 40 and [it.m[SYMS["_dbg_inv"] + k] for k in range(8)] == inv2)
 it.press("select", after=16)
 for _ in range(inv2.index(7)):
     it.press("down", after=16)
 it.press("a", after=16); it.frames(4)
-check(f"sell 金疮药 for 50 ({it.r16('_dbg_gold')})", it.r16("_dbg_gold") == 50 and 7 not in [it.m[SYMS["_dbg_inv"] + k] for k in range(8)])
+check(f"sell 金疮药 for 50 ({it.r16('_dbg_gold')})", it.r16("_dbg_gold") == 90 and 7 not in [it.m[SYMS["_dbg_inv"] + k] for k in range(8)])
 it.press("b", after=16); camp_wait(it, C_MAIN)
 # equip 铁脊矛 on 刘备
 atk0 = u_atk(it, 0)
@@ -774,7 +841,7 @@ it.press("start", after=16)
 it.wait_state([G_IDLE], 600)
 check(f"depart: battle with 刘备/简雍/关羽, 张飞 stays in camp ({it.unit(0)}, {it.unit(7)}, {it.unit(1)}, hp 张飞 {it.hp(2)})",
       it.state() == G_IDLE and it.unit(0) == (4, 12) and it.unit(7) == (5, 11) and it.unit(1) == (5, 13) and it.hp(2) == 0)
-check("gold kept after departing", it.r16("_dbg_gold") == 50)
+check("gold kept after departing", it.r16("_dbg_gold") == 90)
 check("enemies are back after departing", all(it.hp(i) > 0 for i in range(3, 7)))
 check("BG map consistent after camp", view_mismatches(it) == 0)
 it.pb.stop(save=False)

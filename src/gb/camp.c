@@ -25,11 +25,11 @@
 #define N_LINES 9u
 #define N_OFF 4u
 
-enum { SC_MAIN, SC_EQUIP, SC_EXCH, SC_SHOP, SC_DEPLOY };
+enum { SC_MAIN, SC_EQUIP, SC_EXCH, SC_SHOP, SC_DEPLOY, SC_PRIZE };
 
 static const uint8_t officer[N_OFF] = {0, 1, 2, 7};     /* TECH01 player instances: 刘备 关羽 张飞 简雍 */
 static const uint8_t officer_tx[N_OFF] = {TX_NAME_LIUBEI, TX_NAME_GUANYU, TX_NAME_ZHANGFEI, TX_NAME_JIANYONG};
-static const uint8_t cmd_tx[5] = {TX_CMD_COUNCIL, TX_CMD_EQUIP, TX_CMD_EXCH, TX_CMD_SHOP, TX_CMD_DEPART};
+static const uint8_t cmd_tx[6] = {TX_CMD_COUNCIL, TX_CMD_EQUIP, TX_CMD_EXCH, TX_CMD_SHOP, TX_CMD_DEPART, TX_CMD_PRIZE};
 
 /* all camp state in one block (the C globals area is nearly full: this lives on the stack of camp_run) */
 typedef struct {
@@ -82,8 +82,9 @@ static void compose(uint8_t k)
     switch (C->screen) {
     case SC_MAIN:
         if (k == 0) { hud_tx(0, TX_CAMP_TITLE, 0); hud_space(0); hud_space(0); hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold); }
-        else if (k >= 1 && k <= 5) {
+        else if (k >= 1 && k <= 6) {
             arrow(C->cur == k - 1u); hud_tx(0, cmd_tx[k - 1u], 0);
+            if (k == 6) { hud_space(0); hud_num(0, prize_count()); }
             if (k == 1 && C->council) { hud_space(0); hud_tx(0, TX_DONE, 0); }
         } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_CAMP_HINT, 0);
         break;
@@ -136,6 +137,20 @@ static void compose(uint8_t k)
             if (tech01_deploy_forced & (1u << o)) { hud_space(0); hud_tx(0, TX_FORCED, 0); }
         } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_DEPLOY_HINT, 0);
         break;
+    case SC_PRIZE:                                         /* 7.4: distribute / sell / discard every prize */
+        if (k == 0) { hud_tx(0, TX_CMD_PRIZE, 0); hud_space(0); hud_num(0, prize_count()); hud_space(0); hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold); }
+        else if (k >= 1 && k <= 6) {
+            uint8_t i = (uint8_t)(C->top + k - 1u);
+            if (i < prize_count()) {
+                uint8_t it = prize_get(i);
+                arrow(C->cur == i); hud_tx(0, item_name_tx[it], 0);
+                if (item_sell_price(it)) { hud_space(0); hud_num(0, item_sell_price(it)); }
+            }
+        } else if (k == 7) {
+            hud_tx(0, TX_GIVE, 0); hud_tx(0, officer_tx[C->off], 0); hud_space(0);
+            hud_num(0, inv_count(u)); hud_glyph(0, GLYPH_SLASH); hud_num(0, INV_SLOTS);
+        } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_PRIZE_HINT, 0);
+        break;
     }
     hud_raster(0);
 }
@@ -179,7 +194,7 @@ static void publish(void)
 {
     uint8_t s;
     dbg_state = (uint8_t)(CAMP_DBG_STATE + C->screen);
-    dbg_menu_item = C->screen == SC_MAIN || C->screen == SC_DEPLOY || (C->screen == SC_SHOP && !C->sell) ? C->cur : C->slot;
+    dbg_menu_item = C->screen == SC_MAIN || C->screen == SC_DEPLOY || C->screen == SC_PRIZE || (C->screen == SC_SHOP && !C->sell) ? C->cur : C->slot;
     dbg_sel = C->off;
     dbg_gold = *C->gold;
     for (s = 0; s < INV_SLOTS; s++) dbg_inv[s] = inv_get(0, s);
@@ -222,7 +237,7 @@ static uint8_t step(uint8_t pressed)
     case SC_MAIN:
         if (up || down) {
             uint8_t old = C->cur;
-            C->cur = (uint8_t)(up ? (C->cur + 4u) % 5u : (C->cur + 1u) % 5u);
+            C->cur = (uint8_t)(up ? (C->cur + 5u) % 6u : (C->cur + 1u) % 6u);
             draw((uint8_t)(old + 1u)); draw((uint8_t)(C->cur + 1u));
             if (C->msg) { C->msg = 0; draw(8); }
             sfx_play(SFX_CURSOR);
@@ -232,6 +247,8 @@ static uint8_t step(uint8_t pressed)
             else if (C->cur == 1) enter(SC_EQUIP);
             else if (C->cur == 2) enter(SC_EXCH);
             else if (C->cur == 3) enter(SC_SHOP);
+            else if (C->cur == 5) enter(SC_PRIZE);
+            else if (prize_count()) { sfx_play(SFX_ERROR); say(TX_PRIZE_FIRST); }    /* 7.4: queue must be empty */
             else if (!C->council && TECH01_COUNCIL_N) { sfx_play(SFX_ERROR); say(TX_COUNCIL_FIRST); }
             else enter(SC_DEPLOY);
         }
@@ -300,6 +317,41 @@ static uint8_t step(uint8_t pressed)
             }
         }
         break;
+    case SC_PRIZE: {
+        uint8_t n = prize_count();
+        if (pressed & J_START) { enter(SC_MAIN); break; }                   /* make room first, come back */
+        if (!n) { enter(SC_MAIN); break; }
+        if (left || right) {
+            C->off = (uint8_t)(left ? (C->off + N_OFF - 1u) % N_OFF : (C->off + 1u) % N_OFF);
+            C->msg = 0; draw(7); draw(8);
+        } else if (up || down) {
+            C->cur = (uint8_t)(up ? (C->cur + n - 1u) % n : (C->cur + 1u) % n);
+            shop_scroll(C->cur, n);
+            draw_all(0);
+        } else if (pressed & (J_A | J_B | J_SELECT)) {
+            uint8_t it = prize_get(C->cur), ok = 0;
+            if (pressed & J_A) {
+                if (inv_count(u) >= INV_SLOTS) say(TX_BAG_FULL);
+                else { inv_add(u, it); ok = 1; C->msg = 0; }
+            } else if (pressed & J_SELECT) {
+                uint16_t p = item_sell_price(it);
+                if (!p) say(TX_CANT_SELL);
+                else { *C->gold = (uint16_t)(*C->gold + p); ok = 1; C->msg = TX_SOLD; }
+            } else {
+                if (item_defs[it].kind == IK_PLOT) say(TX_NO_DISCARD);       /* plot items must be kept */
+                else { ok = 1; C->msg = TX_DISCARDED; }
+            }
+            if (ok) {
+                prize_remove(C->cur);
+                sfx_play(SFX_CONFIRM);
+                if (!prize_count()) { enter(SC_MAIN); break; }
+                if (C->cur >= prize_count()) C->cur = (uint8_t)(prize_count() - 1u);
+                shop_scroll(C->cur, prize_count());
+                draw_all(0);
+            } else sfx_play(SFX_ERROR);
+        }
+        break;
+    }
     case SC_DEPLOY:
         if (up || down) {
             uint8_t old = C->cur;
@@ -344,6 +396,7 @@ void camp_run(uint16_t *gold, CampDeploy *dep) BANKED
         for (k = 0; k < N_OFF && k < TECH01_DEPLOY_MAX; k++) dep->order[k] = k;
         dep->n = k;
     }
+    if (prize_count()) { camp.screen = SC_PRIZE; }        /* 7.4: the spoils come first */
     screen_init();
     input_flush();
     for (;;) {

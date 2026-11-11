@@ -19,6 +19,10 @@ extern const uint8_t tech01_unit_tiles[];
 typedef struct { uint8_t cls, faction, x, y, ai; } Tech01Unit;
 #define TECH01_AI_GROUPS 2u
 extern const uint8_t tech01_shop[];
+extern const uint8_t tech01_remap[8][4];
+#define TECH01_TREASURES 2u
+#define TECH01_TREASURE_FLAG0 0x100u
+extern const uint8_t tech01_treasures[][3];
 extern const uint8_t tech01_council[][2];
 extern const uint8_t tech01_deploy_forced;   /* bit k = player officer k must deploy */
 #define TECH01_SHOP_N 18u

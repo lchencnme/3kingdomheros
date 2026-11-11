@@ -20,3 +20,22 @@ void sram_read(uint8_t bank, uint16_t off, uint8_t *dst, uint16_t n) PLATFORM_AP
 {
     memcpy(dst, &host_sram[bank][off], n);
 }
+
+/* treasures (design doc 7.4) for host tests: set host_n_treasures and fill host_treasures */
+#include "../../src/core/item.h"
+TreasureDef host_treasures[8];
+uint8_t host_n_treasures;
+uint8_t treasure_def(uint8_t i, TreasureDef *t) PLATFORM_API
+{
+    if (i >= host_n_treasures) return 0;
+    *t = host_treasures[i];
+    return 1;
+}
+/* default VM flag storage for tests that do not run the VM (test_vm has its own strong versions) */
+static uint8_t host_flags[2][512];
+__attribute__((weak)) uint8_t vm_flag_get(uint8_t s, uint16_t id) PLATFORM_API { return (host_flags[s & 1][(id >> 3) & 511] >> (id & 7)) & 1; }
+__attribute__((weak)) void vm_flag_set(uint8_t s, uint16_t id, uint8_t v) PLATFORM_API
+{
+    uint8_t *f = &host_flags[s & 1][(id >> 3) & 511], m = (uint8_t)(1u << (id & 7));
+    *f = v ? (uint8_t)(*f | m) : (uint8_t)(*f & ~m);
+}

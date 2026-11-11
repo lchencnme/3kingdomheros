@@ -19,6 +19,7 @@
 #include "wram.h"
 #include "rom.h"
 #include "../core/battle.h"
+#include "../core/item.h"
 #include "../gen/tech01_data.h"
 
 uint16_t cam_x, cam_y;
@@ -70,6 +71,8 @@ static void filter_units(int16_t wx0, int16_t wx1, int16_t wy0, int16_t wy1)
     }
 }
 static uint8_t cur_vis[MAXU], cur_pal[MAXU], cur_body[MAXU];
+#define MAX_TRE 4u
+static uint8_t tre_x[MAX_TRE], tre_y[MAX_TRE], n_tre;   /* untaken treasure cells (drawn as chests) */
 
 /* staging: C100 (256 B, design doc 11.4); pending transfers built in the visible period */
 #define STAGE ((uint8_t *)0xC100u)
@@ -138,9 +141,9 @@ static void mark(uint8_t *d, uint8_t lx, uint8_t ly, uint8_t fac, uint8_t acted)
 }
 
 /* compose world hardware tile (wx, wy) into dst (16 B); returns its attribute (palette | bank bit) */
-static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl)
+static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl, uint8_t dz)
 {
-    uint8_t pal = 0, k, under = 0, y;
+    uint8_t pal = 0, k, y, top = 0xFF;
     if (wx < 0 || wy < 0 || wx >= (int16_t)grid_w * 2 || wy >= (int16_t)grid_h * 2) {
         memset(dst, 0, 16);
     } else {
@@ -148,12 +151,39 @@ static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl)
         uint8_t q = (uint8_t)(((wy & 1) << 1) | (wx & 1));
         memcpy(dst, &tech01_bg_tiles[(uint16_t)meta[t * 4 + q] * 16u], 16);   /* same ROM bank as this code */
         pal = hl ? PAL_HL : tpal[t];
+        if (q == 3u) {     /* treasure chest in the cell's lower-right tile, under any unit (7.4) */
+            uint8_t k;
+            for (k = 0; k < n_tre; k++) if (tre_x[k] == cx && tre_y[k] == cy) {
+                static const uint8_t chest[8] = {0x00, 0x00, 0x7E, 0x42, 0x7E, 0x5A, 0x7E, 0x00};
+                for (y = 0; y < 8; y++) { dst[2 * y] |= chest[y]; dst[2 * y + 1] |= chest[y]; }
+            }
+        }
+        if (dz) {          /* enemy danger view: an X at the cell centre, one arm per tile (12.2, 8.4) */
+            static const uint8_t r0[4] = {5, 5, 0, 0};
+            static const uint8_t xa[4][3] = {{0x04, 0x02, 0x01}, {0x20, 0x40, 0x80}, {0x01, 0x02, 0x04}, {0x80, 0x40, 0x20}};
+            for (y = 0; y < 3; y++) { dst[2 * (r0[q] + y)] |= xa[q][y]; dst[2 * (r0[q] + y) + 1] |= xa[q][y]; }
+        }
         if (hl) {          /* move range: ink corner ticks at the cell's four outer corners (12.2) */
             static const uint8_t row_a[4] = {0, 0, 7, 7}, row_b[4] = {1, 1, 6, 6}, row_c[4] = {2, 2, 5, 5};
             static const uint8_t bar[4] = {0xE0, 0x07, 0xE0, 0x07}, tick[4] = {0x80, 0x01, 0x80, 0x01};
             dst[2 * row_a[q]] |= bar[q]; dst[2 * row_a[q] + 1] |= bar[q];
             dst[2 * row_b[q]] |= tick[q]; dst[2 * row_b[q] + 1] |= tick[q];
             dst[2 * row_c[q]] |= tick[q]; dst[2 * row_c[q] + 1] |= tick[q];
+        }
+    }
+    /* the top unit (last in draw order) gives the tile its palette (12.2) */
+    for (k = 0; k < n_cand; k++) {
+        uint8_t u = cand[k];
+        int16_t lx = wx - (int16_t)snap_x[u] * 2, ly = wy - ((int16_t)snap_y[u] * 2 - 1);
+        if (lx >= 0 && lx <= 1 && ly >= 0 && ly <= 2) top = u;
+    }
+    if (top != 0xFF) {     /* offline remap table: terrain colours -> nearest colours of that palette */
+        uint8_t rm = tech01_remap[pal][cur_pal[top] - 4u], lsel = rm & 7u, hsel = (uint8_t)(rm >> 4);
+        for (y = 0; y < 8; y++) {
+            uint8_t lo = dst[2 * y], hi = dst[2 * y + 1];
+            uint8_t m1 = (uint8_t)(lo & ~hi), m2 = (uint8_t)(~lo & hi), m3 = (uint8_t)(lo & hi);
+            dst[2 * y] = (uint8_t)(((lsel & 1u) ? m1 : 0u) | ((lsel & 2u) ? m2 : 0u) | ((lsel & 4u) ? m3 : 0u));
+            dst[2 * y + 1] = (uint8_t)(((hsel & 1u) ? m1 : 0u) | ((hsel & 2u) ? m2 : 0u) | ((hsel & 4u) ? m3 : 0u));
         }
     }
     /* units whose 16x24 box covers this position, in draw order (pre-filtered candidates) */
@@ -163,10 +193,6 @@ static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl)
         const uint8_t *ut;
         if (lx < 0 || lx > 1 || ly < 0 || ly > 2) continue;
         ut = &tech01_unit_tiles[((uint16_t)(cur_body[u] & 3u) * 6u + (uint16_t)ly * 2u + (uint16_t)lx) * UNIT_TILE_BYTES];
-        if (!under) {      /* terrain under a unit keeps only its ink (colour 3) */
-            for (y = 0; y < 8; y++) { uint8_t ink = (uint8_t)(dst[2 * y] & dst[2 * y + 1]); dst[2 * y] = ink; dst[2 * y + 1] = ink; }
-            under = 1;
-        }
         for (y = 0; y < 8; y++) {
             uint8_t m = ut[16 + y], nm = (uint8_t)~m;
             dst[2 * y] = (uint8_t)((dst[2 * y] & nm) | ut[2 * y]);
@@ -176,6 +202,21 @@ static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl)
         pal = cur_pal[u];
     }
     return pal;
+}
+
+static uint8_t dz_on;
+#define W7_DANGER ((uint8_t *)0xDC00u)   /* danger bitmap (overlays the AI scratch while the view is shown) */
+static uint8_t in_danger(int16_t wx, int16_t wy)
+{
+    uint8_t r, o;
+    uint16_t c;
+    if (!dz_on || wx < 0 || wy < 0 || wx >= (int16_t)grid_w * 2 || wy >= (int16_t)grid_h * 2) return 0;
+    c = (uint16_t)(wy >> 1) * grid_w + (uint16_t)(wx >> 1);
+    o = SVBK_REG;
+    SVBK_REG = WB_SCRATCH;
+    r = (uint8_t)((W7_DANGER[c >> 3] >> (c & 7u)) & 1u);
+    SVBK_REG = o;
+    return r;
 }
 
 static uint8_t in_range_hl(int16_t wx, int16_t wy)
@@ -197,7 +238,7 @@ static uint8_t in_range_hl(int16_t wx, int16_t wy)
 static void stage_tile(int16_t wx, int16_t wy)
 {
     uint16_t s = slot_of(wx, wy);
-    uint8_t at = compose(wx, wy, STAGE + (uint16_t)n_tiles * 16u, in_range_hl(wx, wy));
+    uint8_t at = compose(wx, wy, STAGE + (uint16_t)n_tiles * 16u, in_range_hl(wx, wy), in_danger(wx, wy));
     t_wx1[n_tiles] = (uint8_t)(wx + 1); t_wy1[n_tiles] = (uint8_t)(wy + 1);
     t_at[n_tiles] = (uint8_t)(at | (slot_bank(s) ? 0x08u : 0u));
     n_tiles++;
@@ -213,7 +254,7 @@ void mapview_init(const uint8_t *meta4, const uint8_t *terrain_pal) BANKED
     int16_t x, y;
     uint8_t buf[16], i;
     meta = meta4; tpal = terrain_pal;
-    hl_on = 0; hl_row = CACHE_H; hl_half = 0; edge_kind = 0; n_tiles = 0;
+    hl_on = 0; dz_on = 0; hl_row = CACHE_H; hl_half = 0; edge_kind = 0; n_tiles = 0;
     n_units_seen = 12;
     have_gen = 0;
     if (cam_x > max_cam_x()) cam_x = max_cam_x();
@@ -221,6 +262,7 @@ void mapview_init(const uint8_t *meta4, const uint8_t *terrain_pal) BANKED
     tox = (int16_t)(cam_x >> 3) - 1;
     toy = (int16_t)(cam_y >> 3) - 1;
     refresh_units();
+    load_treasures();
     {
         uint8_t o = SVBK_REG;
         SVBK_REG = WB_SCRATCH;
@@ -234,7 +276,7 @@ void mapview_init(const uint8_t *meta4, const uint8_t *terrain_pal) BANKED
     for (y = toy; y < toy + CACHE_H; y++)
         for (x = tox; x < tox + CACHE_W; x++) {
             uint16_t s = slot_of(x, y);
-            uint8_t at = compose(x, y, buf, 0);
+            uint8_t at = compose(x, y, buf, 0, 0);
             VBK_REG = slot_bank(s);
             set_bkg_data(slot_id(s), 1, buf);
             VBK_REG = VBK_TILES;
@@ -248,6 +290,35 @@ void mapview_init(const uint8_t *meta4, const uint8_t *terrain_pal) BANKED
 }
 
 void mapview_set_units(uint8_t n) BANKED { n_units_seen = n > MAXU ? MAXU : n; }
+
+static void queue_cell(uint8_t x, uint8_t y);
+static void load_treasures(void)
+{
+    TreasureDef d;
+    uint8_t i;
+    n_tre = 0;
+    for (i = 0; treasure_def(i, &d) && n_tre < MAX_TRE; i++)
+        if (treasure_at(d.x, d.y) == i) { tre_x[n_tre] = d.x; tre_y[n_tre] = d.y; n_tre++; }
+}
+
+void mapview_treasures(void) BANKED
+{
+    uint8_t ox[MAX_TRE], oy[MAX_TRE], on = n_tre, k, o;
+    for (k = 0; k < on; k++) { ox[k] = tre_x[k]; oy[k] = tre_y[k]; }
+    load_treasures();
+    o = SVBK_REG;
+    SVBK_REG = WB_SCRATCH;
+    for (k = 0; k < on; k++) queue_cell(ox[k], oy[k]);       /* covers the chest tile (2x+1, 2y+1) */
+    SVBK_REG = o;
+}
+
+void mapview_danger(uint8_t on) BANKED
+{
+    if (on == dz_on) return;
+    dz_on = on;
+    hb_x0 = tox; hb_x1 = tox + CACHE_W - 1; hb_y0 = toy; hb_y1 = toy + CACHE_H - 1;   /* whole cache */
+    hl_row = 0; hl_half = 0;
+}
 
 void mapview_highlight(uint8_t on) BANKED
 {
