@@ -8,7 +8,16 @@
 #define TECH01_SCRIPT_BYTES 124u
 #define TECH01_SCRIPT_BANK 15u
 #define TECH01_ONCE_BITS 7u
-extern const VmEvent tech01_events[TECH01_EVENT_COUNT];
-extern const VmTemplate tech01_templates[TECH01_TEMPLATE_COUNT];
-extern const uint8_t tech01_script[TECH01_SCRIPT_BYTES];
+typedef struct { uint8_t n_events, n_templates; const VmEvent *events; const VmTemplate *templates;
+                 const uint8_t *script; } BattleEv;   /* script in bank TECH01_SCRIPT_BANK */
+extern const BattleEv battle_ev[];
+extern const VmEvent tech01_events[];
+extern const VmTemplate tech01_templates[];
+extern const uint8_t tech01_script[];
+extern const VmEvent bt1_events[];
+extern const VmTemplate bt1_templates[];
+extern const uint8_t bt1_script[];
+extern const VmEvent bt2_events[];
+extern const VmTemplate bt2_templates[];
+extern const uint8_t bt2_script[];
 #endif

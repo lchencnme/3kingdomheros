@@ -205,6 +205,7 @@ static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl, uint8_t
 }
 
 static uint8_t dz_on;
+static void load_treasures(void);
 #define W7_DANGER ((uint8_t *)0xDC00u)   /* danger bitmap (overlays the AI scratch while the view is shown) */
 static uint8_t in_danger(int16_t wx, int16_t wy)
 {

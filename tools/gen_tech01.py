@@ -259,7 +259,7 @@ AI_GROUPS = [{"id": 0, "mode": "AGGRESSIVE", "target": None, "leash": 3},
              {"id": 1, "mode": "HOLD", "target": None, "leash": 3}]
 UNIT_AI = {6: 1}           # unit index -> group (default 0)
 AI_MODES = {"HOLD": 0, "AGGRESSIVE": 1, "GUARD_POINT": 2, "ESCORT": 3, "ESCAPE": 4}
-START_ITEMS = [(0, 1), (0, 7), (1, 3), (2, 0), (7, 8), (7, 9), (3, 0)]
+START_ITEMS = [(3, 0)]     # enemies only: officers bring theirs from the roster (content/roster.json)
 
 
 def main():
@@ -296,7 +296,7 @@ def main():
          "typedef struct { uint8_t cls, faction, x, y, ai; } Tech01Unit;",
          f"#define TECH01_AI_GROUPS {len(AI_GROUPS)}u",
          "extern const uint8_t tech01_shop[];", "extern const uint8_t tech01_remap[8][4];", f"#define TECH01_TREASURES {len(TREASURES)}u",
-         "#define TECH01_TREASURE_FLAG0 0x100u", "extern const uint8_t tech01_treasures[][3];", "extern const uint8_t tech01_council[][2];",
+         "#define TECH01_TREASURE_FLAG0 0x100u", "extern const uint8_t tech01_treasures[][3];", "extern const uint16_t tech01_council[][2];",
          "extern const uint8_t tech01_deploy_forced;   /* bit k = player officer k must deploy */",
          f"#define TECH01_SHOP_N {len(CAMP['shop'])}u", f"#define TECH01_COUNCIL_N {len(CAMP['council'])}u",
          f"#define TECH01_DEPLOY_MAX {CAMP['deploy']['max_count']}u", "extern const uint8_t tech01_ai_groups[];   /* {id, mode, target lo, hi, leash} */",
@@ -351,8 +351,9 @@ def main():
             raise SystemExit(f"gen_tech01: bad treasure {(x, y, it)}")
     ci.append("const uint8_t tech01_treasures[][3] = {" + ", ".join(f"{{{x}, {y}, {it}}}" for x, y, it in TREASURES) + "};")
     ci.append("const uint8_t tech01_shop[] = {" + ", ".join(map(str, camp["shop"])) + "};")
-    ci.append("const uint8_t tech01_council[][2] = {" + ", ".join(f"{{{spk[s]}, {tx}}}" for s, tx in camp["council"]) + "};")
+    ci.append("const uint16_t tech01_council[][2] = {" + ", ".join(f"{{{spk[s]}, {tx}}}" for s, tx in camp["council"]) + "};")
     ci.append(f"const uint8_t tech01_deploy_forced = {forced};")
+    ci.append("const uint8_t tech01_levels[] = {" + ", ".join("1" for _ in UNITS) + "};")
     ci.append("const Tech01Unit tech01_units[] = {")
     for k, (n, _, cl, f, x, y) in enumerate(UNITS):
         ci.append(f"    {{{cl}, {fac[f]}, {x}, {y}, {UNIT_AI.get(k, 0)}}}, /* {n} */")

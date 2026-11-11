@@ -43,4 +43,5 @@ extern volatile uint8_t dbg_ai_items;
 extern volatile uint8_t dbg_inv[8];
 extern volatile uint8_t dbg_treasures;
 extern volatile uint8_t dbg_treasure_mask;
+extern volatile uint8_t dbg_battle;
 #endif

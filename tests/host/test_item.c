@@ -8,6 +8,7 @@
 #include "../../src/core/grid.h"
 #include "../../src/core/rules.h"
 #include "../../src/core/vm.h"
+#include "../../src/core/roster.h"
 
 extern uint8_t host_terrain[4096], host_occ[4096];
 extern ActiveUnit host_units[MAX_UNITS];
@@ -15,6 +16,7 @@ extern UnitBase host_base[MAX_UNITS];
 extern uint8_t host_sram[16][8192];
 extern TreasureDef host_treasures[8];
 extern uint8_t host_n_treasures;
+extern uint8_t host_campaign[256];
 
 static int fails = 0, checks = 0;
 #define CHECK(cond, ...) do { checks++; if (!(cond)) { fails++; printf("FAIL %s:%d ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
@@ -443,6 +445,55 @@ int main(void)
         memset(bits, 0, sizeof bits);
         ai_danger_add(&B, &MR, 2, bits);
         CHECK(!((bits[(5 * 12 + 9) >> 3] >> ((5 * 12 + 9) & 7)) & 1), "walls shorten the danger zone");
+    }
+
+    /* roster (5.6, B.2), continuity (2.4), camp saves (11.6) */
+    reset();
+    {
+        RosterRec rr;
+        SaveUi ui;
+        uint8_t a, k;
+        uint16_t mhp;
+        roster_clear();
+        a = roster_add(2, 6, 3, 80, 50, 90);                 /* 关羽: cavalry L3, CMD 90 */
+        CHECK(a == 0 && roster_add(2, 6, 1, 1, 1, 1) == 0xFF && roster_count() == 1, "add once per character");
+        CHECK(roster_add(8, 9, 1, 30, 85, 60) == 1 && roster_find(8) == 1 && roster_find(5) == 0xFF, "find");
+        CHECK(named_get(2) == FATE_OWNED && named_get(3) == FATE_NONE, "named states");
+        roster_read(0, &rr); rr.items[0] = 0x41; rr.items[1] = 0; rr.equip[0] = 0; rr.xp = 40; roster_write(0, &rr);
+        roster_deploy(&B, 0, 6, 9, 9, 1);
+        mhp = (uint16_t)(class_defs[6].hp + 12u * 2u + 2u * 90u);
+        CHECK(host_units[6].max_hp == mhp && host_units[6].hp == mhp, "derived from the record's CMD (%u vs %u)", host_units[6].max_hp, mhp);
+        CHECK(inv_get(6, 0) == 0x41 && inv_equipped(6, EQ_WEAPON) == 0 && host_units[6].exp == 40, "items, equipment, XP come along");
+        host_units[6].hp = 50; host_units[6].morale = 70; host_units[6].level = 4;
+        inv_set(6, 3, 1);
+        roster_sync(0, 6);
+        roster_read(0, &rr);
+        CHECK(rr.hp == 50 && rr.morale == 70 && rr.level == 4 && rr.items[6] == 1, "sync back (hp/morale/L/items)");
+        roster_deploy(&B, 0, 6, 9, 9, 0);
+        CHECK(host_units[6].hp == 50 && host_units[6].morale == 70, "NO_REPLENISH carries hp/morale");
+        roster_deploy(&B, 0, 6, 9, 9, 1);
+        CHECK(host_units[6].hp == host_units[6].max_hp && host_units[6].morale == 100, "NORMAL replenishes");
+        /* camp save: roster + named + campaign area + gold + next battle */
+        memset(&ui, 0, sizeof ui);
+        ui.battle_id = 2; ui.gold = 1234;
+        host_campaign[5] = 0x5A;
+        save_cache_reset();
+        CHECK(save_camp(SAVE_SLOT_NORMAL0, &ui) == SAVE_OK && save_kind(SAVE_SLOT_NORMAL0) == SAVE_KIND_CAMP, "camp save");
+        roster_clear(); host_campaign[5] = 0; memset(&ui, 0, sizeof ui);
+        save_cache_reset();
+        CHECK(load_battle(SAVE_SLOT_NORMAL0, &B, &ui) != SAVE_OK, "a camp save is not a battle save");
+        CHECK(load_camp(SAVE_SLOT_NORMAL0, &ui) == SAVE_OK && ui.battle_id == 2 && ui.gold == 1234, "camp load");
+        CHECK(roster_count() == 2 && roster_find(8) == 1 && named_get(8) == FATE_OWNED && host_campaign[5] == 0x5A,
+              "roster / named states / campaign area restored");
+        roster_read(0, &rr);
+        CHECK(rr.items[6] == 1 && rr.level == 4, "record contents restored");
+        /* battle save with a non-empty roster: the loader walks the TLVs */
+        memset(&ui, 0, sizeof ui);
+        for (k = 0; k < 3; k++) host_units[k].action_flags = 0;
+        CHECK(save_battle(SAVE_SLOT_SUSPEND, &B, &ui) == SAVE_OK, "battle save with roster");
+        roster_clear();
+        CHECK(load_battle(SAVE_SLOT_SUSPEND, &B, &ui) == SAVE_OK && roster_count() == 2 && host_units[6].max_hp == mhp + 12,
+              "battle load with roster (units after a 2-record roster)");
     }
 
     /* battle save carries the inventory block (tag 9) */

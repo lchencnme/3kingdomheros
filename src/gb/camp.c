@@ -20,28 +20,43 @@
 #include "../gen/text_data.h"
 #include "../gen/fs_data.h"
 #include "../gen/tech01_data.h"
+#include "../gen/campaign_data.h"
+#include "../core/roster.h"
+#include "../core/save.h"
 
 #define PAL_TEXT 7u
 #define N_LINES 9u
-#define N_OFF 4u
+#define N_OFF (C->n_off)                                /* roster officers, as camp instances 0..n-1 */
 
 enum { SC_MAIN, SC_EQUIP, SC_EXCH, SC_SHOP, SC_DEPLOY, SC_PRIZE };
 
-static const uint8_t officer[N_OFF] = {0, 1, 2, 7};     /* TECH01 player instances: 刘备 关羽 张飞 简雍 */
-static const uint8_t officer_tx[N_OFF] = {TX_NAME_LIUBEI, TX_NAME_GUANYU, TX_NAME_ZHANGFEI, TX_NAME_JIANYONG};
-static const uint8_t cmd_tx[6] = {TX_CMD_COUNCIL, TX_CMD_EQUIP, TX_CMD_EXCH, TX_CMD_SHOP, TX_CMD_DEPART, TX_CMD_PRIZE};
+#define officer(o) (o)
+#define N_CMD 7u
+static const uint8_t cmd_tx[N_CMD] = {TX_CMD_COUNCIL, TX_CMD_EQUIP, TX_CMD_EXCH, TX_CMD_SHOP, TX_CMD_DEPART, TX_CMD_PRIZE, TX_CMD_SAVE};
+extern uint8_t cur_bt, camp_save_ok;
 
 /* all camp state in one block (the C globals area is nearly full: this lives on the stack of camp_run) */
 typedef struct {
     uint16_t *gold;
     CampDeploy *dep;
     uint8_t screen, cur, off, slot, pick, pick_off, pick_slot, sell, top, msg, main_cur, council;
+    uint8_t n_off, mode, next, deploy_max, forced;
 } Camp;
 
 static Camp *C;                                         /* 2 B global: points into camp_run's frame */
 
 /* no line may straddle tile ids 127/128: in LCDC.4 = 0 addressing they are not adjacent in VRAM
  * (0x97F0 vs 0x8800) and one 576 B GDMA would run on into the BG map at 0x9800 */
+/* officer name: the starting-roster table by character, else the class name */
+static uint8_t name_tx(uint8_t o)
+{
+    RosterRec r;
+    uint8_t k;
+    roster_read(o, &r);
+    for (k = 0; k < N_ROSTER_INIT; k++) if (roster_init[k].character == r.character) return roster_init[k].name_tx;
+    return class_name_tx[r.cls];
+}
+
 static uint8_t line_bank(uint8_t k) { return k < 6u ? 1u : 0u; }
 static uint8_t line_id(uint8_t k)
 {
@@ -77,12 +92,12 @@ static uint8_t dep_index(uint8_t o)
 
 static void compose(uint8_t k)
 {
-    uint8_t u = officer[C->off];
+    uint8_t u = officer(C->off);
     hud_begin();
     switch (C->screen) {
     case SC_MAIN:
         if (k == 0) { hud_tx(0, TX_CAMP_TITLE, 0); hud_space(0); hud_space(0); hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold); }
-        else if (k >= 1 && k <= 6) {
+        else if (k >= 1 && k <= N_CMD) {
             arrow(C->cur == k - 1u); hud_tx(0, cmd_tx[k - 1u], 0);
             if (k == 6) { hud_space(0); hud_num(0, prize_count()); }
             if (k == 1 && C->council) { hud_space(0); hud_tx(0, TX_DONE, 0); }
@@ -94,12 +109,12 @@ static void compose(uint8_t k)
             ActiveUnit a;
             unit_load(u, &a);
             hud_tx(0, C->screen == SC_EQUIP ? TX_CMD_EQUIP : TX_CMD_EXCH, 0); hud_space(0);
-            hud_tx(0, officer_tx[C->off], 0); hud_space(0);
+            hud_tx(0, name_tx(C->off), 0); hud_space(0);
             if (C->screen == SC_EQUIP || C->pick == 0xFF) {
                 hud_tx(0, TX_ATK, 0); hud_num(0, a.atk); hud_space(0);
                 hud_tx(0, TX_MAG, 0); hud_num(0, a.mag); hud_space(0);
                 hud_tx(0, TX_MOVE, 0); hud_num(0, a.move);
-            } else { hud_tx(0, TX_PICKED, 0); hud_tx(0, item_name_tx[inv_get(officer[C->pick_off], C->pick_slot)], 0); }
+            } else { hud_tx(0, TX_PICKED, 0); hud_tx(0, item_name_tx[inv_get(officer(C->pick_off), C->pick_slot)], 0); }
         } else if (k >= 1 && k <= 8) {
             uint8_t s = (uint8_t)(k - 1u);
             arrow(C->slot == s);
@@ -112,8 +127,8 @@ static void compose(uint8_t k)
             hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold);
         } else if (!C->sell && k >= 1 && k <= 6) {
             uint8_t i = (uint8_t)(C->top + k - 1u);
-            if (i < TECH01_SHOP_N) {
-                uint8_t it = tech01_shop[i];
+            if (i < camp_defs[0].n_shop) {
+                uint8_t it = camp_defs[0].shop[i];
                 arrow(C->cur == i); hud_tx(0, item_name_tx[it], 0); hud_space(0); hud_num(0, item_defs[it].price);
             }
         } else if (C->sell && k >= 1 && k <= 6) {
@@ -124,17 +139,17 @@ static void compose(uint8_t k)
                 if (it != ITEM_NONE && item_sell_price(it)) { hud_space(0); hud_num(0, item_sell_price(it)); }
             }
         } else if (k == 7) {
-            hud_tx(0, C->sell ? TX_FROM : TX_GIVE, 0); hud_tx(0, officer_tx[C->off], 0); hud_space(0);
+            hud_tx(0, C->sell ? TX_FROM : TX_GIVE, 0); hud_tx(0, name_tx(C->off), 0); hud_space(0);
             hud_num(0, inv_count(u)); hud_glyph(0, GLYPH_SLASH); hud_num(0, INV_SLOTS);
         } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_SHOP_HINT2, 0);
         break;
     case SC_DEPLOY:
-        if (k == 0) { hud_tx(0, TX_CMD_DEPART, 0); hud_space(0); hud_num(0, C->dep->n); hud_glyph(0, GLYPH_SLASH); hud_num(0, TECH01_DEPLOY_MAX); }
+        if (k == 0) { hud_tx(0, TX_CMD_DEPART, 0); hud_space(0); hud_num(0, C->dep->n); hud_glyph(0, GLYPH_SLASH); hud_num(0, C->deploy_max); }
         else if (k >= 1 && k <= N_OFF) {
             uint8_t o = (uint8_t)(k - 1u), d = dep_index(o);
-            arrow(C->cur == o); hud_tx(0, officer_tx[o], 0); hud_space(0);
+            arrow(C->cur == o); hud_tx(0, name_tx(o), 0); hud_space(0);
             if (d != 0xFF) { hud_tx(0, TX_DEP_MARK, 0); hud_num(0, (uint16_t)(d + 1u)); }
-            if (tech01_deploy_forced & (1u << o)) { hud_space(0); hud_tx(0, TX_FORCED, 0); }
+            if (C->forced & (1u << o)) { hud_space(0); hud_tx(0, TX_FORCED, 0); }
         } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_DEPLOY_HINT, 0);
         break;
     case SC_PRIZE:                                         /* 7.4: distribute / sell / discard every prize */
@@ -147,7 +162,7 @@ static void compose(uint8_t k)
                 if (item_sell_price(it)) { hud_space(0); hud_num(0, item_sell_price(it)); }
             }
         } else if (k == 7) {
-            hud_tx(0, TX_GIVE, 0); hud_tx(0, officer_tx[C->off], 0); hud_space(0);
+            hud_tx(0, TX_GIVE, 0); hud_tx(0, name_tx(C->off), 0); hud_space(0);
             hud_num(0, inv_count(u)); hud_glyph(0, GLYPH_SLASH); hud_num(0, INV_SLOTS);
         } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_PRIZE_HINT, 0);
         break;
@@ -213,7 +228,7 @@ static void enter(uint8_t sc)
 static void council(void)
 {
     uint8_t i;
-    for (i = 0; i < TECH01_COUNCIL_N && i < DQ_MAX; i++) { DQ->speaker[i] = tech01_council[i][0]; DQ->text[i] = tech01_council[i][1]; }
+    for (i = 0; i < camp_defs[0].n_council && i < DQ_MAX; i++) { DQ->speaker[i] = (uint8_t)camp_defs[0].council[i][0]; DQ->text[i] = camp_defs[0].council[i][1]; }
     DQ->n = i;
     dialog_run_from(0);
     DQ->n = 0;
@@ -232,12 +247,12 @@ static void shop_scroll(uint8_t sel, uint8_t n)
 static uint8_t step(uint8_t pressed)
 {
     uint8_t up = pressed & J_UP, down = pressed & J_DOWN, left = pressed & J_LEFT, right = pressed & J_RIGHT;
-    uint8_t u = officer[C->off];
+    uint8_t u = officer(C->off);
     switch (C->screen) {
     case SC_MAIN:
         if (up || down) {
             uint8_t old = C->cur;
-            C->cur = (uint8_t)(up ? (C->cur + 5u) % 6u : (C->cur + 1u) % 6u);
+            C->cur = (uint8_t)(up ? (C->cur + N_CMD - 1u) % N_CMD : (C->cur + 1u) % N_CMD);
             draw((uint8_t)(old + 1u)); draw((uint8_t)(C->cur + 1u));
             if (C->msg) { C->msg = 0; draw(8); }
             sfx_play(SFX_CURSOR);
@@ -248,8 +263,18 @@ static uint8_t step(uint8_t pressed)
             else if (C->cur == 2) enter(SC_EXCH);
             else if (C->cur == 3) enter(SC_SHOP);
             else if (C->cur == 5) enter(SC_PRIZE);
+            else if (C->cur == 6) {                         /* 存档: camp save (11.6) of the synced roster */
+                SaveUi ui;
+                uint8_t o;
+                for (o = 0; o < C->n_off; o++) roster_sync(o, o);
+                memset(&ui, 0, sizeof ui);
+                ui.battle_id = cur_bt; ui.gold = *C->gold; ui.options = 1;
+                if (save_camp(SAVE_SLOT_NORMAL0, &ui) == SAVE_OK) { camp_save_ok = 1; say(TX_CAMP_SAVED); }
+                else say(TX_SAVE_FAIL);
+                dbg_saves++;
+            }
             else if (prize_count()) { sfx_play(SFX_ERROR); say(TX_PRIZE_FIRST); }    /* 7.4: queue must be empty */
-            else if (!C->council && TECH01_COUNCIL_N) { sfx_play(SFX_ERROR); say(TX_COUNCIL_FIRST); }
+            else if (!C->council && camp_defs[0].n_council) { sfx_play(SFX_ERROR); say(TX_COUNCIL_FIRST); }
             else enter(SC_DEPLOY);
         }
         break;
@@ -279,7 +304,7 @@ static uint8_t step(uint8_t pressed)
                 C->pick = 1; C->pick_off = C->off; C->pick_slot = C->slot;
                 sfx_play(SFX_CONFIRM); draw(0);
             } else {
-                if (item_exchange_camp(officer[C->pick_off], C->pick_slot, u, C->slot) == IR_OK) sfx_play(SFX_CONFIRM);
+                if (item_exchange_camp(officer(C->pick_off), C->pick_slot, u, C->slot) == IR_OK) sfx_play(SFX_CONFIRM);
                 else sfx_play(SFX_ERROR);
                 C->pick = 0xFF;
                 draw_all(0);
@@ -294,13 +319,13 @@ static uint8_t step(uint8_t pressed)
         } else if (up || down) {
             uint8_t top0 = C->top, old = C->sell ? C->slot : C->cur, now;
             if (C->sell) { C->slot = (uint8_t)(up ? (C->slot + 7u) & 7u : (C->slot + 1u) & 7u); shop_scroll(C->slot, INV_SLOTS); now = C->slot; }
-            else { C->cur = (uint8_t)(up ? (C->cur + TECH01_SHOP_N - 1u) % TECH01_SHOP_N : (C->cur + 1u) % TECH01_SHOP_N); shop_scroll(C->cur, TECH01_SHOP_N); now = C->cur; }
+            else { C->cur = (uint8_t)(up ? (C->cur + camp_defs[0].n_shop - 1u) % camp_defs[0].n_shop : (C->cur + 1u) % camp_defs[0].n_shop); shop_scroll(C->cur, camp_defs[0].n_shop); now = C->cur; }
             if (C->top != top0) { uint8_t k; for (k = 1; k <= 6; k++) draw(k); }   /* scrolled */
             else { draw((uint8_t)(old - C->top + 1u)); draw((uint8_t)(now - C->top + 1u)); }
             if (C->msg) { C->msg = 0; draw(8); }
         } else if (pressed & J_B) enter(SC_MAIN);
         else if ((pressed & J_A) && !C->sell) {           /* 7.3: check gold and a free slot, then pay and give */
-            uint8_t it = tech01_shop[C->cur];
+            uint8_t it = camp_defs[0].shop[C->cur];
             uint16_t price = item_defs[it].price;
             if (*C->gold < price) { sfx_play(SFX_ERROR); say(TX_NO_GOLD); }
             else if (inv_count(u) >= INV_SLOTS) { sfx_play(SFX_ERROR); say(TX_BAG_FULL); }
@@ -319,7 +344,8 @@ static uint8_t step(uint8_t pressed)
         break;
     case SC_PRIZE: {
         uint8_t n = prize_count();
-        if (pressed & J_START) { enter(SC_MAIN); break; }                   /* make room first, come back */
+        if (C->mode == CAMP_PRIZES_ONLY && !n) return 1;                    /* continuous battle: go on */
+        if ((pressed & J_START) && C->mode != CAMP_PRIZES_ONLY) { enter(SC_MAIN); break; }   /* make room */
         if (!n) { enter(SC_MAIN); break; }
         if (left || right) {
             C->off = (uint8_t)(left ? (C->off + N_OFF - 1u) % N_OFF : (C->off + 1u) % N_OFF);
@@ -344,7 +370,7 @@ static uint8_t step(uint8_t pressed)
             if (ok) {
                 prize_remove(C->cur);
                 sfx_play(SFX_CONFIRM);
-                if (!prize_count()) { enter(SC_MAIN); break; }
+                if (!prize_count()) { if (C->mode == CAMP_PRIZES_ONLY) return 1; enter(SC_MAIN); break; }
                 if (C->cur >= prize_count()) C->cur = (uint8_t)(prize_count() - 1u);
                 shop_scroll(C->cur, prize_count());
                 draw_all(0);
@@ -360,11 +386,11 @@ static uint8_t step(uint8_t pressed)
         } else if (pressed & J_A) {
             uint8_t d = dep_index(C->cur), k;
             if (d != 0xFF) {
-                if (tech01_deploy_forced & (1u << C->cur)) { sfx_play(SFX_ERROR); say(TX_FORCED_MSG); break; }
+                if (C->forced & (1u << C->cur)) { sfx_play(SFX_ERROR); say(TX_FORCED_MSG); break; }
                 for (k = d; k + 1u < C->dep->n; k++) C->dep->order[k] = C->dep->order[k + 1u];
                 C->dep->n--;
             } else {
-                if (C->dep->n >= TECH01_DEPLOY_MAX) { sfx_play(SFX_ERROR); break; }
+                if (C->dep->n >= C->deploy_max) { sfx_play(SFX_ERROR); break; }
                 C->dep->order[C->dep->n++] = C->cur;
             }
             sfx_play(SFX_CONFIRM); C->msg = 0;
@@ -385,15 +411,19 @@ static uint8_t step(uint8_t pressed)
     return 0;
 }
 
-void camp_run(uint16_t *gold, CampDeploy *dep) BANKED
+void camp_run(uint16_t *gold, CampDeploy *dep, uint8_t mode, uint8_t next_bt) BANKED
 {
     Camp camp;
     memset(&camp, 0, sizeof camp);
-    camp.gold = gold; camp.dep = dep; camp.pick = 0xFF;
+    camp.gold = gold; camp.dep = dep; camp.pick = 0xFF; camp.mode = mode; camp.next = next_bt;
+    camp.n_off = roster_count() < 7u ? roster_count() : 7u;   /* deployment list: lines 1..7 */
+    if (next_bt < N_BATTLES) { camp.deploy_max = battle_defs[next_bt].deploy_max; camp.forced = battle_defs[next_bt].forced; }
+    else { camp.deploy_max = 4; camp.forced = 1; }
+    if (mode == CAMP_PRIZES_ONLY && !prize_count()) return;
     C = &camp;
     if (!dep->n) {                                      /* first visit: everyone, in roster order */
         uint8_t k;
-        for (k = 0; k < N_OFF && k < TECH01_DEPLOY_MAX; k++) dep->order[k] = k;
+        for (k = 0; k < N_OFF && k < C->deploy_max; k++) dep->order[k] = k;
         dep->n = k;
     }
     if (prize_count()) { camp.screen = SC_PRIZE; }        /* 7.4: the spoils come first */

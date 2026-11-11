@@ -39,3 +39,7 @@ __attribute__((weak)) void vm_flag_set(uint8_t s, uint16_t id, uint8_t v) PLATFO
     uint8_t *f = &host_flags[s & 1][(id >> 3) & 511], m = (uint8_t)(1u << (id & 7));
     *f = v ? (uint8_t)(*f | m) : (uint8_t)(*f & ~m);
 }
+/* campaign area (GB: WRAM1 DF00) */
+uint8_t host_campaign[256];
+void campaign_read(uint8_t off, uint8_t *dst, uint8_t n) PLATFORM_API { memcpy(dst, host_campaign + off, n); }
+void campaign_write(uint8_t off, const uint8_t *src, uint8_t n) PLATFORM_API { memcpy(host_campaign + off, src, n); }

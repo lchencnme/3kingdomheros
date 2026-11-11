@@ -109,5 +109,13 @@
   "TX_XRECV_HINT": "左右换人 上下选格 A交换",
   "TX_IR_6": "已装备的物品不能交换",
   "TX_DANGER_CALC": "敌军危险区计算中……",
-  "TX_DANGER_ON": "危险区（×）  B关闭"
+  "TX_DANGER_ON": "危险区（×）  B关闭",
+  "TX_BT_TITLE_0": "第一战 操演",
+  "TX_BT_TITLE_1": "第二战 渡口夜战",
+  "TX_BT_TITLE_2": "第三战 追击残兵",
+  "TX_CMD_SAVE": "存档",
+  "TX_CAMP_SAVED": "营地存档完成",
+  "TX_TITLE_NEW": "A 新游戏",
+  "TX_TITLE_LOAD": "SELECT 读取营地存档",
+  "TX_END_TITLE": "完"
 }

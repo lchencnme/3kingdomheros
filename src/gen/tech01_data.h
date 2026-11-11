@@ -23,7 +23,7 @@ extern const uint8_t tech01_remap[8][4];
 #define TECH01_TREASURES 2u
 #define TECH01_TREASURE_FLAG0 0x100u
 extern const uint8_t tech01_treasures[][3];
-extern const uint8_t tech01_council[][2];
+extern const uint16_t tech01_council[][2];
 extern const uint8_t tech01_deploy_forced;   /* bit k = player officer k must deploy */
 #define TECH01_SHOP_N 18u
 #define TECH01_COUNCIL_N 4u
@@ -37,6 +37,6 @@ extern const uint8_t tech01_meta[10][4];
 extern const uint8_t tech01_terrain_pal[10];
 extern const uint8_t tech01_terrain[];
 extern const Tech01Unit tech01_units[];
-#define TECH01_START_ITEMS 7u
+#define TECH01_START_ITEMS 1u
 extern const uint8_t tech01_start_items[][2];
 #endif

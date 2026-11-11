@@ -1,0 +1,9 @@
+{
+  "_comment": "开局名册（设计文档 5.6、15.3）。base = STR/INT/CMD（平衡参数，原创数值）；items = 开局携带物 ID。",
+  "officers": [
+    {"character": 1, "tag": "CH_LIUBEI",   "name": "TX_NAME_LIUBEI",   "class": 0, "level": 1, "base": [70, 68, 72], "items": [1, 7]},
+    {"character": 2, "tag": "CH_GUANYU",   "name": "TX_NAME_GUANYU",   "class": 6, "level": 1, "base": [78, 56, 74], "items": [3]},
+    {"character": 3, "tag": "CH_ZHANGFEI", "name": "TX_NAME_ZHANGFEI", "class": 6, "level": 1, "base": [80, 40, 66], "items": [0]},
+    {"character": 8, "tag": "CH_JIANYONG", "name": "TX_NAME_JIANYONG", "class": 9, "level": 1, "base": [40, 76, 58], "items": [8, 9]}
+  ]
+}

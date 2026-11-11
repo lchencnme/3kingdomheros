@@ -7,6 +7,7 @@
 #include "../core/save.h"
 #include "../core/item.h"
 #include "../gen/tech01_data.h"
+#include "../gen/campaign_data.h"
 #include "../gen/tech01_events.h"
 #include "rom.h"
 #include "wram.h"
@@ -18,13 +19,15 @@
 #define SRAM_BATTLE_FLAGS 6400u
 #define W1_CAMPAIGN ((uint8_t *)0xDF00u)
 
-uint8_t vm_event_count(void) PLATFORM_API { return TECH01_EVENT_COUNT; }
+uint8_t cur_bt;                                 /* index into battle_defs / battle_ev (design doc 2.1) */
 
-void vm_event_header(uint8_t i, VmEvent *e) PLATFORM_API { memcpy(e, &tech01_events[i], sizeof *e); }
+uint8_t vm_event_count(void) PLATFORM_API { return battle_ev[cur_bt].n_events; }
+
+void vm_event_header(uint8_t i, VmEvent *e) PLATFORM_API { memcpy(e, &battle_ev[cur_bt].events[i], sizeof *e); }
 
 void vm_read(uint16_t off, uint8_t *dst, uint8_t n) PLATFORM_API
 {
-    rom_copy(TECH01_SCRIPT_BANK, dst, tech01_script + off, n);
+    rom_copy(TECH01_SCRIPT_BANK, dst, battle_ev[cur_bt].script + off, n);
 }
 
 uint8_t vm_flag_get(uint8_t scope, uint16_t id) PLATFORM_API
@@ -61,8 +64,8 @@ void vm_text(uint8_t speaker, uint16_t text_id) PLATFORM_API
 
 uint8_t vm_template(uint8_t idx, VmTemplate *t) PLATFORM_API
 {
-    if (idx >= TECH01_TEMPLATE_COUNT) return 0;
-    memcpy(t, &tech01_templates[idx], sizeof *t);
+    if (idx >= battle_ev[cur_bt].n_templates) return 0;
+    memcpy(t, &battle_ev[cur_bt].templates[idx], sizeof *t);
     return 1;
 }
 
@@ -72,8 +75,9 @@ void vm_gold(uint16_t amount) PLATFORM_API { gold = (uint16_t)(gold + amount < g
 /* treasures of the current battle (design doc 7.4) */
 uint8_t treasure_def(uint8_t i, TreasureDef *t) PLATFORM_API
 {
-    if (i >= TECH01_TREASURES) return 0;
-    t->x = tech01_treasures[i][0]; t->y = tech01_treasures[i][1]; t->item = tech01_treasures[i][2];
+    const BattleDef *d = &battle_defs[cur_bt];
+    if (i >= d->n_tre) return 0;
+    t->x = d->tre[i][0]; t->y = d->tre[i][1]; t->item = d->tre[i][2];
     t->flag = (uint16_t)(TECH01_TREASURE_FLAG0 + i);
     return 1;
 }
@@ -98,4 +102,17 @@ void vm_clear_battle_flags(void)
     uint16_t off;
     memset(z, 0, sizeof z);
     for (off = 0; off < 512u; off += 32u) sram_write(SRAM_RUNTIME_BANK, (uint16_t)(SRAM_BATTLE_FLAGS + off), z, 32);
+}
+
+/* campaign area (global flags, design doc 11.5/11.6): WRAM1 DF00 */
+void campaign_read(uint8_t off, uint8_t *dst, uint8_t n) PLATFORM_API
+{
+    uint8_t o = SVBK_REG;
+    SVBK_REG = WB_UNITS; memcpy(dst, W1_CAMPAIGN + off, n); SVBK_REG = o;
+}
+
+void campaign_write(uint8_t off, const uint8_t *src, uint8_t n) PLATFORM_API
+{
+    uint8_t o = SVBK_REG;
+    SVBK_REG = WB_UNITS; memcpy(W1_CAMPAIGN + off, src, n); SVBK_REG = o;
 }

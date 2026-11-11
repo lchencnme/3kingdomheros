@@ -9,4 +9,6 @@ extern const uint16_t mus_pulse_reg[96];
 extern const uint16_t mus_wave_reg[96];
 extern const uint8_t mus_wave_soft[16];
 extern const Song song_battle;   /* 旌旗缓行 */
+extern const Song song_camp;   /* 营火 */
+extern const Song song_end;   /* 归营 */
 #endif

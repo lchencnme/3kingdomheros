@@ -5,6 +5,7 @@ cd "$(dirname "$0")"
 LCC=${GBDK_LCC:-tools/gbdk/bin/lcc}
 python3 -I tools/gen_rules.py
 python3 -I tools/gen_tech01.py
+python3 -I tools/gen_campaign.py
 python3 -I tools/gen_font.py
 python3 -I tools/gen_music.py
 python3 -I tools/gen_actors.py
@@ -33,7 +34,7 @@ cc -std=c99 -Wall -Wextra -O1 -o build/host/test_strategy tests/host/test_strate
 build/host/test_strategy
 cc -std=c99 -Wall -Wextra -O1 -o build/host/test_item tests/host/test_item.c tests/host/host_units.c \
    tests/host/host_grid.c tests/host/host_sram.c src/core/item.c src/core/ai.c src/core/strategy.c src/core/save.c \
-   src/core/battle.c src/core/rng.c src/core/rules.c src/core/path.c src/gen/rules_data.c
+   src/core/roster.c src/core/battle.c src/core/rng.c src/core/rules.c src/core/path.c src/gen/rules_data.c
 build/host/test_item
 tools/build_rom.sh                     # single source of truth for the ROM link line
 shasum -a 256 build/gb/sanguo_hjz.gbc

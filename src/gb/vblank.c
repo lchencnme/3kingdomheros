@@ -8,6 +8,7 @@ uint16_t vb_slot_addr(uint8_t id) { return id < 128u ? (uint16_t)(0x9000u + (uin
 /* wait for the next VBlank and return with LY in 144..149, else keep waiting (LY gate, design doc 12.1) */
 void vb_wait(void)
 {
+    if (!(LCDC_REG & LCDCF_ON)) return;      /* LCD off: LY stays 0, VRAM is free anyway (never wait forever) */
     for (;;) {
         wait_vbl_done();
         if (LY_REG >= 144u && LY_REG <= 149u) return;

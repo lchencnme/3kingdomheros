@@ -158,6 +158,11 @@ import json as _json
 import re as _re
 _B = _json.load(open(ROM.resolve().parents[2] / "content/battles/BT_TECH01.json"))
 _W, _H, _TERR = _B["map"]["width"], _B["map"]["height"], _B["map"]["terrain"]
+_CAMPAIGN = _json.load(open(ROM.resolve().parents[2] / "content/campaign.json"))
+_MAPS = []
+for _bt in _CAMPAIGN["battles"]:
+    _bj = _json.load(open(ROM.resolve().parents[2] / f"content/battles/{_bt['id']}.json"))
+    _MAPS.append((_bj["map"]["width"], _bj["map"]["height"], _bj["map"]["terrain"], [tuple(x) for x in _bj.get("treasures", [])]))
 _IDX = (ROM.resolve().parents[2] / "src/gen/tech01_index.c").read_text()
 _META = [list(map(int, m.split(","))) for m in _re.findall(r"\{(\d+, \d+, \d+, \d+)\}",
          _re.search(r"tech01_meta\[10\]\[4\] = \{(.*?)\};", _IDX).group(1))]
@@ -201,6 +206,7 @@ def view_mismatches(em, highlight=False, danger=False):
     """independent re-implementation of the 352-slot compositor (design doc 12.2): every visible
     hardware position must point at its own slot and hold exactly terrain + units in draw order"""
     cx, cy = em.r16("_dbg_cam_x"), em.r16("_dbg_cam_y")
+    _W, _H, _TERR, tre = _MAPS[em.r8("_dbg_battle")]
     units = []
     for i in range(12):
         a = 0xD000 + 40 * i
@@ -230,7 +236,7 @@ def view_mismatches(em, highlight=False, danger=False):
         c_ = cy_ * _W + cx_
         return dbits is not None and (dbits[c_ >> 3] >> (c_ & 7)) & 1
     tmask = em.r8("_dbg_treasure_mask")
-    chests = {(x, y) for k, (x, y, _) in enumerate(_TRE) if tmask & (1 << k)}
+    chests = {(x, y) for k, (x, y, _) in enumerate(tre if em.r8("_dbg_battle") else _TRE) if tmask & (1 << k)}
     bad = 0
     for j in range(15):
         for i in range(21):
@@ -331,7 +337,7 @@ e.wait_state([G_MOVE], 30)
 rng_frames = e.r16("_dbg_t_range")
 check(f"move range <=150ms (刘备: {rng_frames} frames)", rng_frames <= 9)
 check("A on own unit -> move preview", e.state() == G_MOVE)
-e.frames(40)                                             # the range sweep recomposes the area
+e.frames(90)                                             # the range sweep recomposes the area (~40 frames)
 check("move range drawn as corner ticks + range palette", view_mismatches(e, highlight=True) == 0)
 e.png(ROM.parent / "shot_range.png")
 e.press("right"); e.press("right")
@@ -396,6 +402,8 @@ def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
                 if em.hp(i) == 0 or em.state() != G_IDLE:
                     continue
                 em.goto(*em.unit(i))
+                if em.state() != G_IDLE:
+                    continue          # the battle ended meanwhile: never press A on the outcome screen
                 em.press("a")
                 em.wait_state([G_MOVE], 12)
                 if em.state() != G_MOVE:
@@ -438,10 +446,12 @@ def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
                hp_ok=hp_ok, canary=em.canary_ok(), stack_free=em.stack_free(), state=em.state(),
                fs_count=em.r8("_dbg_fs_count"), fs_ly_max=em.r8("_dbg_fs_ly_max"),
                fs_chunk_max=em.r16("_dbg_fs_bytes_max"), fs_skipped=em.r8("_dbg_fs_skipped"),
-               bg_ok=view_mismatches(em) == 0)
+               bg_ok=view_mismatches(em) == 0, vm_err=em.r8("_dbg_vm_err"),
+               alive=[bool(em.m[1, 0xD000 + 40 * i + 34] & 0x18) for i in range(N_UNITS)])
     if shots:
         em.frames(10)
         em.png(ROM.parent / "shot_outcome.png")
+    em.frames(45)            # the outcome screen ignores presses for 40 frames (no accidental skip)
     em.press("a")            # restart from the outcome screen (a win goes through the camp: 出阵)
     for _ in range(200):                     # a win opens the camp: spoils (25), then 军议, then 出阵
         if em.state() in (G_IDLE, 20, 25):
@@ -549,7 +559,7 @@ v.press("start")
 v.wait_state([G_IDLE], 2000)
 move_unit(v, 0, 7, 10)
 check(f"POST_MOVE village event ran ({v.r8('_dbg_dialog_pages')} pages)", v.r8("_dbg_dialog_pages") == pages_before + 1
-      and v.unit(0) == (7, 10) and v.hp(0) == 300)
+      and v.unit(0) == (7, 10) and v.hp(0) == (v.m[1, 0xD000 + 12] | (v.m[1, 0xD000 + 13] << 8)))
 # end turns until round 3 enemy phase: reinforcements appear in reserved slots 7 and 8
 while v.r16("_dbg_round") < 4 and v.fc < 30000 and v.state() != G_OUTCOME:
     if v.state() == G_IDLE:
@@ -658,13 +668,12 @@ check("DUEL scenario exercised", duel_done)
 check("no VM error during duel", d.r8("_dbg_vm_err") == 0)
 d.pb.stop(save=False)
 
-# TALK: deterministic replay -- by round 8 the east archer (unit 4) has come within 简雍's reach
+# TALK: the east archer (unit 4) placed within 简雍's reach (round 1, deterministic)
 k = Emu()
 k.wait_state([G_IDLE], 300)
-while k.r16("_dbg_round") < 8 and k.state() != G_OUTCOME:
-    k.wait_state([G_IDLE], 3000)
-    k.press("start")
-k.wait_state([G_IDLE], 3000)
+a4 = 0xD000 + 40 * 4                                     # place the east archer two cells south of 简雍
+k.m[1, a4 + 7] = 3; k.m[1, a4 + 8] = 15
+k.frames(4)
 if try_reach_and_menu(k, 7, 4):
     for _ in range(5):
         if k.r8("_dbg_menu_item") == 3:
@@ -765,6 +774,7 @@ def u_atk(em, i):
     return em.m[1, a + 18] | (em.m[1, a + 19] << 8)
 
 C_MAIN, C_EQUIP, C_EXCH, C_SHOP, C_DEPLOY = 20, 21, 22, 23, 24
+it.frames(45)
 it.press("a", after=16)
 check("win -> the spoils come first (prize screen)", camp_wait(it, 25))
 it.press("b", after=16)
@@ -830,8 +840,15 @@ it.press("a", after=16); it.frames(6)
 inv3 = [it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
 check(f"exchange: spear left 刘备, ATK back to {u_atk(it, 0)}", 0x47 not in inv3 and u_atk(it, 0) == atk0)
 it.press("b", after=16); camp_wait(it, C_MAIN)
+# camp save (11.6): roster, named states, campaign area, gold, the camp's battle
+saves0 = it.r8("_dbg_saves")
+for _ in range(4):
+    it.press("down", after=16)                             # 交换 -> 存档
+it.press("a", after=30)
+check(f"camp save written ({camp_cur(it)})", it.r8("_dbg_saves") == saves0 + 1 and camp_cur(it) == 6)
+it.press("up", after=16); it.press("up", after=16)
 # deployment: leave 张飞 behind, move 简雍 before 关羽, depart
-it.press("down", after=16); it.press("down", after=16); it.press("a", after=16)
+it.press("a", after=16)
 check("出阵 opens the deployment screen after 军议", camp_wait(it, C_DEPLOY))
 it.frames(60); it.png(ROM.parent / "shot_deploy.png")
 it.press("down", after=16); it.press("down", after=16); it.press("a", after=16)        # 张飞 out
@@ -839,12 +856,62 @@ it.press("down", after=16); it.press("select", after=16)                     # �
 it.press("up", after=16); it.press("up", after=16); it.press("up", after=16); it.press("a", after=16)   # 刘备 is forced: stays
 it.press("start", after=16)
 it.wait_state([G_IDLE], 600)
-check(f"depart: battle with 刘备/简雍/关羽, 张飞 stays in camp ({it.unit(0)}, {it.unit(7)}, {it.unit(1)}, hp 张飞 {it.hp(2)})",
-      it.state() == G_IDLE and it.unit(0) == (4, 12) and it.unit(7) == (5, 11) and it.unit(1) == (5, 13) and it.hp(2) == 0)
+check(f"depart: battle 2 with 刘备/简雍/关羽 in slot order, 张飞 stays in camp ({it.unit(0)}, {it.unit(3)}, {it.unit(1)}, hp 张飞 {it.hp(2)})",
+      it.state() == G_IDLE and it.r8("_dbg_battle") == 1 and it.unit(0) == (2, 8) and it.unit(3) == (3, 9)
+      and it.unit(1) == (2, 10) and it.hp(2) == 0)
 check("gold kept after departing", it.r16("_dbg_gold") == 90)
-check("enemies are back after departing", all(it.hp(i) > 0 for i in range(3, 7)))
-check("BG map consistent after camp", view_mismatches(it) == 0)
-it.pb.stop(save=False)
+inv4 = [it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
+check(f"roster carried 刘备's items into battle 2 ({inv4})", 0x70 in inv4)
+check("battle 2 enemies on the field", all(it.hp(i) > 0 for i in range(4, 10)))
+it.frames(60)
+check("BG map consistent after camp (battle 2 map)", view_mismatches(it) == 0)
+
+def win_now(em, enemies):
+    """remove the enemies, then end the turn: the phase change checks the outcome (6.6)"""
+    for i in enemies:
+        a = 0xD000 + 40 * i
+        em.m[1, a + 10] = 0; em.m[1, a + 11] = 0
+        em.m[1, a + 34] = em.m[1, a + 34] | 0x08
+    em.press("start")
+    em.wait_state([G_OUTCOME], 900)
+    em.frames(45)                                       # the outcome screen ignores presses for 40 frames
+
+a0 = 0xD000
+it.press("start")                                         # one full round first (CARRY needs round > 1)
+it.wait_state([G_IDLE], 3000)
+it.m[1, a0 + 10] = 100; it.m[1, a0 + 11] = 0               # 刘备 wounded at the end of battle 2
+win_now(it, range(4, 10))
+check("battle 2 won", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+round2 = it.r16("_dbg_round")
+it.press("a", after=16)
+check("continuous battle: only the spoils screen (prize-only camp)", camp_wait(it, 25, 300))
+for _ in range(4):
+    if it.state() != 25:
+        break
+    it.press("a", after=16)
+it.wait_state([G_IDLE], 900)
+check(f"battle 3 follows directly ({it.r8('_dbg_battle')})", it.state() == G_IDLE and it.r8("_dbg_battle") == 2)
+check(f"NO_REPLENISH: 刘备 keeps hp 100 ({it.hp(0)})", it.hp(0) == 100)
+check(f"round CARRY: round {it.r16('_dbg_round')} continues from {round2}", it.r16("_dbg_round") >= round2 and it.r16("_dbg_round") > 1)
+check(f"张飞 (not used in battle 2) deploys fresh ({it.hp(2)})", it.hp(2) > 0)
+it.frames(60)
+check("battle 3 map consistent", view_mismatches(it) == 0)
+win_now(it, range(4, 8))
+it.press("a", after=16)
+for _ in range(1200):                                     # the ending pages run in dialogue mode
+    if it.state() == G_TITLE and it.r8("_dbg_dialog_active") == 0:
+        break
+    it.frames(1)
+check(f"last battle won -> ending -> title (state {it.state()}, battle {it.r8('_dbg_battle')}, outcome {it.r8('_dbg_outcome')})", it.state() == G_TITLE)
+it.frames(10); it.png(ROM.parent / "shot_title.png")
+ram_end = it.power_off()
+# cold boot: the camp save is offered at the title (SELECT)
+cs = Emu(ram_end)
+cs.wait_state([G_TITLE], 300)
+cs.press("select", after=16)
+check("title: SELECT loads the camp save into the camp screen", camp_wait(cs, C_MAIN, 300) or camp_wait(cs, 25, 10))
+check(f"camp save restored the gold ({cs.r16('_dbg_gold')})", cs.r16("_dbg_gold") == 90)
+cs.pb.stop(save=False)
 
 # ------------------------------------------------------------------ in-game save: SELECT -> power off -> cold boot
 s = Emu()

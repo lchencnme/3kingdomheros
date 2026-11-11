@@ -1,0 +1,10 @@
+{
+  "_comment": "战役顺序（设计文档 2.1、2.4）。camp = 战后进入的营地（null = 连续战，直接进入下一关，只先分配战利品）；next = null 表示结局。",
+  "start": "BT_TECH01",
+  "battles": [
+    {"id": "BT_TECH01", "title": "TX_BT_TITLE_0", "camp": "CAMP_TECH01", "next": "BT_TECH02"},
+    {"id": "BT_TECH02", "title": "TX_BT_TITLE_1", "camp": null, "next": "BT_TECH03"},
+    {"id": "BT_TECH03", "title": "TX_BT_TITLE_2", "camp": null, "next": null}
+  ],
+  "ending": [["LIUBEI", "TXD_END_1"], ["NARRATOR", "TXD_END_2"], ["NARRATOR", "TXD_END_3"]]
+}

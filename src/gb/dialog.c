@@ -102,7 +102,7 @@ uint8_t dialog_run_from(uint8_t i) BANKED
             uint8_t more;
             hud_begin();
             if (sp < PORTRAIT_COUNT) hud_tx_list(2, (uint8_t)(TX_PNAME_0 + 0), 0, sp);   /* name list */
-            more = hud_tx_page((uint8_t)q->text[i], page);
+            more = hud_tx_page(q->text[i], page);
             if (first || sp != last_sp) {
                 /* new speaker: paper, LCD off, reload portrait + text (no tearing, design doc 12.5) */
                 vb_wait();
