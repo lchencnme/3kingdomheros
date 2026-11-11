@@ -41,10 +41,11 @@ static int16_t hb_x0, hb_x1, hb_y0, hb_y1;   /* hw-position box the sweep must r
 
 /* render state + dirty queue in WRAM bank7 D400..D5FF (the former full-map inqueue area, now unused) */
 typedef struct { uint8_t x, y, vis, pal, body; } RU;
+#define RS_QMAX 32u                    /* overflow -> full-cache recomposition sweep */
 typedef struct {
     RU ru[MAXU];                       /* what is currently drawn */
     uint8_t nq;
-    uint8_t qx[64], qy[64];            /* dirty world hardware positions */
+    uint8_t qx[RS_QMAX], qy[RS_QMAX];  /* dirty world hardware positions */
 } RenderState;
 #define RS ((RenderState *)0xD400u)
 typedef char rs_fits[(sizeof(RenderState) <= 0x200u) ? 1 : -1];
@@ -80,11 +81,18 @@ static uint8_t edge_kind;              /* 0 none, 1 column, 2 row (two halves) *
 static int16_t edge_pos;
 static uint8_t edge_half;
 static uint8_t n_tiles;                /* staged tiles (16 B each) */
-static uint8_t t_wx1[16], t_wy1[16];   /* world hw position + 1 (so -1 fits in a byte) */
-static uint8_t t_at[16];
-#define T_WX(i) ((int16_t)t_wx1[i] - 1)
-#define T_WY(i) ((int16_t)t_wy1[i] - 1)
-#define T_SLOT(i) slot_of(T_WX(i), T_WY(i))
+/* per staged tile, everything VBlank needs, precomputed in the visible period (WRAM bank7 D480..D4BF):
+ * VBlank only copies. On SameBoy / hardware VRAM writes during mode 3 are dropped, so the commit must be
+ * short and must stop when VBlank ends (12.1). */
+typedef struct {
+    uint8_t id[16], at[16];            /* BG tile id, attribute (bit3 = VRAM bank of the tile) */
+    uint16_t moff[16];                 /* BG map offset ((wy & 31) << 5 | (wx & 31)) */
+} TileMeta;
+__at(0xD480) TileMeta mv_tmeta;           /* absolute (WRAM bank7 when SVBK = 7); no RAM allocated */
+#define TM (&mv_tmeta)
+typedef char tm_fits[(sizeof(TileMeta) <= 0x40u) ? 1 : -1];
+static uint8_t n_done;                 /* staged tiles already committed (a commit may span VBlanks) */
+static uint8_t q_overflow;             /* dirty queue overflowed: a full sweep follows */
 static uint8_t contiguous;             /* staged tiles form one contiguous slot run */
 
 static uint16_t max_cam_x(void) { uint16_t w = (uint16_t)grid_w * 16u; return w > VIEW_W ? w - VIEW_W : 0; }
@@ -240,8 +248,12 @@ static void stage_tile(int16_t wx, int16_t wy)
 {
     uint16_t s = slot_of(wx, wy);
     uint8_t at = compose(wx, wy, STAGE + (uint16_t)n_tiles * 16u, in_range_hl(wx, wy), in_danger(wx, wy));
-    t_wx1[n_tiles] = (uint8_t)(wx + 1); t_wy1[n_tiles] = (uint8_t)(wy + 1);
-    t_at[n_tiles] = (uint8_t)(at | (slot_bank(s) ? 0x08u : 0u));
+    uint8_t id = slot_id(s), o = SVBK_REG;
+    SVBK_REG = WB_SCRATCH;
+    TM->id[n_tiles] = id;
+    TM->at[n_tiles] = (uint8_t)(at | (slot_bank(s) ? 0x08u : 0u));
+    TM->moff[n_tiles] = (uint16_t)(((uint16_t)(wy & 31) << 5) | (uint16_t)(wx & 31));
+    SVBK_REG = o;
     n_tiles++;
 }
 
@@ -255,7 +267,7 @@ void mapview_init(const uint8_t *meta4, const uint8_t *terrain_pal) BANKED
     int16_t x, y;
     uint8_t buf[16], i;
     meta = meta4; tpal = terrain_pal;
-    hl_on = 0; dz_on = 0; hl_row = CACHE_H; hl_half = 0; edge_kind = 0; n_tiles = 0;
+    hl_on = 0; dz_on = 0; hl_row = CACHE_H; hl_half = 0; n_done = 0; q_overflow = 0; edge_kind = 0; n_tiles = 0;
     n_units_seen = 12;
     have_gen = 0;
     if (cam_x > max_cam_x()) cam_x = max_cam_x();
@@ -405,7 +417,8 @@ static void queue_cell(uint8_t x, uint8_t y)
     for (wy = wy0; wy < wy0 + 3; wy++)
         for (wx = wx0; wx < wx0 + 2; wx++) {
             if (wx < tox || wx >= tox + CACHE_W || wy < toy || wy >= toy + CACHE_H) continue;
-            if (RS->nq < 64u) { RS->qx[RS->nq] = (uint8_t)wx; RS->qy[RS->nq] = (uint8_t)(wy & 0xFF); RS->nq++; }
+            if (RS->nq < RS_QMAX) { RS->qx[RS->nq] = (uint8_t)wx; RS->qy[RS->nq] = (uint8_t)(wy & 0xFF); RS->nq++; }
+            else q_overflow = 1;               /* too many at once: recompose the whole cache instead */
         }
 }
 
@@ -434,6 +447,14 @@ void mapview_prepare(void) BANKED
         if (r->vis) queue_cell(r->x, r->y);
         if (vis) queue_cell(snap_x[i], snap_y[i]);
         r->vis = vis; r->x = snap_x[i]; r->y = snap_y[i]; r->pal = cur_pal[i]; r->body = cur_body[i];
+    }
+    if (q_overflow) {                          /* dirty queue overflowed: sweep the whole cache */
+        q_overflow = 0;
+        RS->nq = 0;
+        SVBK_REG = o;
+        hb_x0 = tox; hb_x1 = tox + CACHE_W - 1; hb_y0 = toy; hb_y1 = toy + CACHE_H - 1;
+        hl_row = 0; hl_half = 0;
+        goto attrs;
     }
     /* stage up to 12 dirty positions (2 B queue entries are wx, wy & 0xFF; wy fits since maps <= 64 rows) */
     {
@@ -470,23 +491,149 @@ static void gdma16(uint8_t bank, uint16_t src, uint16_t dst, uint8_t blocks)
     HDMA5_REG = (uint8_t)(blocks - 1u);
 }
 
+/* VBlank tile loop (design doc 12.1), SM83 assembly: the C version cost ~300-400 M-cycles per tile
+ * (a double-speed line is 228), so 16 tiles ran ~6 lines past VBlank and SameBoy/hardware dropped the
+ * writes (mode 3). Per tile: check LY (start only on 144..151), then atomically: [GDMA 16 B of
+ * STAGE + i*16 -> tile id] + attribute byte + id byte into the BG map. Uses the precomputed TileMeta
+ * (WRAM bank7, selected by the caller). Advances n_done; the rest waits for the next VBlank. */
+static void commit_loop(void) __naked
+{
+    __asm
+    ld   a, (_n_done)
+    ld   b, a
+    ld   a, (_n_tiles)
+    ld   c, a
+1$:
+    ld   a, b
+    cp   a, c
+    jp   nc, 9$
+    ldh  a, (_LY_REG + 0)
+    cp   a, #144
+    jp   c, 9$
+    cp   a, #152
+    jp   nc, 9$
+    di
+    ld   hl, #(_mv_tmeta + 16)
+    ld   a, l
+    add  a, b
+    ld   l, a
+    adc  a, h
+    sub  a, l
+    ld   h, a
+    ld   e, (hl)
+    ld   hl, #_mv_tmeta
+    ld   a, l
+    add  a, b
+    ld   l, a
+    adc  a, h
+    sub  a, l
+    ld   h, a
+    ld   d, (hl)
+    ld   a, (_contiguous)
+    or   a, a
+    jr   nz, 2$
+    ld   a, e
+    rrca
+    rrca
+    rrca
+    and  a, #1
+    ldh  (_VBK_REG + 0), a
+    ld   a, #0xC1
+    ldh  (_HDMA1_REG + 0), a
+    ld   a, b
+    swap a
+    ldh  (_HDMA2_REG + 0), a
+    ld   a, d
+    swap a
+    and  a, #0xF0
+    ldh  (_HDMA4_REG + 0), a
+    ld   a, d
+    bit  7, a
+    jr   nz, 3$
+    swap a
+    and  a, #0x0F
+    add  a, #0x10
+    jr   4$
+3$:
+    and  a, #0x7F
+    swap a
+    and  a, #0x0F
+    add  a, #0x08
+4$:
+    ldh  (_HDMA3_REG + 0), a
+    xor  a, a
+    ldh  (_HDMA5_REG + 0), a
+2$:
+    push de
+    ld   hl, #(_mv_tmeta + 32)
+    ld   a, b
+    add  a, a
+    add  a, l
+    ld   l, a
+    adc  a, h
+    sub  a, l
+    ld   h, a
+    ld   a, (hl+)
+    ld   e, a
+    ld   a, (hl)
+    add  a, #0x98
+    ld   h, a
+    ld   l, e
+    pop  de
+    ld   a, #1
+    ldh  (_VBK_REG + 0), a
+    ld   (hl), e
+    xor  a, a
+    ldh  (_VBK_REG + 0), a
+    ld   (hl), d
+    ldh  a, (_STAT_REG + 0)              ; test hook: this tile's last write still in VBlank (mode 1)?
+    and  a, #3
+    cp   a, #1
+    jr   z, 5$
+    ld   hl, #_dbg_vram_late
+    inc  (hl)
+5$:
+    ei
+    inc  b
+    jp   1$
+9$:
+    ld   a, b
+    ld   (_n_done), a
+    ret
+    __endasm;
+}
+
 void mapview_commit(void) BANKED
 {
-    uint8_t i;
-    /* LY gate (design doc 12.1): a late frame commits nothing; staged tiles + SCX stay pending together */
-    if (LY_REG < 144u || LY_REG > 149u) return;
+    uint8_t o;
+    /* LY gate (12.1): start only early in VBlank; each tile re-checks, the rest waits for the next VBlank */
+    if (LY_REG < 144u || LY_REG > 151u) return;
     if (n_tiles) {
-        if (contiguous) { uint16_t s0 = T_SLOT(0); gdma16(slot_bank(s0), (uint16_t)STAGE, id_addr(slot_id(s0)), n_tiles); }
-        else for (i = 0; i < n_tiles; i++) { uint16_t s = T_SLOT(i); gdma16(slot_bank(s), (uint16_t)STAGE + (uint16_t)i * 16u, id_addr(slot_id(s)), 1); }
-        for (i = 0; i < n_tiles; i++) {
-            uint16_t s = T_SLOT(i);
-            VBK_REG = VBK_TILES; write_map_byte(T_WX(i), T_WY(i), slot_id(s));
-            VBK_REG = VBK_ATTRIBUTES; write_map_byte(T_WX(i), T_WY(i), t_at[i]);
+        o = SVBK_REG;
+        SVBK_REG = WB_SCRATCH;
+        if (contiguous && n_done == 0) {       /* one column: a single GDMA for all tile data (~1.2 lines) */
+            uint8_t at0 = TM->at[0], late = 0;
+            uint16_t dst = id_addr(TM->id[0]);
+            CRITICAL {                         /* atomic LY check + start: no ISR in between (12.1) */
+                if (LY_REG > 149u) late = 1;
+                else {
+                    VBK_REG = (uint8_t)((at0 >> 3) & 1u);
+                    HDMA1_REG = 0xC1u; HDMA2_REG = 0x00u;      /* source: STAGE (C100) */
+                    HDMA3_REG = (uint8_t)((dst >> 8) & 0x1Fu); HDMA4_REG = (uint8_t)(dst & 0xF0u);
+                    HDMA5_REG = (uint8_t)(n_tiles - 1u);
+                }
+            }
+            if (late) { SVBK_REG = o; goto regs; }
         }
-        n_tiles = 0;
-        if (edge_kind == 2) { if (edge_half == 0) edge_half = 1; else edge_kind = 0; }
-        else edge_kind = 0;
+        commit_loop();                         /* SM83: ~40 M-cycles per tile, stops when VBlank ends */
+        SVBK_REG = o;
+        if (n_done == n_tiles) {
+            n_tiles = 0; n_done = 0;
+            if (edge_kind == 2) { if (edge_half == 0) edge_half = 1; else edge_kind = 0; }
+            else edge_kind = 0;
+        }
     }
+regs:
     VBK_REG = VBK_TILES;
     if (edge_kind == 0) { SCX_REG = (uint8_t)cam_x; SCY_REG = (uint8_t)cam_y; }
 }

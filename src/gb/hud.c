@@ -175,19 +175,25 @@ void hud_commit(void)
     /* design doc 12.1 LY gate: a 576B GDMA takes ~2.5 lines, the 128B flip < 1 line (VBlank = LY 144..153) */
     if (ly < 144u || ly > 152u) return;
     if ((job == 2 || job == 4) && ly > 150u) return;
-    if (job == 2) { gdma_line(0); job = 3; }
-    else if (job == 4) { gdma_line(1); job = 5; }
-    else if (job == 6) {
-        /* flip: GDMA the prepared 4 rows x 32 window-map ids (128B), atomic and short */
-        VBK_REG = VBK_TILES;
-        HDMA1_REG = (uint8_t)(0xC800u >> 8);
-        HDMA2_REG = 0x00;
-        HDMA3_REG = (uint8_t)((0x9C00u >> 8) & 0x1F);
-        HDMA4_REG = 0x00;
-        HDMA5_REG = (uint8_t)(128u / 16u - 1u);
-        shown = job_page;
-        job = 0;
-        dbg_hud_busy = 0;
+    if (job != 2 && job != 4 && job != 6) return;
+    CRITICAL {                                 /* LY check + GDMA atomic; the GDMA halts the CPU */
+        ly = LY_REG;
+        if (ly < 144u || ly > 152u || ((job == 2 || job == 4) && ly > 150u)) ly = 0;
+        else if (job == 2) { gdma_line(0); job = 3; }
+        else if (job == 4) { gdma_line(1); job = 5; }
+        else {
+            /* flip: GDMA the prepared 4 rows x 32 window-map ids (128B), atomic and short */
+            VBK_REG = VBK_TILES;
+            HDMA1_REG = (uint8_t)(0xC800u >> 8);
+            HDMA2_REG = 0x00;
+            HDMA3_REG = (uint8_t)((0x9C00u >> 8) & 0x1F);
+            HDMA4_REG = 0x00;
+            HDMA5_REG = (uint8_t)(128u / 16u - 1u);
+            shown = job_page;
+            job = 0;
+            dbg_hud_busy = 0;
+        }
+        if (ly && (STAT_REG & 3u) != 1u) dbg_vram_late++;   /* 12.1 test hook: still inside VBlank? */
     }
 }
 
@@ -197,8 +203,8 @@ void hud_init(uint8_t blank_tile)
     blank = blank_tile;
     shown = 1;                       /* first job draws page 0 */
     job = 0;
-    /* window attributes never change: bank1 tiles, palette 0 (edge columns: bank0 blank) */
-    for (c = 0; c < 20; c++) attr[c] = (c == 0 || c == 19) ? 0 : 0x08;
+    /* window attributes never change: bank1 tiles, palette 0 */
+    for (c = 0; c < 20; c++) attr[c] = 0x08;   /* edge columns too: the blank tile lives in bank1 */
     VBK_REG = VBK_ATTRIBUTES;
     for (r = 0; r < 4; r++) set_win_tiles(0, r, 20, 1, attr);
     VBK_REG = VBK_TILES;

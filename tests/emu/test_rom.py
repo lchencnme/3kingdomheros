@@ -381,6 +381,7 @@ e.png(ROM.parent / "shot_far_corner.png")
 e.hold("left", 400); e.hold("up", 300)
 check("camera returns to origin", e.r16("_dbg_cam_x") == 0 and e.r16("_dbg_cam_y") == 0)
 check("BG map matches terrain after round trip", view_mismatches(e) == 0)
+check(f"no VRAM write outside VBlank while scrolling ({e.r8('_dbg_vram_late')})", e.r8("_dbg_vram_late") == 0)
 check("stack canary intact", e.canary_ok())
 e.pb.stop(save=False)
 
@@ -446,7 +447,7 @@ def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
                hp_ok=hp_ok, canary=em.canary_ok(), stack_free=em.stack_free(), state=em.state(),
                fs_count=em.r8("_dbg_fs_count"), fs_ly_max=em.r8("_dbg_fs_ly_max"),
                fs_chunk_max=em.r16("_dbg_fs_bytes_max"), fs_skipped=em.r8("_dbg_fs_skipped"),
-               bg_ok=view_mismatches(em) == 0, vm_err=em.r8("_dbg_vm_err"),
+               bg_ok=view_mismatches(em) == 0, vm_err=em.r8("_dbg_vm_err"), vram_late=em.r8("_dbg_vram_late"),
                alive=[bool(em.m[1, 0xD000 + 40 * i + 34] & 0x18) for i in range(N_UNITS)])
     if shots:
         em.frames(10)
@@ -494,6 +495,7 @@ check(f"fullscreen presentations ran ({r1['fs_count']})", r1["fs_count"] >= 3)
 check(f"all fullscreen GDMA end inside VBlank (max LY {r1['fs_ly_max']} <= 152)", 144 <= r1["fs_ly_max"] <= 152)
 check(f"fullscreen upload chunk <= 1024 B ({r1['fs_chunk_max']})", 0 < r1["fs_chunk_max"] <= 1024)
 check("map consistent after the last presentation", r1["bg_ok"])
+check(f"no VRAM write outside VBlank in a full battle ({r1['vram_late']}, {r2['vram_late']})", r1["vram_late"] == 0 and r2["vram_late"] == 0)
 r3 = play_battle(skip_presentations=True)
 check(f"B skipped presentations ({r3['fs_skipped']})", r3["fs_skipped"] >= 1)
 check("skipping presentations does not change logic (outcome/round/RNG/draws/hp)",

@@ -73,6 +73,7 @@ static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 extern uint16_t gold;                          /* vm_gb.c (GIVE_GOLD) */
 extern uint8_t cur_bt;                         /* vm_gb.c: current battle (battle_defs index) */
 #define BD (&battle_defs[cur_bt])
+void unit_base_cache_clear(void);
 static void publish_debug(void);
 static uint16_t carry_round;                   /* 2.4 round_mode CARRY */
 uint8_t camp_save_ok;
@@ -80,6 +81,9 @@ static uint8_t audio_ready;                    /* music_play only after audio_in
 static CampDeploy deploy;                      /* officer order chosen in the camp (2.3); n = 0: default */
 static AiMode ai_mode;                         /* static: enemy_step sits above the deepest call chain */
 static const uint8_t blank16[16];
+/* HUD blank tile: VRAM bank1 id 120 (bank1 72..119 / 200..247 are map slots, 0..71 / 128..199 the HUD
+ * pages). It used to be bank0 id 40, which the BG compositor reuses as map slot 40. */
+#define HUD_BLANK 120u
 
 /* debug/test hooks (read by tests/emu/test_rom.py through the .noi symbol file) */
 
@@ -417,8 +421,8 @@ static void map_mode_restore(void)
     set_bkg_palette(0, 8, tech01_bg_pals);
     VBK_REG = VBK_TILES;
     rom_set_bkg_data(TECH01_BANK, 0, TECH01_BG_TILES, tech01_bg_tiles);
-    set_bkg_data(TECH01_BG_TILES, 1, blank16);
-    hud_init(TECH01_BG_TILES);
+    VBK_REG = 1; set_bkg_data(HUD_BLANK, 1, blank16); VBK_REG = VBK_TILES;
+    hud_init(HUD_BLANK);
     mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
     SHOW_WIN; SHOW_SPRITES;
     DISPLAY_ON;
@@ -615,7 +619,7 @@ static void start_battle(void)
 }
 
 /* a new campaign (2.1): starting roster with its items, battle 1 */
-void unit_base_cache_clear(void);
+
 static void new_game(void)
 {
     uint8_t k, s;
@@ -1376,14 +1380,14 @@ void game_run(void) BANKED
     set_sprite_palette(0, 4, tech01_obj_pals);
     VBK_REG = VBK_TILES;
     rom_set_bkg_data(TECH01_BANK, 0, TECH01_BG_TILES, tech01_bg_tiles);
-    set_bkg_data(TECH01_BG_TILES, 1, blank16);
+    VBK_REG = 1; set_bkg_data(HUD_BLANK, 1, blank16); VBK_REG = VBK_TILES;
     rom_set_sprite_data(TECH01_BANK, 0, TECH01_OBJ_TILES, tech01_obj_tiles);
     for (i = 0; i < 20; i++) {
-        set_win_tile_xy(i, 0, TECH01_BG_TILES); set_win_tile_xy(i, 1, TECH01_BG_TILES);
-        set_win_tile_xy(i, 2, TECH01_BG_TILES); set_win_tile_xy(i, 3, TECH01_BG_TILES);
+        set_win_tile_xy(i, 0, HUD_BLANK); set_win_tile_xy(i, 1, HUD_BLANK);
+        set_win_tile_xy(i, 2, HUD_BLANK); set_win_tile_xy(i, 3, HUD_BLANK);
     }
     WY_REG = 112; WX_REG = 7;
-    hud_init(TECH01_BG_TILES);
+    hud_init(HUD_BLANK);
 
     {
         uint8_t copy;

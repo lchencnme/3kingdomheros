@@ -36,6 +36,8 @@ extern volatile uint8_t dbg_n_units;
 extern volatile uint8_t dbg_strat_casts;
 extern volatile uint8_t dbg_menu_item;
 extern volatile uint32_t dbg_crc_check;
+extern volatile uint8_t dbg_vram_late;
+extern volatile uint8_t dbg_commit_ly_max;
 extern volatile uint16_t dbg_gold;
 extern volatile uint8_t dbg_item_uses;
 extern volatile uint8_t dbg_ai_strats;
