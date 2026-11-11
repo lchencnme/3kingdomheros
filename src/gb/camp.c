@@ -1,0 +1,363 @@
+#pragma bank 10   /* same bank as vblank.c: vb_wait/vb_gdma_wait are plain calls (design doc 11.3) */
+/* Camp node (design doc 2.2, 2.3, 7.1, 7.3): its own full screen (paper + text lines), blocking like the
+ * dialogue mode. Commands: 军议 (council, required before departing) / 装备 / 交换 / 商店 (buy + sell) /
+ * 出阵 (deployment: choose officers and their order; forced officers stay in).
+ *
+ * Screen: 9 text lines of 16 px (rows 2k, 2k+1; columns 1..18), 36 tiles each: lines 0-2 bank1 ids 0..107,
+ * lines 3-5 bank1 ids 128..235, lines 6-8 bank0 ids 1..108. Palette 7 = paper/ink. Window and sprites off. */
+#include <gb/gb.h>
+#include <gb/cgb.h>
+#include <string.h>
+#include "camp.h"
+#include "hud.h"
+#include "dialog.h"
+#include "dialogq.h"
+#include "vblank.h"
+#include "audio.h"
+#include "input.h"
+#include "debug.h"
+#include "../core/item.h"
+#include "../gen/text_data.h"
+#include "../gen/fs_data.h"
+#include "../gen/tech01_data.h"
+
+#define PAL_TEXT 7u
+#define N_LINES 9u
+#define N_OFF 4u
+
+enum { SC_MAIN, SC_EQUIP, SC_EXCH, SC_SHOP, SC_DEPLOY };
+
+static const uint8_t officer[N_OFF] = {0, 1, 2, 7};     /* TECH01 player instances: 刘备 关羽 张飞 简雍 */
+static const uint8_t officer_tx[N_OFF] = {TX_NAME_LIUBEI, TX_NAME_GUANYU, TX_NAME_ZHANGFEI, TX_NAME_JIANYONG};
+static const uint8_t cmd_tx[5] = {TX_CMD_COUNCIL, TX_CMD_EQUIP, TX_CMD_EXCH, TX_CMD_SHOP, TX_CMD_DEPART};
+
+/* all camp state in one block (the C globals area is nearly full: this lives on the stack of camp_run) */
+typedef struct {
+    uint16_t *gold;
+    CampDeploy *dep;
+    uint8_t screen, cur, off, slot, pick, pick_off, pick_slot, sell, top, msg, main_cur, council;
+} Camp;
+
+static Camp *C;                                         /* 2 B global: points into camp_run's frame */
+
+/* no line may straddle tile ids 127/128: in LCDC.4 = 0 addressing they are not adjacent in VRAM
+ * (0x97F0 vs 0x8800) and one 576 B GDMA would run on into the BG map at 0x9800 */
+static uint8_t line_bank(uint8_t k) { return k < 6u ? 1u : 0u; }
+static uint8_t line_id(uint8_t k)
+{
+    if (k < 3u) return (uint8_t)(k * 36u);                 /* bank1   0..107 */
+    if (k < 6u) return (uint8_t)(128u + (k - 3u) * 36u);   /* bank1 128..235 */
+    return (uint8_t)(1u + (k - 6u) * 36u);                 /* bank0   1..108 */
+}
+
+static void upload(uint8_t k, uint8_t lcd_off)
+{
+    uint8_t bank = line_bank(k);
+    if (lcd_off) { VBK_REG = bank; set_bkg_data(line_id(k), 36, (uint8_t *)0xC800u); VBK_REG = 0; }
+    else vb_gdma_wait(bank, 0xC800u, vb_slot_addr(line_id(k)), 576);
+}
+
+static void arrow(uint8_t on) { if (on) hud_tx(0, TX_ARROW, 0); else { hud_space(0); hud_space(0); } }
+
+static void item_label(uint8_t unit, uint8_t s)
+{
+    uint8_t it = inv_get(unit, s);
+    if (it == ITEM_NONE) { hud_tx(0, TX_EMPTY, 0); return; }
+    hud_tx(0, item_name_tx[it], 0);
+    if (inv_slot_equipped(unit, s)) { hud_space(0); hud_tx(0, TX_EQ_MARK, 0); }
+}
+
+/* index in the deployment order, or 0xFF */
+static uint8_t dep_index(uint8_t o)
+{
+    uint8_t k;
+    for (k = 0; k < C->dep->n; k++) if (C->dep->order[k] == o) return k;
+    return 0xFF;
+}
+
+static void compose(uint8_t k)
+{
+    uint8_t u = officer[C->off];
+    hud_begin();
+    switch (C->screen) {
+    case SC_MAIN:
+        if (k == 0) { hud_tx(0, TX_CAMP_TITLE, 0); hud_space(0); hud_space(0); hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold); }
+        else if (k >= 1 && k <= 5) {
+            arrow(C->cur == k - 1u); hud_tx(0, cmd_tx[k - 1u], 0);
+            if (k == 1 && C->council) { hud_space(0); hud_tx(0, TX_DONE, 0); }
+        } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_CAMP_HINT, 0);
+        break;
+    case SC_EQUIP:
+    case SC_EXCH:
+        if (k == 0) {
+            ActiveUnit a;
+            unit_load(u, &a);
+            hud_tx(0, C->screen == SC_EQUIP ? TX_CMD_EQUIP : TX_CMD_EXCH, 0); hud_space(0);
+            hud_tx(0, officer_tx[C->off], 0); hud_space(0);
+            if (C->screen == SC_EQUIP || C->pick == 0xFF) {
+                hud_tx(0, TX_ATK, 0); hud_num(0, a.atk); hud_space(0);
+                hud_tx(0, TX_MAG, 0); hud_num(0, a.mag); hud_space(0);
+                hud_tx(0, TX_MOVE, 0); hud_num(0, a.move);
+            } else { hud_tx(0, TX_PICKED, 0); hud_tx(0, item_name_tx[inv_get(officer[C->pick_off], C->pick_slot)], 0); }
+        } else if (k >= 1 && k <= 8) {
+            uint8_t s = (uint8_t)(k - 1u);
+            arrow(C->slot == s);
+            item_label(u, s);
+        }
+        break;
+    case SC_SHOP:
+        if (k == 0) {
+            hud_tx(0, TX_CMD_SHOP, 0); hud_space(0); hud_tx(0, C->sell ? TX_SELL : TX_BUY, 0); hud_space(0);
+            hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold);
+        } else if (!C->sell && k >= 1 && k <= 6) {
+            uint8_t i = (uint8_t)(C->top + k - 1u);
+            if (i < TECH01_SHOP_N) {
+                uint8_t it = tech01_shop[i];
+                arrow(C->cur == i); hud_tx(0, item_name_tx[it], 0); hud_space(0); hud_num(0, item_defs[it].price);
+            }
+        } else if (C->sell && k >= 1 && k <= 6) {
+            uint8_t s = (uint8_t)(C->top + k - 1u);
+            if (s < INV_SLOTS) {
+                uint8_t it = inv_get(u, s);
+                arrow(C->slot == s); item_label(u, s);
+                if (it != ITEM_NONE && item_sell_price(it)) { hud_space(0); hud_num(0, item_sell_price(it)); }
+            }
+        } else if (k == 7) {
+            hud_tx(0, C->sell ? TX_FROM : TX_GIVE, 0); hud_tx(0, officer_tx[C->off], 0); hud_space(0);
+            hud_num(0, inv_count(u)); hud_glyph(0, GLYPH_SLASH); hud_num(0, INV_SLOTS);
+        } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_SHOP_HINT2, 0);
+        break;
+    case SC_DEPLOY:
+        if (k == 0) { hud_tx(0, TX_CMD_DEPART, 0); hud_space(0); hud_num(0, C->dep->n); hud_glyph(0, GLYPH_SLASH); hud_num(0, TECH01_DEPLOY_MAX); }
+        else if (k >= 1 && k <= N_OFF) {
+            uint8_t o = (uint8_t)(k - 1u), d = dep_index(o);
+            arrow(C->cur == o); hud_tx(0, officer_tx[o], 0); hud_space(0);
+            if (d != 0xFF) { hud_tx(0, TX_DEP_MARK, 0); hud_num(0, (uint16_t)(d + 1u)); }
+            if (tech01_deploy_forced & (1u << o)) { hud_space(0); hud_tx(0, TX_FORCED, 0); }
+        } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_DEPLOY_HINT, 0);
+        break;
+    }
+    hud_raster(0);
+}
+
+static void draw(uint8_t k) { compose(k); upload(k, 0); }
+
+static void draw_all(uint8_t lcd_off)
+{
+    uint8_t k;
+    for (k = 0; k < N_LINES; k++) { compose(k); upload(k, lcd_off); }
+}
+
+static void screen_init(void)
+{
+    uint8_t r, c, ids[20], at[20];
+    uint16_t pal[4];
+    if (LCDC_REG & LCDCF_ON) { vb_wait(); DISPLAY_OFF; }   /* after the council the LCD is already off:
+                                                             LY stays 0 and vb_wait would never return */
+    HIDE_SPRITES; HIDE_WIN;
+    SCX_REG = 0; SCY_REG = 0;
+    LCDC_REG &= (uint8_t)~LCDCF_BG9C00;
+    memset(ids, 0, 16);
+    VBK_REG = 0; set_bkg_data(0, 1, ids);
+    for (r = 0; r < 18; r++) {
+        uint8_t k = (uint8_t)(r >> 1);
+        for (c = 0; c < 20; c++) {
+            if (c == 0 || c == 19) { ids[c] = 0; at[c] = PAL_TEXT; continue; }
+            ids[c] = (uint8_t)(line_id(k) + (r & 1u) * 18u + (c - 1u));
+            at[c] = (uint8_t)(PAL_TEXT | (line_bank(k) ? 0x08u : 0u));
+        }
+        VBK_REG = 1; set_bkg_tiles(0, r, 20, 1, at);
+        VBK_REG = 0; set_bkg_tiles(0, r, 20, 1, ids);
+    }
+    pal[0] = fs_pals[0]; pal[1] = fs_pals[1]; pal[2] = fs_pals[2]; pal[3] = fs_pals[3];
+    set_bkg_palette(PAL_TEXT, 1, pal);
+    draw_all(1);
+    DISPLAY_ON;
+}
+
+static void publish(void)
+{
+    uint8_t s;
+    dbg_state = (uint8_t)(CAMP_DBG_STATE + C->screen);
+    dbg_menu_item = C->screen == SC_MAIN || C->screen == SC_DEPLOY || (C->screen == SC_SHOP && !C->sell) ? C->cur : C->slot;
+    dbg_sel = C->off;
+    dbg_gold = *C->gold;
+    for (s = 0; s < INV_SLOTS; s++) dbg_inv[s] = inv_get(0, s);
+    dbg_frame_lo++;
+}
+
+static void say(uint8_t tx) { C->msg = tx; draw(8); }
+
+static void enter(uint8_t sc)
+{
+    if (C->screen == SC_MAIN) C->main_cur = C->cur;     /* back in the menu on the command just used */
+    C->screen = sc; C->cur = sc == SC_MAIN ? C->main_cur : 0; C->slot = 0; C->top = 0; C->msg = 0; C->pick = 0xFF; C->sell = 0;
+    draw_all(0);
+}
+
+static void council(void)
+{
+    uint8_t i;
+    for (i = 0; i < TECH01_COUNCIL_N && i < DQ_MAX; i++) { DQ->speaker[i] = tech01_council[i][0]; DQ->text[i] = tech01_council[i][1]; }
+    DQ->n = i;
+    dialog_run_from(0);
+    DQ->n = 0;
+    C->council = 1;
+    screen_init();
+}
+
+static void shop_scroll(uint8_t sel, uint8_t n)
+{
+    (void)n;
+    if (sel < C->top) C->top = sel;
+    else if (sel >= C->top + 6u) C->top = (uint8_t)(sel - 5u);
+}
+
+/* returns 1 when the player departs */
+static uint8_t step(uint8_t pressed)
+{
+    uint8_t up = pressed & J_UP, down = pressed & J_DOWN, left = pressed & J_LEFT, right = pressed & J_RIGHT;
+    uint8_t u = officer[C->off];
+    switch (C->screen) {
+    case SC_MAIN:
+        if (up || down) {
+            uint8_t old = C->cur;
+            C->cur = (uint8_t)(up ? (C->cur + 4u) % 5u : (C->cur + 1u) % 5u);
+            draw((uint8_t)(old + 1u)); draw((uint8_t)(C->cur + 1u));
+            if (C->msg) { C->msg = 0; draw(8); }
+            sfx_play(SFX_CURSOR);
+        } else if (pressed & J_A) {
+            sfx_play(SFX_CONFIRM);
+            if (C->cur == 0) council();
+            else if (C->cur == 1) enter(SC_EQUIP);
+            else if (C->cur == 2) enter(SC_EXCH);
+            else if (C->cur == 3) enter(SC_SHOP);
+            else if (!C->council && TECH01_COUNCIL_N) { sfx_play(SFX_ERROR); say(TX_COUNCIL_FIRST); }
+            else enter(SC_DEPLOY);
+        }
+        break;
+    case SC_EQUIP:
+    case SC_EXCH:
+        if (up || down) {
+            uint8_t old = C->slot;
+            C->slot = (uint8_t)(up ? (C->slot + 7u) & 7u : (C->slot + 1u) & 7u);
+            draw((uint8_t)(old + 1u)); draw((uint8_t)(C->slot + 1u));
+        } else if (left || right) {
+            C->off = (uint8_t)(left ? (C->off + N_OFF - 1u) % N_OFF : (C->off + 1u) % N_OFF);
+            draw_all(0);
+        } else if (pressed & J_B) {
+            if (C->screen == SC_EXCH && C->pick != 0xFF) { C->pick = 0xFF; draw(0); }
+            else enter(SC_MAIN);
+        } else if ((pressed & J_A) && C->screen == SC_EQUIP) {
+            uint8_t it = inv_get(u, C->slot), cat = item_category(it);
+            if (it == ITEM_NONE || cat == EQ_NONE) sfx_play(SFX_ERROR);
+            else if (inv_slot_equipped(u, C->slot)) { item_unequip(u, cat); sfx_play(SFX_CONFIRM); }
+            else if (item_equip(u, C->slot) == IR_OK) sfx_play(SFX_CONFIRM);
+            else sfx_play(SFX_ERROR);
+            draw(0); draw((uint8_t)(C->slot + 1u));
+            { uint8_t s; for (s = 0; s < INV_SLOTS; s++) if (s != C->slot) draw((uint8_t)(s + 1u)); }   /* replaced marks */
+        } else if (pressed & J_A) {                       /* 交换: first pick, then the other end */
+            if (C->pick == 0xFF) {
+                if (inv_get(u, C->slot) == ITEM_NONE) { sfx_play(SFX_ERROR); break; }
+                C->pick = 1; C->pick_off = C->off; C->pick_slot = C->slot;
+                sfx_play(SFX_CONFIRM); draw(0);
+            } else {
+                if (item_exchange_camp(officer[C->pick_off], C->pick_slot, u, C->slot) == IR_OK) sfx_play(SFX_CONFIRM);
+                else sfx_play(SFX_ERROR);
+                C->pick = 0xFF;
+                draw_all(0);
+            }
+        }
+        break;
+    case SC_SHOP:
+        if (pressed & J_SELECT) { C->sell ^= 1u; C->cur = 0; C->slot = 0; C->top = 0; C->msg = 0; draw_all(0); }
+        else if (left || right) {
+            C->off = (uint8_t)(left ? (C->off + N_OFF - 1u) % N_OFF : (C->off + 1u) % N_OFF);
+            C->msg = 0; draw_all(0);
+        } else if (up || down) {
+            uint8_t top0 = C->top, old = C->sell ? C->slot : C->cur, now;
+            if (C->sell) { C->slot = (uint8_t)(up ? (C->slot + 7u) & 7u : (C->slot + 1u) & 7u); shop_scroll(C->slot, INV_SLOTS); now = C->slot; }
+            else { C->cur = (uint8_t)(up ? (C->cur + TECH01_SHOP_N - 1u) % TECH01_SHOP_N : (C->cur + 1u) % TECH01_SHOP_N); shop_scroll(C->cur, TECH01_SHOP_N); now = C->cur; }
+            if (C->top != top0) { uint8_t k; for (k = 1; k <= 6; k++) draw(k); }   /* scrolled */
+            else { draw((uint8_t)(old - C->top + 1u)); draw((uint8_t)(now - C->top + 1u)); }
+            if (C->msg) { C->msg = 0; draw(8); }
+        } else if (pressed & J_B) enter(SC_MAIN);
+        else if ((pressed & J_A) && !C->sell) {           /* 7.3: check gold and a free slot, then pay and give */
+            uint8_t it = tech01_shop[C->cur];
+            uint16_t price = item_defs[it].price;
+            if (*C->gold < price) { sfx_play(SFX_ERROR); say(TX_NO_GOLD); }
+            else if (inv_count(u) >= INV_SLOTS) { sfx_play(SFX_ERROR); say(TX_BAG_FULL); }
+            else { *C->gold = (uint16_t)(*C->gold - price); inv_add(u, it); sfx_play(SFX_CONFIRM); C->msg = TX_BOUGHT; draw(0); draw(7); draw(8); }
+        } else if (pressed & J_A) {
+            uint8_t it = inv_get(u, C->slot), eq = inv_slot_equipped(u, C->slot);
+            uint16_t p = item_sell_price(it);
+            if (it == ITEM_NONE || !p) { sfx_play(SFX_ERROR); say(TX_CANT_SELL); }
+            else {
+                inv_set(u, C->slot, ITEM_NONE);              /* drops the equip mark too */
+                if (eq) item_rederive(u);
+                *C->gold = (uint16_t)(*C->gold + p);
+                sfx_play(SFX_CONFIRM); C->msg = TX_SOLD; draw_all(0);
+            }
+        }
+        break;
+    case SC_DEPLOY:
+        if (up || down) {
+            uint8_t old = C->cur;
+            C->cur = (uint8_t)(up ? (C->cur + N_OFF - 1u) % N_OFF : (C->cur + 1u) % N_OFF);
+            draw((uint8_t)(old + 1u)); draw((uint8_t)(C->cur + 1u));
+        } else if (pressed & J_A) {
+            uint8_t d = dep_index(C->cur), k;
+            if (d != 0xFF) {
+                if (tech01_deploy_forced & (1u << C->cur)) { sfx_play(SFX_ERROR); say(TX_FORCED_MSG); break; }
+                for (k = d; k + 1u < C->dep->n; k++) C->dep->order[k] = C->dep->order[k + 1u];
+                C->dep->n--;
+            } else {
+                if (C->dep->n >= TECH01_DEPLOY_MAX) { sfx_play(SFX_ERROR); break; }
+                C->dep->order[C->dep->n++] = C->cur;
+            }
+            sfx_play(SFX_CONFIRM); C->msg = 0;
+            draw_all(0);
+        } else if (pressed & J_SELECT) {                  /* 调换位置: move the officer one slot earlier */
+            uint8_t d = dep_index(C->cur), tmp;
+            if (d == 0xFF || d == 0) { sfx_play(SFX_ERROR); break; }
+            tmp = C->dep->order[d - 1u]; C->dep->order[d - 1u] = C->dep->order[d]; C->dep->order[d] = tmp;
+            sfx_play(SFX_CONFIRM); draw_all(0);
+        } else if (pressed & J_B) enter(SC_MAIN);
+        else if (pressed & J_START) {
+            if (!C->dep->n) { sfx_play(SFX_ERROR); break; }
+            sfx_play(SFX_CONFIRM);
+            return 1;
+        }
+        break;
+    }
+    return 0;
+}
+
+void camp_run(uint16_t *gold, CampDeploy *dep) BANKED
+{
+    Camp camp;
+    memset(&camp, 0, sizeof camp);
+    camp.gold = gold; camp.dep = dep; camp.pick = 0xFF;
+    C = &camp;
+    if (!dep->n) {                                      /* first visit: everyone, in roster order */
+        uint8_t k;
+        for (k = 0; k < N_OFF && k < TECH01_DEPLOY_MAX; k++) dep->order[k] = k;
+        dep->n = k;
+    }
+    screen_init();
+    input_flush();
+    for (;;) {
+        uint8_t pressed;
+        vb_wait();
+        input_update();                    /* VBlank-ISR latched edges: no press is lost while drawing */
+        pressed = in_pressed;
+        if (in_dy < 0) pressed |= J_UP; else if (in_dy > 0) pressed |= J_DOWN;
+        if (in_dx < 0) pressed |= J_LEFT; else if (in_dx > 0) pressed |= J_RIGHT;
+        if (pressed && step(pressed)) break;
+        publish();
+    }
+    input_flush();
+    vb_wait();
+    DISPLAY_OFF;                                        /* the caller rebuilds map mode (12.5) */
+    C = 0;
+}

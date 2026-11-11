@@ -208,8 +208,19 @@ def view_mismatches(em, highlight=False):
         pal = 5 if fac == 2 else (7 if fl & 2 else 4)
         fam = _FAM[cls]
         body = 1 if fam == "bow" else (2 if fam == "cavalry" else 0)
-        units.append((em.m[1, a + 8], i, em.m[1, a + 7], pal, body))
+        units.append((em.m[1, a + 8], i, em.m[1, a + 7], pal, body, fac, fl & 2))
     units.sort()
+    def s8(v):
+        return v - 256 if v > 127 else v
+    if highlight:                                # move range (MoveRange in WRAM bank7 D600: bx, by, .., dist)
+        mbx, mby = s8(em.m[7, 0xD600]), s8(em.m[7, 0xD601])
+        mdist = [em.m[7, 0xD607 + k] for k in range(361)]
+    def in_range(cx_, cy_):
+        lx_, ly_ = cx_ - mbx, cy_ - mby
+        return 0 <= lx_ < 19 and 0 <= ly_ < 19 and mdist[ly_ * 19 + lx_] != 255
+    def put_ink(d, row, bits):
+        d[2 * row] |= bits
+        d[2 * row + 1] |= bits
     bad = 0
     for j in range(15):
         for i in range(21):
@@ -222,8 +233,14 @@ def view_mismatches(em, highlight=False):
                 tt = _TERR[(wy >> 1) * _W + (wx >> 1)]
                 tid = _META[tt][((wy & 1) << 1) | (wx & 1)]
                 data, pal = list(_BGT[tid * 16:tid * 16 + 16]), _TPAL[tt]
+                q = ((wy & 1) << 1) | (wx & 1)
+                if highlight and in_range(wx >> 1, wy >> 1):      # corner ticks + range palette 6
+                    pal = 6
+                    put_ink(data, (0, 0, 7, 7)[q], (0xE0, 0x07, 0xE0, 0x07)[q])
+                    put_ink(data, (1, 1, 6, 6)[q], (0x80, 0x01, 0x80, 0x01)[q])
+                    put_ink(data, (2, 2, 5, 5)[q], (0x80, 0x01, 0x80, 0x01)[q])
             under = False
-            for (uy, ui, ux, upal, body) in units:
+            for (uy, ui, ux, upal, body, ufac, uacted) in units:
                 lx, ly = wx - ux * 2, wy - (uy * 2 - 1)
                 if not (0 <= lx <= 1 and 0 <= ly <= 2):
                     continue
@@ -238,14 +255,19 @@ def view_mismatches(em, highlight=False):
                     m = ut[16 + y]
                     data[2 * y] = (data[2 * y] & ~m & 0xFF) | ut[2 * y]
                     data[2 * y + 1] = (data[2 * y + 1] & ~m & 0xFF) | ut[2 * y + 1]
+                if ly == 2:                                   # foot mark: hollow / solid (acted)
+                    line, end = (0xF8, 0x08) if lx else (0x1F, 0x10)
+                    put_ink(data, 5, line); put_ink(data, 7, line); put_ink(data, 6, line if uacted else end)
+                elif ly == 0 and lx == 0:                     # side mark: square / circle / triangle
+                    rows = {2: (0x80, 0xC0, 0xE0), 1: (0x40, 0xE0, 0x40)}.get(ufac, (0xE0, 0xE0, 0xE0))
+                    for r_, b_ in enumerate(rows):
+                        put_ink(data, r_, b_)
                 pal = upal
             bank, tid, addr = _slot_vram(_slot(wx, wy))
             pos = 0x9800 + ((wy & 31) << 5) + (wx & 31)
             got_id, got_at = em.m[0, pos], em.m[1, pos]
             got = [em.m[bank, addr + k] for k in range(16)]
-            ok = got_id == tid and (got_at & 0x08) == (0x08 if bank else 0) and got == data
-            if not highlight:
-                ok = ok and (got_at & 7) == pal
+            ok = got_id == tid and (got_at & 0x08) == (0x08 if bank else 0) and got == data and (got_at & 7) == pal
             if not ok:
                 bad += 1
     return bad
@@ -270,6 +292,9 @@ e.wait_state([G_MOVE], 30)
 rng_frames = e.r16("_dbg_t_range")
 check(f"move range <=150ms (刘备: {rng_frames} frames)", rng_frames <= 9)
 check("A on own unit -> move preview", e.state() == G_MOVE)
+e.frames(40)                                             # the range sweep recomposes the area
+check("move range drawn as corner ticks + range palette", view_mismatches(e, highlight=True) == 0)
+e.png(ROM.parent / "shot_range.png")
 e.press("right"); e.press("right")
 check("cursor moved to (6,12)", e.cur() == (6, 12))
 e.press("a")
@@ -379,9 +404,21 @@ def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
         em.frames(10)
         em.png(ROM.parent / "shot_outcome.png")
     em.press("a")            # restart from the outcome screen (a win goes through the camp: 出阵)
-    em.wait_state([G_IDLE, G_CAMP], 200)
-    if em.state() == G_CAMP:
-        em.press("right"); em.press("a")
+    for _ in range(200):                     # a win opens the camp screen (state 20): 军议, then 出阵
+        if em.state() in (G_IDLE, 20):
+            break
+        em.frames(1)
+    if em.state() == 20:
+        p0 = em.r8("_dbg_dialog_pages")
+        em.press("a")
+        for _ in range(900):
+            if em.r8("_dbg_dialog_active") == 0 and em.r8("_dbg_dialog_pages") != p0:
+                break
+            em.frames(1)
+        em.frames(20)
+        for _ in range(4):
+            em.press("down")
+        em.press("a"); em.frames(10); em.press("start")
     em.wait_state([G_IDLE], 200)
     res["restart_ok"] = em.state() == G_IDLE and em.r16("_dbg_round") == 1 and em.unit(0) == (4, 12)
     em.pb.stop(save=False)
@@ -652,21 +689,92 @@ it.press("a")
 it.wait_state([G_OUTCOME], 400)
 check(f"祈雨符 -> rain, last enemies gone -> win, +500 gold ({it.r16('_dbg_gold')})",
       it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1 and it.r16("_dbg_gold") == 500)
-it.press("a"); it.wait_state([G_CAMP], 60)
-check("win -> camp", it.state() == G_CAMP)
-it.press("a"); it.wait_state([G_SHOP], 30)
-check("camp -> shop", it.state() == G_SHOP)
-it.press("a"); it.frames(10)                             # buy 干粮 (50)
+def camp_wait(em, st, n=120):
+    for _ in range(n):
+        if em.state() == st:
+            return True
+        em.frames(1)
+    return em.state() == st
+
+def camp_cur(em):
+    return em.r8("_dbg_menu_item")
+
+def u_atk(em, i):
+    a = 0xD000 + 40 * i
+    return em.m[1, a + 18] | (em.m[1, a + 19] << 8)
+
+C_MAIN, C_EQUIP, C_EXCH, C_SHOP, C_DEPLOY = 20, 21, 22, 23, 24
+it.press("a", after=16)
+check("win -> camp screen", camp_wait(it, C_MAIN))
+it.frames(10); it.png(ROM.parent / "shot_camp.png")
+for _ in range(4):
+    it.press("down", after=16)
+it.press("a", after=16); it.frames(4)
+check("出阵 before 军议 is refused", it.state() == C_MAIN and camp_cur(it) == 4)
+for _ in range(4):
+    it.press("up", after=16)
+pages0 = it.r8("_dbg_dialog_pages")
+it.press("a", after=16)
+for _ in range(900):                                     # the council runs in dialogue mode (A auto-pressed)
+    if it.r8("_dbg_dialog_active") == 0 and it.r8("_dbg_dialog_pages") != pages0:
+        break
+    it.frames(1)
+it.frames(20)
+check(f"军议 plays the council dialogue ({it.r8('_dbg_dialog_pages') - pages0} pages)",
+      it.state() == C_MAIN and it.r8("_dbg_dialog_pages") - pages0 >= 4)
+# shop: 铁脊矛 (500) for 刘备
+it.press("down", after=16); it.press("down", after=16); it.press("down", after=16); it.press("a", after=16)
+check("商店 opens", camp_wait(it, C_SHOP))
+for _ in range(3):
+    it.press("up", after=16)                                     # 0 -> 驿马 -> 六韬 -> 铁脊矛
+check(f"cursor on 铁脊矛 ({camp_cur(it)})", camp_cur(it) == 15)
+it.press("a", after=16); it.frames(4)
 inv2 = [it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
-check(f"shop: gold 500 -> {it.r16('_dbg_gold')}, 干粮 to 刘备 ({inv2[:3]})", it.r16("_dbg_gold") == 450 and 0 in inv2)
-for _ in range(12):                                      # 9 more purchases: gold runs out before the bag does
-    it.press("a"); it.frames(4)
-check(f"shop never overspends (gold {it.r16('_dbg_gold')})", it.r16("_dbg_gold") == 0 or it.r16("_dbg_gold") < 50)
-it.press("b"); it.wait_state([G_CAMP], 30)
-it.press("right"); it.press("a"); it.wait_state([G_IDLE], 300)
+check(f"buy: gold 500 -> {it.r16('_dbg_gold')}, 铁脊矛 to 刘备 ({inv2[:3]})", it.r16("_dbg_gold") == 0 and 0x47 in inv2)
+it.press("up", after=16); it.press("a", after=16); it.frames(4)
+check("no gold -> nothing bought", it.r16("_dbg_gold") == 0 and [it.m[SYMS["_dbg_inv"] + k] for k in range(8)] == inv2)
+it.press("select", after=16)
+for _ in range(inv2.index(7)):
+    it.press("down", after=16)
+it.press("a", after=16); it.frames(4)
+check(f"sell 金疮药 for 50 ({it.r16('_dbg_gold')})", it.r16("_dbg_gold") == 50 and 7 not in [it.m[SYMS["_dbg_inv"] + k] for k in range(8)])
+it.press("b", after=16); camp_wait(it, C_MAIN)
+# equip 铁脊矛 on 刘备
+atk0 = u_atk(it, 0)
+it.press("up", after=16); it.press("up", after=16); it.press("a", after=16)
+check("装备 opens", camp_wait(it, C_EQUIP))
+for _ in range(inv2.index(0x47)):
+    it.press("down", after=16)
+it.press("a", after=16); it.frames(6)
+check(f"equip 铁脊矛: ATK {atk0} -> {u_atk(it, 0)}", u_atk(it, 0) == atk0 + 6)
+it.press("b", after=16); camp_wait(it, C_MAIN)
+# camp exchange: hand the equipped spear to 关羽 (any distance; unequips)
+it.press("down", after=16); it.press("a", after=16)
+check("交换 opens", camp_wait(it, C_EXCH))
+for _ in range(inv2.index(0x47)):
+    it.press("down", after=16)
+it.press("a", after=16)                                           # pick 刘备's spear
+it.press("right", after=16)                                       # 关羽
+for _ in range(8):
+    if camp_cur(it) == 7:
+        break
+    it.press("down", after=16)
+it.press("a", after=16); it.frames(6)
 inv3 = [it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
-check(f"depart: new battle keeps purchases and gold ({inv3}, {it.r16('_dbg_gold')})",
-      it.r16("_dbg_round") == 1 and it.unit(0) == (4, 12) and inv3.count(0) >= 1 and it.r16("_dbg_gold") == 0)
+check(f"exchange: spear left 刘备, ATK back to {u_atk(it, 0)}", 0x47 not in inv3 and u_atk(it, 0) == atk0)
+it.press("b", after=16); camp_wait(it, C_MAIN)
+# deployment: leave 张飞 behind, move 简雍 before 关羽, depart
+it.press("down", after=16); it.press("down", after=16); it.press("a", after=16)
+check("出阵 opens the deployment screen after 军议", camp_wait(it, C_DEPLOY))
+it.frames(60); it.png(ROM.parent / "shot_deploy.png")
+it.press("down", after=16); it.press("down", after=16); it.press("a", after=16)        # 张飞 out
+it.press("down", after=16); it.press("select", after=16)                     # 简雍 one slot earlier
+it.press("up", after=16); it.press("up", after=16); it.press("up", after=16); it.press("a", after=16)   # 刘备 is forced: stays
+it.press("start", after=16)
+it.wait_state([G_IDLE], 600)
+check(f"depart: battle with 刘备/简雍/关羽, 张飞 stays in camp ({it.unit(0)}, {it.unit(7)}, {it.unit(1)}, hp 张飞 {it.hp(2)})",
+      it.state() == G_IDLE and it.unit(0) == (4, 12) and it.unit(7) == (5, 11) and it.unit(1) == (5, 13) and it.hp(2) == 0)
+check("gold kept after departing", it.r16("_dbg_gold") == 50)
 check("enemies are back after departing", all(it.hp(i) > 0 for i in range(3, 7)))
 check("BG map consistent after camp", view_mismatches(it) == 0)
 it.pb.stop(save=False)

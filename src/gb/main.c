@@ -21,6 +21,7 @@
 #include "fs.h"
 #include "dialog.h"
 #include "dialogq.h"
+#include "camp.h"
 #include "duel.h"
 #include "../core/vm.h"
 #include "../core/strategy.h"
@@ -61,10 +62,11 @@ enum {
 
 static Battle B;
 static uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
-static uint8_t mitems[6], isel, xrecv, camp_sel, shop_sel, keep_inv, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
+static uint8_t mitems[6], isel, xrecv, keep_inv, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
 static uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
 static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 static uint16_t gold;
+static CampDeploy deploy;                      /* officer order chosen in the camp (2.3); n = 0: default */
 static AiMode ai_mode;                         /* static: enemy_step sits above the deepest call chain */
 static const uint8_t blank16[16];
 
@@ -284,44 +286,6 @@ static void hud_item_result(const ItemResult *r)
     hud_end();
     dbg_item_uses++;
     publish_inv();
-}
-
-static void hud_camp(void)
-{
-    hud_begin();
-    hud_tx(0, TX_CAMP, 0); hud_space(0); hud_tx(0, TX_GOLD, 0); hud_num(0, gold);
-    if (camp_sel == 0) hud_tx(1, TX_ARROW, 0); else { hud_space(1); hud_space(1); }
-    hud_tx(1, TX_SHOP, 0); hud_space(1);
-    if (camp_sel == 1) hud_tx(1, TX_ARROW, 0); else { hud_space(1); hud_space(1); }
-    hud_tx(1, TX_DEPART, 0);
-    hud_end();
-    publish_inv();
-}
-
-static void hud_shop(uint8_t msg)
-{
-    hud_begin();
-    hud_tx(0, TX_ARROW, 0); hud_tx(0, item_name_tx[shop_sel], 0); hud_space(0);
-    hud_tx(0, TX_GOLD, 0); hud_num(0, item_defs[shop_sel].price);
-    hud_tx(1, TX_GOLD, 0); hud_num(1, gold); hud_space(1);
-    hud_tx(1, msg, 0);
-    hud_end();
-    publish_inv();
-}
-
-/* shop (design doc 7.3): check gold and a free slot first, then take the gold and give the item */
-static void shop_buy(void)
-{
-    static const uint8_t buyers[4] = {0, 1, 2, 7};      /* 刘备 关羽 张飞 简雍: first with a free slot */
-    uint16_t price = item_defs[shop_sel].price;
-    uint8_t k, who = 0xFF;
-    if (gold < price) { sfx_play(SFX_ERROR); hud_shop(TX_NO_GOLD); return; }
-    for (k = 0; k < 4 && who == 0xFF; k++) if (inv_count(buyers[k]) < INV_SLOTS) who = buyers[k];
-    if (who == 0xFF) { sfx_play(SFX_ERROR); hud_shop(TX_BAG_FULL); return; }
-    gold = (uint16_t)(gold - price);
-    inv_add(who, shop_sel);
-    sfx_play(SFX_CONFIRM);
-    hud_shop(TX_BOUGHT);
 }
 
 /* caster is assumed at its tentative cell: temporarily place it there for the check */
@@ -557,12 +521,23 @@ static void start_battle(void)
     keep_inv = 0;
 
     ai_groups_init(tech01_ai_groups, TECH01_AI_GROUPS);       /* 8.2: from the battle definition */
+    {   /* 2.3: officers fill the deployment slots in the chosen order; slot k = k-th player unit's cell */
+        static const uint8_t off_unit[4] = {0, 1, 2, 7};
+        uint8_t k, n = deploy.n ? deploy.n : 4u;
+        for (k = 0; k < n; k++) {
+            uint8_t o = deploy.n ? deploy.order[k] : k, ui = off_unit[o];
+            const Tech01Unit *s = &tech01_units[off_unit[k]], *t = &tech01_units[ui];
+            battle_spawn(&B, ui, (uint16_t)(ui + 1), t->cls, FAC_PLAYER, 1, s->x, s->y);
+        }
+    }
     for (i = 0; i < TECH01_UNITS; i++) {        /* spawn after the inventory: equipment counts (7.1) */
         const Tech01Unit *t = &tech01_units[i];
         ActiveUnit u;
-        battle_spawn(&B, i, t->faction == 0 ? (uint16_t)(i + 1) : ANON_CHARACTER, t->cls, t->faction, 1, t->x, t->y);
+        if (t->faction == FAC_PLAYER) continue;
+        battle_spawn(&B, i, ANON_CHARACTER, t->cls, t->faction, 1, t->x, t->y);
         load(i, &u); u.ai_id = t->ai; unit_store(i, &u);
     }
+    if (B.n_units < TECH01_UNITS) B.n_units = TECH01_UNITS;   /* undeployed slots stay empty records */
     publish_inv();
 
     cur_x = tech01_units[0].x; cur_y = tech01_units[0].y;
@@ -1017,28 +992,16 @@ static void logic(void)
         enemy_step();
         break;
     case G_OUTCOME:
-        if ((in_pressed & J_A) && B.outcome == OUT_WIN) { state = G_CAMP; camp_sel = 0; hud_camp(); }
-        else if (in_pressed & J_A) {
-            DISPLAY_OFF;
-            start_battle(); mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
-            DISPLAY_ON;
-        }
-        break;
-    case G_CAMP:                               /* camp node (design doc 2.2): shop / depart */
-        if (in_dx || in_dy) { camp_sel ^= 1u; hud_camp(); }
-        else if ((in_pressed & J_A) && camp_sel == 0) { state = G_SHOP; shop_sel = 0; hud_shop(TX_SHOP_HINT); }
-        else if (in_pressed & J_A) {
-            DISPLAY_OFF;
+        if ((in_pressed & J_A) && B.outcome == OUT_WIN) {
+            camp_run(&gold, &deploy);              /* own screen; returns with the LCD off */
             keep_inv = 1;
+            start_battle();
+            map_mode_restore();
+        } else if (in_pressed & J_A) {
+            DISPLAY_OFF;
             start_battle(); mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
             DISPLAY_ON;
         }
-        break;
-    case G_SHOP:
-        if (in_dx > 0 || in_dy > 0) { shop_sel = (uint8_t)((shop_sel + 1) % NUM_ITEMS); hud_shop(TX_SHOP_HINT); }
-        else if (in_dx < 0 || in_dy < 0) { shop_sel = (uint8_t)((shop_sel + NUM_ITEMS - 1) % NUM_ITEMS); hud_shop(TX_SHOP_HINT); }
-        else if (in_pressed & J_B) { state = G_CAMP; hud_camp(); }
-        else if (in_pressed & J_A) shop_buy();
         break;
     case G_TITLE:
         if (in_pressed & J_START) {

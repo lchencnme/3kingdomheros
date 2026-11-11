@@ -1,4 +1,5 @@
 #include "tech01_data.h"
+#include "text_data.h"
 const uint16_t tech01_bg_pals[] = {
     24445, 17173, 10840, 4262,
     24445, 12942, 8625, 4262,
@@ -19,6 +20,9 @@ const uint8_t tech01_meta[10][4] = {{0, 1, 2, 3}, {4, 5, 6, 7}, {8, 9, 10, 11}, 
 const uint8_t tech01_terrain_pal[10] = {0, 0, 1, 3, 3, 1, 2, 2, 3, 2};
 const uint8_t tech01_start_items[][2] = {{0, 1}, {0, 7}, {1, 3}, {2, 0}, {7, 8}, {7, 9}, {3, 0}};
 const uint8_t tech01_ai_groups[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3};
+const uint8_t tech01_shop[] = {0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 16, 19, 25, 48, 54, 71, 82, 99};
+const uint8_t tech01_council[][2] = {{0, TXD_T01_COUNCIL_1}, {1, TXD_T01_COUNCIL_2}, {2, TXD_T01_COUNCIL_3}, {0, TXD_T01_COUNCIL_4}};
+const uint8_t tech01_deploy_forced = 1;
 const Tech01Unit tech01_units[] = {
     {0, 0, 4, 12, 0}, /* 刘备 */
     {6, 0, 5, 11, 0}, /* 关羽 */

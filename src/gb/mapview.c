@@ -25,7 +25,8 @@ uint16_t cam_x, cam_y;
 static int16_t tox, toy;               /* loaded hw-tile origin = floor(cam/8)-1 */
 static const uint8_t *meta;            /* [terrain][4] */
 static const uint8_t *tpal;
-static uint8_t hl_on, hl_row;          /* highlight attribute repaint job: rows 0..15, 16 = idle */
+static uint8_t hl_on, hl_row, hl_half; /* highlight repaint sweep: rows 0..15 x 2 half rows, 16 = idle */
+static int16_t hb_x0, hb_x1, hb_y0, hb_y1;   /* hw-position box the sweep must recompose (old + new range) */
 
 #define BLANK_ID_SLOT 0xFFFFu
 #define CACHE_W 22
@@ -35,6 +36,7 @@ static uint8_t hl_on, hl_row;          /* highlight attribute repaint job: rows 
 #define PAL_HL 6u
 #define PAL_ACTED 7u
 #define MAXU 12u
+#define BODY_ACTED 0x80u     /* cur_body bit: unit has acted (solid foot mark) */
 
 /* render state + dirty queue in WRAM bank7 D400..D5FF (the former full-map inqueue area, now unused) */
 typedef struct { uint8_t x, y, vis, pal, body; } RU;
@@ -81,10 +83,6 @@ static uint8_t t_at[16];
 #define T_WY(i) ((int16_t)t_wy1[i] - 1)
 #define T_SLOT(i) slot_of(T_WX(i), T_WY(i))
 static uint8_t contiguous;             /* staged tiles form one contiguous slot run */
-/* pending attribute row (highlight job) */
-static uint8_t ar_pending;
-static int16_t ar_y;
-static uint8_t ar_at[CACHE_W];
 
 static uint16_t max_cam_x(void) { uint16_t w = (uint16_t)grid_w * 16u; return w > VIEW_W ? w - VIEW_W : 0; }
 static uint16_t max_cam_y(void) { uint16_t h = (uint16_t)grid_h * 16u; return h > VIEW_H ? h - VIEW_H : 0; }
@@ -115,11 +113,27 @@ static void refresh_units(void)
         uint8_t vis = snap_hp[i] && !(snap_flags[i] & (AF_RETREAT | AF_DEAD | AF_AWAY));
         cur_vis[i] = vis;
         cur_pal[i] = snap_fac[i] == FAC_ENEMY ? PAL_ENEMY : ((snap_flags[i] & AF_ACTED) ? PAL_ACTED : PAL_PLAYER);
-        cur_body[i] = body_of(snap_cls[i]);
+        cur_body[i] = (uint8_t)(body_of(snap_cls[i]) | ((snap_flags[i] & AF_ACTED) ? BODY_ACTED : 0u));
         if (!vis) continue;
         for (k = n_order; k > 0 && (snap_y[order[k - 1]] > snap_y[i]); k--) order[k] = order[k - 1];
         order[k] = i;
         n_order++;
+    }
+}
+
+/* 12.2 markers, ink only: foot mark on the feet row (hollow = can act, solid = acted) and a side mark on
+ * the head tile (player square, ally circle, enemy triangle) - identification never relies on colour */
+static void ink(uint8_t *d, uint8_t row, uint8_t bits) { d[2 * row] |= bits; d[2 * row + 1] |= bits; }
+static void mark(uint8_t *d, uint8_t lx, uint8_t ly, uint8_t fac, uint8_t acted)
+{
+    if (ly == 2) {
+        uint8_t line = lx ? 0xF8u : 0x1Fu, end = lx ? 0x08u : 0x10u;
+        ink(d, 5, line); ink(d, 7, line);
+        if (acted) ink(d, 6, line); else ink(d, 6, end);
+    } else if (ly == 0 && lx == 0) {
+        if (fac == FAC_ENEMY) { ink(d, 0, 0x80); ink(d, 1, 0xC0); ink(d, 2, 0xE0); }
+        else if (fac == FAC_ALLY) { ink(d, 0, 0x40); ink(d, 1, 0xE0); ink(d, 2, 0x40); }
+        else { ink(d, 0, 0xE0); ink(d, 1, 0xE0); ink(d, 2, 0xE0); }
     }
 }
 
@@ -134,6 +148,13 @@ static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl)
         uint8_t q = (uint8_t)(((wy & 1) << 1) | (wx & 1));
         memcpy(dst, &tech01_bg_tiles[(uint16_t)meta[t * 4 + q] * 16u], 16);   /* same ROM bank as this code */
         pal = hl ? PAL_HL : tpal[t];
+        if (hl) {          /* move range: ink corner ticks at the cell's four outer corners (12.2) */
+            static const uint8_t row_a[4] = {0, 0, 7, 7}, row_b[4] = {1, 1, 6, 6}, row_c[4] = {2, 2, 5, 5};
+            static const uint8_t bar[4] = {0xE0, 0x07, 0xE0, 0x07}, tick[4] = {0x80, 0x01, 0x80, 0x01};
+            dst[2 * row_a[q]] |= bar[q]; dst[2 * row_a[q] + 1] |= bar[q];
+            dst[2 * row_b[q]] |= tick[q]; dst[2 * row_b[q] + 1] |= tick[q];
+            dst[2 * row_c[q]] |= tick[q]; dst[2 * row_c[q] + 1] |= tick[q];
+        }
     }
     /* units whose 16x24 box covers this position, in draw order (pre-filtered candidates) */
     for (k = 0; k < n_cand; k++) {
@@ -141,7 +162,7 @@ static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl)
         int16_t lx = wx - (int16_t)snap_x[u] * 2, ly = wy - ((int16_t)snap_y[u] * 2 - 1);
         const uint8_t *ut;
         if (lx < 0 || lx > 1 || ly < 0 || ly > 2) continue;
-        ut = &tech01_unit_tiles[((uint16_t)cur_body[u] * 6u + (uint16_t)ly * 2u + (uint16_t)lx) * UNIT_TILE_BYTES];
+        ut = &tech01_unit_tiles[((uint16_t)(cur_body[u] & 3u) * 6u + (uint16_t)ly * 2u + (uint16_t)lx) * UNIT_TILE_BYTES];
         if (!under) {      /* terrain under a unit keeps only its ink (colour 3) */
             for (y = 0; y < 8; y++) { uint8_t ink = (uint8_t)(dst[2 * y] & dst[2 * y + 1]); dst[2 * y] = ink; dst[2 * y + 1] = ink; }
             under = 1;
@@ -151,6 +172,7 @@ static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl)
             dst[2 * y] = (uint8_t)((dst[2 * y] & nm) | ut[2 * y]);
             dst[2 * y + 1] = (uint8_t)((dst[2 * y + 1] & nm) | ut[2 * y + 1]);
         }
+        mark(dst, (uint8_t)lx, (uint8_t)ly, snap_fac[u], (uint8_t)(cur_body[u] & BODY_ACTED));
         pal = cur_pal[u];
     }
     return pal;
@@ -172,21 +194,6 @@ static uint8_t in_range_hl(int16_t wx, int16_t wy)
     return r;
 }
 
-static uint8_t attr_of(int16_t wx, int16_t wy)
-{
-    uint8_t k, pal = 0;
-    for (k = 0; k < n_order; k++) {
-        uint8_t u = order[k];
-        int16_t lx = wx - (int16_t)snap_x[u] * 2, ly = wy - ((int16_t)snap_y[u] * 2 - 1);
-        if (lx >= 0 && lx <= 1 && ly >= 0 && ly <= 2) pal = cur_pal[u];
-    }
-    if (!pal) {
-        if (wx < 0 || wy < 0 || wx >= (int16_t)grid_w * 2 || wy >= (int16_t)grid_h * 2) pal = 0;
-        else pal = in_range_hl(wx, wy) ? PAL_HL : tpal[grid_terrain((uint8_t)(wx >> 1), (uint8_t)(wy >> 1)) & 0x0F];
-    }
-    return (uint8_t)(pal | (slot_bank(slot_of(wx, wy)) ? 0x08u : 0u));
-}
-
 static void stage_tile(int16_t wx, int16_t wy)
 {
     uint16_t s = slot_of(wx, wy);
@@ -206,7 +213,7 @@ void mapview_init(const uint8_t *meta4, const uint8_t *terrain_pal) BANKED
     int16_t x, y;
     uint8_t buf[16], i;
     meta = meta4; tpal = terrain_pal;
-    hl_on = 0; hl_row = CACHE_H; edge_kind = 0; ar_pending = 0; n_tiles = 0;
+    hl_on = 0; hl_row = CACHE_H; hl_half = 0; edge_kind = 0; n_tiles = 0;
     n_units_seen = 12;
     have_gen = 0;
     if (cam_x > max_cam_x()) cam_x = max_cam_x();
@@ -244,8 +251,20 @@ void mapview_set_units(uint8_t n) BANKED { n_units_seen = n > MAXU ? MAXU : n; }
 
 void mapview_highlight(uint8_t on) BANKED
 {
+    /* the sweep recomposes the union of the previous and the current range boxes (MR box, cells) */
+    int16_t x0, y0, o = SVBK_REG;
+    SVBK_REG = WB_SCRATCH;
+    x0 = (int16_t)W7_MR->bx * 2; y0 = (int16_t)W7_MR->by * 2;
+    SVBK_REG = (uint8_t)o;
+    if (hl_row >= CACHE_H) { hb_x0 = x0; hb_y0 = y0; hb_x1 = x0 + 2 * MR_DIM - 1; hb_y1 = y0 + 2 * MR_DIM - 1; }
+    else {
+        if (x0 < hb_x0) hb_x0 = x0;
+        if (y0 < hb_y0) hb_y0 = y0;
+        if (x0 + 2 * MR_DIM - 1 > hb_x1) hb_x1 = x0 + 2 * MR_DIM - 1;
+        if (y0 + 2 * MR_DIM - 1 > hb_y1) hb_y1 = y0 + 2 * MR_DIM - 1;
+    }
     hl_on = on;
-    hl_row = 0;
+    hl_row = 0; hl_half = 0;
 }
 
 void mapview_camera_follow(uint8_t cx, uint8_t cy) BANKED
@@ -359,11 +378,15 @@ void mapview_prepare(void) BANKED
         if (n) return;
     }
 attrs:
-    if (hl_row < CACHE_H && !ar_pending) {
-        ar_y = toy + hl_row;
-        for (i = 0; i < CACHE_W; i++) ar_at[i] = attr_of(tox + i, ar_y);
-        ar_pending = 1;
-        hl_row++;
+    while (hl_row < CACHE_H) {                 /* range sweep: one half row (11 positions) per frame */
+        int16_t wy = toy + hl_row, x0 = tox + (int16_t)hl_half * 11;
+        uint8_t hit = wy >= hb_y0 && wy <= hb_y1 && x0 + 10 >= hb_x0 && x0 <= hb_x1;
+        if (++hl_half == 2) { hl_half = 0; hl_row++; }
+        if (!hit) continue;                    /* outside both boxes: nothing changes there */
+        filter_units(x0, x0 + 10, wy, wy);
+        for (i = 0; i < 11; i++) stage_tile(x0 + i, wy);
+        contiguous = 0;
+        break;
     }
 }
 
@@ -391,13 +414,6 @@ void mapview_commit(void) BANKED
         n_tiles = 0;
         if (edge_kind == 2) { if (edge_half == 0) edge_half = 1; else edge_kind = 0; }
         else edge_kind = 0;
-    }
-    if (ar_pending) {
-        uint8_t *base = (uint8_t *)0x9800u + ((uint16_t)(ar_y & 31) << 5);
-        uint8_t x = (uint8_t)(tox & 31);
-        VBK_REG = VBK_ATTRIBUTES;
-        for (i = 0; i < CACHE_W; i++) { base[x] = ar_at[i]; x = (uint8_t)((x + 1) & 31); }
-        ar_pending = 0;
     }
     VBK_REG = VBK_TILES;
     if (edge_kind == 0) { SCX_REG = (uint8_t)cam_x; SCY_REG = (uint8_t)cam_y; }

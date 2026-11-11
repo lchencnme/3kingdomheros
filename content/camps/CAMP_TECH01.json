@@ -1,0 +1,8 @@
+{
+  "_comment": "TECH01 试验营地（设计文档 2.2、附录C.4/C.5）。shop 是可买道具 ID；council 是军议台词（必看，看完才能出阵）。",
+  "id": "CAMP_TECH01",
+  "commands": ["COUNCIL", "EQUIP", "EXCHANGE", "SHOP", "DEPLOY"],
+  "council": [["LIUBEI", "TXD_T01_COUNCIL_1"], ["GUANYU", "TXD_T01_COUNCIL_2"], ["ZHANGFEI", "TXD_T01_COUNCIL_3"], ["LIUBEI", "TXD_T01_COUNCIL_4"]],
+  "shop": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 16, 19, 25, 48, 54, 71, 82, 99],
+  "deploy": {"max_count": 4, "forced": ["CH_LIUBEI"]}
+}

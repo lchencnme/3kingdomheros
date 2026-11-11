@@ -1569,10 +1569,7 @@
   ],
   "max_count": 4,
   "forced": [
-   "CH_LIUBEI",
-   "CH_GUANYU",
-   "CH_ZHANGFEI",
-   "CH_JIANYONG"
+   "CH_LIUBEI"
   ],
   "forbidden": []
  },

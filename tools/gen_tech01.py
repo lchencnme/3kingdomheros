@@ -230,6 +230,7 @@ UNITS = [  # (name, char_tag, class, faction, x, y)
     ("弓手", "ANON", 3, "ENEMY", 26, 12),
     ("简雍", "CH_JIANYONG", 9, "PLAYER", 3, 13),   # 文士: strategies (design doc 6.3)
 ]
+CAMP = json.loads((Path(__file__).resolve().parent.parent / "content/camps/CAMP_TECH01.json").read_text(encoding="utf-8"))
 # starting inventory (design doc 7.1): (unit index, item id from content/items.json)
 # AI groups (design doc 8.2): group 0 attacks; group 1 (the east archer) holds its post until threatened
 AI_GROUPS = [{"id": 0, "mode": "AGGRESSIVE", "target": None, "leash": 3},
@@ -271,7 +272,11 @@ def main():
          "#define UNIT_TILE_BYTES 24u   /* 16 B 2bpp + 8 B mask; 6 tiles per body (2 x 3) */",
          "extern const uint8_t tech01_unit_tiles[];",
          "typedef struct { uint8_t cls, faction, x, y, ai; } Tech01Unit;",
-         f"#define TECH01_AI_GROUPS {len(AI_GROUPS)}u", "extern const uint8_t tech01_ai_groups[];   /* {id, mode, target lo, hi, leash} */",
+         f"#define TECH01_AI_GROUPS {len(AI_GROUPS)}u",
+         "extern const uint8_t tech01_shop[];", "extern const uint8_t tech01_council[][2];",
+         "extern const uint8_t tech01_deploy_forced;   /* bit k = player officer k must deploy */",
+         f"#define TECH01_SHOP_N {len(CAMP['shop'])}u", f"#define TECH01_COUNCIL_N {len(CAMP['council'])}u",
+         f"#define TECH01_DEPLOY_MAX {CAMP['deploy']['max_count']}u", "extern const uint8_t tech01_ai_groups[];   /* {id, mode, target lo, hi, leash} */",
          "extern const uint8_t tech01_bg_tiles[];", "extern const uint8_t tech01_obj_tiles[];",
          "extern const uint16_t tech01_bg_pals[32];", "extern const uint16_t tech01_obj_pals[16];",
          "extern const uint8_t tech01_meta[10][4];", "extern const uint8_t tech01_terrain_pal[10];",
@@ -303,6 +308,21 @@ def main():
         tgt = 0xFFFF if g["target"] is None else g["target"]
         recs += [g["id"], AI_MODES[g["mode"]], tgt & 0xFF, tgt >> 8, g["leash"]]
     ci.append("const uint8_t tech01_ai_groups[] = {" + ", ".join(map(str, recs)) + "};")
+    # camp node (design doc 2.2, C.4): shop list, council lines, deployment rules
+    camp = json.loads((ROOT / "content/camps/CAMP_TECH01.json").read_text(encoding="utf-8"))
+    items = {it["id"]: it for it in json.loads((ROOT / "content/items.json").read_text(encoding="utf-8"))["items"]}
+    for i in camp["shop"]:
+        if i not in items or items[i]["price"] <= 0:
+            raise SystemExit(f"gen_tech01: shop item {i} unknown or not for sale")
+    spk = {"LIUBEI": 0, "GUANYU": 1, "ZHANGFEI": 2, "NARRATOR": 0xFF}
+    players = [u for u in UNITS if u[3] == "PLAYER"]
+    forced = 0
+    for tag in camp["deploy"]["forced"]:
+        forced |= 1 << [u[1] for u in players].index(tag)
+    ci.insert(1, '#include "text_data.h"')
+    ci.append("const uint8_t tech01_shop[] = {" + ", ".join(map(str, camp["shop"])) + "};")
+    ci.append("const uint8_t tech01_council[][2] = {" + ", ".join(f"{{{spk[s]}, {tx}}}" for s, tx in camp["council"]) + "};")
+    ci.append(f"const uint8_t tech01_deploy_forced = {forced};")
     ci.append("const Tech01Unit tech01_units[] = {")
     for k, (n, _, cl, f, x, y) in enumerate(UNITS):
         ci.append(f"    {{{cl}, {fac[f]}, {x}, {y}, {UNIT_AI.get(k, 0)}}}, /* {n} */")
@@ -316,8 +336,8 @@ def main():
         "schema_version": 2, "id": "BT_TECH01", "profile": "DEFAULT_D1", "source_ref": "ORIGINAL",
         "map": {"width": W, "height": H, "tileset": "TS_TECH01",
                 "metatiles": terrain, "terrain": terrain},
-        "deploy": {"slots": [[x, y] for n, tag, cl, f, x, y in UNITS if f == "PLAYER"], "max_count": 4,
-                   "forced": ["CH_LIUBEI", "CH_GUANYU", "CH_ZHANGFEI", "CH_JIANYONG"], "forbidden": []},
+        "deploy": {"slots": [[x, y] for n, tag, cl, f, x, y in UNITS if f == "PLAYER"], "max_count": CAMP["deploy"]["max_count"],
+                   "forced": CAMP["deploy"]["forced"], "forbidden": []},
         "templates": [{"id": i, "character": "ANON", "class": cl, "level": 1, "str": 70, "int": 60, "cmd": 70,
                        "items": [None] * 8, "equipment": [None] * 3, "instance_id": 3 + i,
                        "blocks_victory": True, "appearance_variant": 0}
