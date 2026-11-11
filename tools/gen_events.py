@@ -113,6 +113,26 @@ class Compiler:
                 out += [0x0A, self.unit(args[0])] + u16(min(args[1], 9999))
             elif name == "DUEL":
                 out += [0x0B, self.unit(args[0]), self.unit(args[1])] + u16(min(args[2], 9999))
+            elif name == "SET_AI":     # [subject, mode, target, leash]; subject int unit or "G<n>" group
+                subj = args[0]
+                if isinstance(subj, str) and subj.startswith("G"):
+                    g = int(subj[1:])
+                    if not 0 <= g < 96:
+                        die(f"bad AI group {subj}")
+                    s16 = 0x8000 | g
+                else:
+                    s16 = self.unit(subj)
+                modes = {"HOLD": 0, "AGGRESSIVE": 1, "GUARD_POINT": 2, "ESCORT": 3, "ESCAPE": 4}
+                if args[1] not in modes:
+                    die(f"unknown AI mode {args[1]}")
+                tgt = args[2]
+                if tgt is None:
+                    tgt = 0xFFFF
+                elif isinstance(tgt, list):                 # [x, y] cell
+                    tgt = tgt[1] * self.b["map"]["width"] + tgt[0]
+                else:
+                    tgt = self.unit(tgt)
+                out += [0x0D] + u16(s16) + [modes[args[1]]] + u16(tgt) + [min(max(args[3], 0), 255)]
             elif name in ("FACTION_SET", "RECRUIT"):
                 fac = FACTION[args[1]] if name == "FACTION_SET" else FACTION["PLAYER"]
                 out += [0x0C, self.unit(args[0]), fac]

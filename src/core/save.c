@@ -272,7 +272,12 @@ uint8_t save_battle(uint8_t slot, const Battle *b, const SaveUi *ui) CORE_API
         uint16_t k;
         for (k = 0; k < 1920u; k += 32u) { sram_read(15, k, fb, 32); w_bytes(&w, fb, 32); }
     }
-    w_tlv(&w, 10, 960); w_fill(&w, 0, 960);             /* AI groups + overrides */
+    w_tlv(&w, 10, 960);                                 /* AI groups + overrides: SRAM12 @6912 (8.2) */
+    {
+        uint8_t fb[32];
+        uint16_t k;
+        for (k = 0; k < 960u; k += 32u) { sram_read(12, (uint16_t)(6912u + k), fb, 32); w_bytes(&w, fb, 32); }
+    }
     crc = w.crc ^ 0xFFFFFFFFul;
     /* bytes after body_len are not written (not covered by any CRC; readers never look at them) */
     (void)blen;
@@ -404,6 +409,8 @@ uint8_t load_battle(uint8_t slot, Battle *b, SaveUi *ui) CORE_API
         uint8_t fb[32];
         uint16_t k;
         for (k = 0; k < 1920u; k += 32u) { img_read(base, (uint16_t)(off + 3u + k), fb, 32); sram_write(15, k, fb, 32); }
+        off = (uint16_t)(off + 3u + 1920u);              /* tag 10: AI groups + overrides back to SRAM12 */
+        for (k = 0; k < 960u; k += 32u) { img_read(base, (uint16_t)(off + 3u + k), fb, 32); sram_write(12, (uint16_t)(6912u + k), fb, 32); }
     }
     return SAVE_OK;
 }

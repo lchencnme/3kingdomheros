@@ -2,6 +2,7 @@
 #pragma bank 8
 #endif
 #include "vm.h"
+#include "ai.h"
 #include "grid.h"
 #include "path.h"
 
@@ -189,6 +190,12 @@ static uint8_t run_code(Battle *b, const VmFact *f, uint16_t off, uint16_t len)
                     unit_store(a[0], &u);
                 }
             }
+            break;
+        case OP_SET_AI:
+            vm_read((uint16_t)(off + 1u), a, 6);
+            off += 7;
+            if (a[2] > AI_ESCAPE) return VM_BAD_SCRIPT;
+            ai_set(rd16(a), a[2], rd16(a + 3), a[5]);
             break;
         case OP_DUEL: {
             /* design doc 9.3: named duel replaces this attack, consumes the action, draws no RNG */

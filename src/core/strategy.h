@@ -32,10 +32,15 @@ uint8_t strategy_check(const Battle *b, uint8_t caster, uint8_t sid, uint8_t cx,
 /* resolve (caster must already stand at its final cell); returns SR_* (state untouched unless SR_OK) */
 uint8_t strategy_cast(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy, StrategyResult *r) CORE_API;
 
-/* AI estimate (design doc 8.3): expected value of casting offensive sid on centre (cx, cy), at variance
- * 100, hit% applied, clamped to remaining hp. Ignores the caster's position (the caller checks range
- * and LOS from the candidate endpoint). Returns 0 if not castable / no hostile target at the centre. */
-typedef struct { uint16_t dmg; uint8_t kills, ctrl; } StratEstimate;
+/* strategy books (7.3): same resolution without MP/learn/SILENCE checks, MAG = ITEM_SCROLL_MAG, no XP */
+uint8_t strategy_book_check(const Battle *b, uint8_t user, uint8_t sid, uint8_t cx, uint8_t cy) CORE_API;
+uint8_t strategy_book_cast(Battle *b, uint8_t user, uint8_t sid, uint8_t cx, uint8_t cy, StrategyResult *r) CORE_API;
+
+/* AI estimate (design doc 8.3): expected value of casting sid on centre (cx, cy). Offensive: damage at
+ * variance 100 x hit%, clamped to remaining hp, kills, new controls. Heal / morale: amounts actually
+ * restored on allies. Ignores the caster's position (the caller checks range and LOS from the endpoint).
+ * Returns 0 if not castable / no valid target at the centre. */
+typedef struct { uint16_t dmg; uint8_t kills, ctrl; uint16_t heal, morale; } StratEstimate;
 uint8_t strategy_estimate(const Battle *b, const ActiveUnit *c, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy,
                           StratEstimate *e, ActiveUnit *tmp) CORE_API;
 #endif

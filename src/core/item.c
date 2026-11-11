@@ -1,11 +1,13 @@
 #ifdef __SDCC
-#pragma bank 12
+#pragma bank 13
 #endif
 #include <string.h>
 #include "item.h"
 #include "grid.h"
 #include "path.h"
 #include "save.h"
+
+#define EQ_OFF 16u            /* record: 8 x u16 items, then 3 equip slot indices (FF = none), 1 pad */
 
 static uint8_t manhattan(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 {
@@ -14,20 +16,42 @@ static uint8_t manhattan(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 }
 
 static uint16_t rec_off(uint8_t unit, uint8_t slot) { return (uint16_t)((uint16_t)unit * INV_REC + (uint16_t)slot * 2u); }
+static uint16_t eq_off(uint8_t unit, uint8_t cat) { return (uint16_t)((uint16_t)unit * INV_REC + EQ_OFF + cat); }
+
+static uint8_t item_known(uint8_t it) { return it < NUM_ITEMS && item_defs[it].kind != IK_NONE; }
 
 uint8_t inv_get(uint8_t unit, uint8_t slot) CORE_API
 {
     uint8_t v[2];
     if (unit >= MAX_UNITS || slot >= INV_SLOTS) return ITEM_NONE;
     sram_read(INV_SRAM_BANK, rec_off(unit, slot), v, 2);
-    if (v[1] != 0 || v[0] >= NUM_ITEMS) return ITEM_NONE;          /* FFFF (or unknown id) = empty */
+    if (v[1] != 0 || !item_known(v[0])) return ITEM_NONE;          /* FFFF (or unknown id) = empty */
     return v[0];
+}
+
+uint8_t inv_equipped(uint8_t unit, uint8_t cat) CORE_API
+{
+    uint8_t s;
+    if (unit >= MAX_UNITS || cat > EQ_MOUNT) return ITEM_NONE;
+    sram_read(INV_SRAM_BANK, eq_off(unit, cat), &s, 1);
+    return s < INV_SLOTS ? s : ITEM_NONE;
+}
+
+static void eq_write(uint8_t unit, uint8_t cat, uint8_t slot) { sram_write(INV_SRAM_BANK, eq_off(unit, cat), &slot, 1); }
+
+uint8_t inv_slot_equipped(uint8_t unit, uint8_t slot) CORE_API
+{
+    uint8_t c;
+    for (c = 0; c <= EQ_MOUNT; c++) if (inv_equipped(unit, c) == slot) return 1;
+    return 0;
 }
 
 void inv_set(uint8_t unit, uint8_t slot, uint8_t item) CORE_API
 {
-    uint8_t v[2];
+    uint8_t v[2], c;
     if (unit >= MAX_UNITS || slot >= INV_SLOTS) return;
+    for (c = 0; c <= EQ_MOUNT; c++)                                   /* the slot's content changes: */
+        if (inv_equipped(unit, c) == slot) eq_write(unit, c, 0xFF);   /* it is no longer equipped */
     if (item == ITEM_NONE) { v[0] = 0xFF; v[1] = 0xFF; } else { v[0] = item; v[1] = 0; }
     sram_write(INV_SRAM_BANK, rec_off(unit, slot), v, 2);
 }
@@ -55,6 +79,91 @@ void inv_clear_all(void) CORE_API
     for (k = 0; k < (uint16_t)MAX_UNITS * INV_REC; k += 32u) sram_write(INV_SRAM_BANK, k, ff, 32);
 }
 
+/* ---------------------------------------------------------------- equipment (7.1) */
+uint8_t item_category(uint8_t item) CORE_API
+{
+    if (!item_known(item)) return EQ_NONE;
+    switch (item_defs[item].kind) {
+    case IK_WEAPON: return EQ_WEAPON;
+    case IK_MANUAL: return EQ_MANUAL;
+    case IK_MOUNT: return EQ_MOUNT;
+    }
+    return EQ_NONE;
+}
+
+void item_mods(uint8_t unit, StatIn *s) CORE_API
+{
+    uint8_t c;
+    for (c = 0; c <= EQ_MOUNT; c++) {
+        uint8_t sl = inv_equipped(unit, c), it;
+        const ItemDef *d;
+        if (sl == ITEM_NONE) continue;
+        it = inv_get(unit, sl);
+        if (item_category(it) != c) continue;                          /* stale index: ignore */
+        d = &item_defs[it];
+        s->mod_atk += d->atk; s->mod_mag += d->mag; s->mod_res += d->res;
+        s->mod_agi = (int8_t)(s->mod_agi + d->agi); s->mod_move = (int8_t)(s->mod_move + d->move);
+    }
+}
+
+uint8_t item_heal_bonus(uint8_t unit) CORE_API
+{
+    uint8_t sl = inv_equipped(unit, EQ_MANUAL), it;
+    if (sl == ITEM_NONE) return 0;
+    it = inv_get(unit, sl);
+    return item_category(it) == EQ_MANUAL ? item_defs[it].p1 : 0u;
+}
+
+void item_rederive(uint8_t unit) CORE_API
+{
+    ActiveUnit u;
+    StatIn si;
+    Derived d;
+    UnitBase base;
+    uint16_t old_mhp, old_mmp;
+    unit_load(unit, &u);
+    old_mhp = u.max_hp; old_mmp = u.max_mp;
+    unit_base(unit, &base);
+    si.cls = u.class_id; si.level = u.level; si.str = base.str; si.intl = base.intl; si.cmd = base.cmd;
+    si.mod_hp = si.mod_mp = si.mod_atk = si.mod_def = si.mod_mag = si.mod_res = 0; si.mod_agi = 0; si.mod_move = 0;
+    item_mods(unit, &si);
+    rules_derive(&si, &d);
+    if (old_mhp) {
+        u.hp = rules_keep_deficit(old_mhp, u.hp, d.max_hp, u.hp ? 1u : 0u);
+        u.mp = rules_keep_deficit(old_mmp, u.mp, d.max_mp, 0);
+    } else { u.hp = d.max_hp; u.mp = d.max_mp; }
+    u.max_hp = d.max_hp; u.max_mp = d.max_mp; u.atk = d.atk; u.def = d.def;
+    u.mag = d.mag; u.res = d.res; u.agility = d.agi; u.move = d.move;
+    unit_store(unit, &u);
+}
+
+uint8_t item_equip(uint8_t unit, uint8_t slot) CORE_API
+{
+    ActiveUnit u;
+    uint8_t it = inv_get(unit, slot), cat = item_category(it);
+    if (it == ITEM_NONE) return IR_EMPTY;
+    if (cat == EQ_NONE) return IR_NO_EFFECT;
+    unit_load(unit, &u);
+    if (class_defs[u.class_id].family == FAM_CIVILIAN) return IR_CLASS;   /* 民众不能装备 (6.1) */
+    eq_write(unit, cat, slot);
+    item_rederive(unit);
+    return IR_OK;
+}
+
+void item_unequip(uint8_t unit, uint8_t cat) CORE_API
+{
+    if (inv_equipped(unit, cat) == ITEM_NONE) return;
+    eq_write(unit, cat, 0xFF);
+    item_rederive(unit);
+}
+
+uint16_t item_sell_price(uint8_t item) CORE_API
+{
+    if (!item_known(item) || !(item_defs[item].flags & IF_SELL)) return 0;
+    return (uint16_t)(item_defs[item].price / 2u);
+}
+
+/* ---------------------------------------------------------------- use (7.3) */
 static uint8_t unit_at(const Battle *b, uint8_t x, uint8_t y, ActiveUnit *u)
 {
     uint8_t i;
@@ -68,7 +177,7 @@ static uint8_t unit_at(const Battle *b, uint8_t x, uint8_t y, ActiveUnit *u)
 uint16_t item_value(const Battle *b, uint8_t item, const ActiveUnit *t) CORE_API
 {
     const ItemDef *d;
-    if (item >= NUM_ITEMS) return 0;
+    if (!item_known(item)) return 0;
     d = &item_defs[item];
     switch (d->kind) {
     case IK_HP: { uint16_t gap = (uint16_t)(t->max_hp - t->hp); return d->power < gap ? d->power : gap; }
@@ -78,6 +187,8 @@ uint16_t item_value(const Battle *b, uint8_t item, const ActiveUnit *t) CORE_API
     case IK_FIRE: return d->power < t->hp ? d->power : t->hp;
     case IK_RAIN: return b->weather ? 0u : 1u;
     case IK_CLEAR: return b->weather ? 1u : 0u;
+    case IK_PROMOTE: return t->class_id == d->p1 && t->level >= d->p3;
+    case IK_RECLASS: return t->class_id != d->p1 && class_defs[t->class_id].family != FAM_CIVILIAN;
     }
     return 0;
 }
@@ -89,12 +200,19 @@ uint8_t item_check(const Battle *b, uint8_t user, uint8_t slot, uint8_t tx, uint
     const ItemDef *def;
     if (it == ITEM_NONE) return IR_EMPTY;
     def = &item_defs[it];
+    if (def->kind == IK_BOOK) {
+        uint8_t r = strategy_book_check(b, user, def->p1, tx, ty);
+        return r == SR_OK ? IR_OK : (r == SR_RANGE || r == SR_LOS ? IR_RANGE : (r == SR_WEATHER ? IR_NO_EFFECT : IR_NO_TARGET));
+    }
+    if (def->kind >= IK_WEAPON) return IR_NO_EFFECT;                  /* equipment / plot: not usable */
     unit_load(user, &c);
     if (tx >= grid_w || ty >= grid_h) return IR_RANGE;
     d = manhattan(c.x, c.y, tx, ty);
     if (d > def->range) return IR_RANGE;
-    if (def->kind == IK_RAIN || def->kind == IK_CLEAR)
-        return item_value(b, it, &c) ? IR_OK : IR_NO_EFFECT;     /* self only (range 0) */
+    if (def->kind == IK_RAIN || def->kind == IK_CLEAR || def->kind == IK_PROMOTE || def->kind == IK_RECLASS) {
+        if (item_value(b, it, &c)) return IR_OK;                       /* self only (range 0) */
+        return (def->kind == IK_PROMOTE || def->kind == IK_RECLASS) ? IR_CLASS : IR_NO_EFFECT;
+    }
     if (def->kind == IK_FIRE && d > 1 && !los_clear(c.x, c.y, tx, ty)) return IR_RANGE;
     ti = unit_at(b, tx, ty, &t);
     if (ti == 0xFF) return IR_NO_TARGET;
@@ -103,19 +221,34 @@ uint8_t item_check(const Battle *b, uint8_t user, uint8_t slot, uint8_t tx, uint
     return item_value(b, it, &t) ? IR_OK : IR_NO_EFFECT;
 }
 
+static void mark_used(Battle *b, uint8_t user)
+{
+    ActiveUnit c;
+    unit_load(user, &c);
+    if (unit_alive(&c)) { c.action_flags |= (uint8_t)(AF_MOVED | AF_ACTED); unit_store(user, &c); }
+    battle_check_outcome(b, 0);
+}
+
 uint8_t item_use(Battle *b, uint8_t user, uint8_t slot, uint8_t tx, uint8_t ty, ItemResult *r) CORE_API
 {
-    ActiveUnit c, t;
+    ActiveUnit t;
     uint8_t chk = item_check(b, user, slot, tx, ty), it, ti, k;
     const ItemDef *def;
     r->item = ITEM_NONE; r->target = 0xFF; r->killed = 0; r->amount = 0;
     if (chk != IR_OK) return chk;
     it = inv_get(user, slot);
     def = &item_defs[it];
+    if (def->kind == IK_BOOK) return IR_NO_EFFECT;                    /* books: item_use_book */
     r->item = it;
     inv_set(user, slot, ITEM_NONE);                      /* consumed first: a reset never duplicates it */
     if (def->kind == IK_RAIN || def->kind == IK_CLEAR) {
         b->weather = def->kind == IK_RAIN ? 1u : 0u;
+        r->target = user; r->amount = 1;
+    } else if (def->kind == IK_PROMOTE || def->kind == IK_RECLASS) {
+        unit_load(user, &t);                             /* 5.5: keep L/XP and the deficit */
+        t.class_id = def->kind == IK_PROMOTE ? def->p2 : def->p1;
+        unit_store(user, &t);
+        item_rederive(user);
         r->target = user; r->amount = 1;
     } else {
         ti = unit_at(b, tx, ty, &t);
@@ -139,26 +272,55 @@ uint8_t item_use(Battle *b, uint8_t user, uint8_t slot, uint8_t tx, uint8_t ty, 
         }
         unit_store(ti, &t);
     }
-    unit_load(user, &c);
-    if (unit_alive(&c)) { c.action_flags |= (uint8_t)(AF_MOVED | AF_ACTED); unit_store(user, &c); }
-    battle_check_outcome(b, 0);
+    mark_used(b, user);
     return IR_OK;
+}
+
+uint8_t item_use_book(Battle *b, uint8_t user, uint8_t slot, uint8_t cx, uint8_t cy, StrategyResult *sr) CORE_API
+{
+    uint8_t it = inv_get(user, slot), r;
+    sr->n = 0; sr->xp = 0; sr->levels = 0;
+    if (it == ITEM_NONE) return IR_EMPTY;
+    if (item_defs[it].kind != IK_BOOK) return IR_NO_EFFECT;
+    r = item_check(b, user, slot, cx, cy);
+    if (r != IR_OK) return r;
+    inv_set(user, slot, ITEM_NONE);                      /* consumed even if every target is missed */
+    strategy_book_cast(b, user, item_defs[it].p1, cx, cy, sr);   /* marks the action, checks the outcome */
+    return IR_OK;
+}
+
+/* ---------------------------------------------------------------- exchange (7.3) */
+static void swap_slots(uint8_t a, uint8_t sa, uint8_t b, uint8_t sb)
+{
+    uint8_t ia = inv_get(a, sa), ib = inv_get(b, sb);
+    inv_set(b, sb, ia);
+    inv_set(a, sa, ib);
 }
 
 uint8_t item_exchange(uint8_t actor, uint8_t sa, uint8_t recv, uint8_t sb) CORE_API
 {
     ActiveUnit a, r;
-    uint8_t ia, ib;
     unit_load(actor, &a);
     unit_load(recv, &r);
     if (actor == recv || !unit_alive(&a) || !unit_alive(&r) || factions_hostile(a.faction, r.faction)) return IR_NO_TARGET;
     if (manhattan(a.x, a.y, r.x, r.y) != 1) return IR_RANGE;
     if (sa >= INV_SLOTS || sb >= INV_SLOTS) return IR_EMPTY;
-    ia = inv_get(actor, sa); ib = inv_get(recv, sb);
-    if (ia == ITEM_NONE && ib == ITEM_NONE) return IR_EMPTY;
-    inv_set(recv, sb, ia);
-    inv_set(actor, sa, ib);
+    if (inv_get(actor, sa) == ITEM_NONE && inv_get(recv, sb) == ITEM_NONE) return IR_EMPTY;
+    if (inv_slot_equipped(actor, sa) || inv_slot_equipped(recv, sb)) return IR_EQUIPPED;
+    swap_slots(actor, sa, recv, sb);
     a.action_flags |= (uint8_t)(AF_MOVED | AF_ACTED);
     unit_store(actor, &a);
+    return IR_OK;
+}
+
+uint8_t item_exchange_camp(uint8_t a, uint8_t sa, uint8_t b, uint8_t sb) CORE_API
+{
+    uint8_t ea, eb;
+    if (sa >= INV_SLOTS || sb >= INV_SLOTS || (a == b && sa == sb)) return IR_EMPTY;
+    if (inv_get(a, sa) == ITEM_NONE && inv_get(b, sb) == ITEM_NONE) return IR_EMPTY;
+    ea = inv_slot_equipped(a, sa); eb = inv_slot_equipped(b, sb);
+    swap_slots(a, sa, b, sb);                            /* inv_set drops the equip marks of both slots */
+    if (ea) item_rederive(a);
+    if (eb) item_rederive(b);
     return IR_OK;
 }

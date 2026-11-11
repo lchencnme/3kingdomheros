@@ -226,7 +226,9 @@ def main():
     ci.append("const uint8_t digit_glyph[10] = {" + ", ".join(str(reg["glyphs"][d]) for d in "0123456789") + "};")
     ci.append("const uint8_t class_name_tx[] = {" + ", ".join(str(names.index(f"TX_CLASS_{c_['id']}")) for c_ in rules["classes"]) + "};")
     ci.append("const uint8_t strat_name_tx[] = {" + ", ".join(str(names.index(f"TX_STRAT_{s_['id']}")) for s_ in rules["strategies"]) + "};")
-    ci.append("const uint8_t item_name_tx[] = {" + ", ".join(str(names.index(f"TX_ITEM_{it['id']}")) for it in items) + "};")
+    ibyid = {it["id"]: it for it in items}
+    ci.append("const uint8_t item_name_tx[] = {" + ", ".join(str(names.index(f"TX_ITEM_{i}")) if i in ibyid else "0"
+                                                       for i in range(max(ibyid) + 1)) + "};")
     ci.append("const uint8_t terrain_name_tx[] = {" + ", ".join(str(names.index(f"TX_TERRAIN_{t_['id']}")) for t_ in rules["terrain"]) + "};")
     OUT_H.write_text("\n".join(h) + "\n", encoding="utf-8")
     OUT_C.write_text("\n".join(c) + "\n", encoding="utf-8")

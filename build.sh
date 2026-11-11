@@ -20,15 +20,15 @@ cc -std=c99 -Wall -Wextra -O1 -o build/host/test_battle tests/host/test_battle.c
    src/core/rng.c src/core/rules.c src/core/path.c src/gen/rules_data.c
 build/host/test_battle
 cc -std=c99 -Wall -Wextra -O2 -o build/host/test_save tests/host/test_save.c tests/host/host_sram.c \
-   tests/host/host_units.c tests/host/host_grid.c src/core/save.c src/core/battle.c src/core/rng.c \
+   tests/host/host_units.c tests/host/host_grid.c src/core/save.c src/core/battle.c src/core/item.c src/core/strategy.c src/core/rng.c \
    src/core/rules.c src/core/path.c src/gen/rules_data.c
 build/host/test_save
 cc -std=c99 -Wall -Wextra -O1 -o build/host/test_vm tests/host/test_vm.c tests/host/host_units.c \
-   tests/host/host_grid.c src/core/vm.c src/core/battle.c src/core/rng.c src/core/rules.c src/core/path.c \
+   tests/host/host_grid.c tests/host/host_sram.c src/core/item.c src/core/strategy.c src/core/ai.c src/core/vm.c src/core/battle.c src/core/rng.c src/core/rules.c src/core/path.c \
    src/gen/rules_data.c
 build/host/test_vm
 cc -std=c99 -Wall -Wextra -O1 -o build/host/test_strategy tests/host/test_strategy.c tests/host/host_units.c \
-   tests/host/host_grid.c src/core/strategy.c src/core/battle.c src/core/rng.c src/core/rules.c src/core/path.c \
+   tests/host/host_grid.c tests/host/host_sram.c src/core/item.c src/core/strategy.c src/core/battle.c src/core/rng.c src/core/rules.c src/core/path.c \
    src/gen/rules_data.c
 build/host/test_strategy
 cc -std=c99 -Wall -Wextra -O1 -o build/host/test_item tests/host/test_item.c tests/host/host_units.c \

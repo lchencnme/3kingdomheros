@@ -65,6 +65,7 @@ static uint8_t mitems[6], isel, xrecv, camp_sel, shop_sel, keep_inv, n_mitems, n
 static uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
 static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 static uint16_t gold;
+static AiMode ai_mode;                         /* static: enemy_step sits above the deepest call chain */
 static const uint8_t blank16[16];
 
 /* debug/test hooks (read by tests/emu/test_rom.py through the .noi symbol file) */
@@ -540,10 +541,6 @@ static void start_battle(void)
         ai_invalidate(W7_AI);
         SVBK_REG = o;
     }
-    for (i = 0; i < TECH01_UNITS; i++) {
-        const Tech01Unit *t = &tech01_units[i];
-        battle_spawn(&B, i, t->faction == 0 ? (uint16_t)(i + 1) : ANON_CHARACTER, t->cls, t->faction, 1, t->x, t->y);
-    }
     /* inventory (7.1): a new game starts from the battle's item list; departing from the camp keeps what
      * the player's officers carry (shop purchases) and only re-issues the enemies' items */
     if (!keep_inv) inv_clear_all();
@@ -558,7 +555,16 @@ static void start_battle(void)
             inv_add(tech01_start_items[i][0], tech01_start_items[i][1]);
     if (!keep_inv) gold = 0;
     keep_inv = 0;
+
+    ai_groups_init(tech01_ai_groups, TECH01_AI_GROUPS);       /* 8.2: from the battle definition */
+    for (i = 0; i < TECH01_UNITS; i++) {        /* spawn after the inventory: equipment counts (7.1) */
+        const Tech01Unit *t = &tech01_units[i];
+        ActiveUnit u;
+        battle_spawn(&B, i, t->faction == 0 ? (uint16_t)(i + 1) : ANON_CHARACTER, t->cls, t->faction, 1, t->x, t->y);
+        load(i, &u); u.ai_id = t->ai; unit_store(i, &u);
+    }
     publish_inv();
+
     cur_x = tech01_units[0].x; cur_y = tech01_units[0].y;
     battle_phase_start(&B, FAC_PLAYER);
     state = G_BANNER; timer = 45; next_state = G_IDLE;
@@ -592,8 +598,19 @@ static void begin_enemy_phase(void)
     fire(TR_PHASE_START, FAC_ENEMY, 0xFF, 0xFF, 0xFF);
     if (B.outcome) return;
     SVBK_REG = WB_SCRATCH;
+    {   /* 8.2 HOLD alert test once per phase, while the banner is up (exact SPFA per nearby opponent) */
+        uint8_t i;
+        for (i = 0; i < B.n_units; i++) ai_hold_update(&B, W7_MR, i);
+    }
     ai_invalidate(W7_AI);
-    ai_field_request(&B, W7_AI, MT_FOOT, SIDE_E);     /* pre-warm the most common move type */
+    {   /* pre-warm the field of the first enemy that will act */
+        uint8_t i;
+        ActiveUnit u;
+        for (i = 0; i < B.n_units; i++) {
+            load(i, &u);
+            if (u.faction == FAC_ENEMY && battle_can_act(&u)) { ai_field_prepare(&B, W7_AI, i); break; }
+        }
+    }
     SVBK_REG = o;
     enemy_i = 0;
     state = G_BANNER; timer = 45; next_state = G_ENEMY;
@@ -895,11 +912,10 @@ static void prewarm_next(void)
         if (u.faction == FAC_ENEMY && battle_can_act(&u)) break;
     }
     if (j >= B.n_units) return;
-    m = rules_class_move_type(u.class_id);
+    (void)m;
     o = SVBK_REG;
     SVBK_REG = WB_SCRATCH;
-    if (W7_AI->field_state == 0 || W7_AI->field_mtype != m || W7_AI->field_side != SIDE_E)
-        ai_field_request(&B, W7_AI, m, SIDE_E);
+    ai_field_prepare(&B, W7_AI, j);            /* move type and target-specific source (8.4) */
     SVBK_REG = o;
 }
 
@@ -923,10 +939,11 @@ static void enemy_step(void)
         return;
     }
     unit_pos(enemy_i, &ux, &uy);
+    ai_resolve(enemy_i, &ai_mode);             /* 8.2: group / instance override (SRAM12) */
     o = SVBK_REG;
     t0 = sys_time;
     SVBK_REG = WB_SCRATCH;
-    ai_decide(&B, W7_AI, W7_MR, enemy_i, AI_AGGRESSIVE, &c);
+    ai_decide_mode(&B, W7_AI, W7_MR, enemy_i, &ai_mode, &c);
     SVBK_REG = o;
     dbg_t_ai = sys_time - t0;
     if (c.x != ux || c.y != uy) {

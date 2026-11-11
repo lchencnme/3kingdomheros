@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include "platform.h"
 #include "battle.h"
+#include "rules.h"
+#include "strategy.h"
 
 #define INV_SLOTS 8u
 #define INV_REC 20u
@@ -18,6 +20,13 @@
 #define IR_NO_TARGET 3u    /* no valid unit at the target cell */
 #define IR_NO_EFFECT 4u    /* full hp / morale / mp, nothing to cleanse, weather already set: not consumed */
 #define IR_FULL 5u         /* exchange: receiver has no free slot */
+#define IR_EQUIPPED 6u     /* equipped items move only at the camp (unequip first) */
+#define IR_CLASS 7u        /* promotion / class change / equipment not allowed for this class or level */
+
+#define EQ_WEAPON 0u
+#define EQ_MANUAL 1u
+#define EQ_MOUNT 2u
+#define EQ_NONE 0xFFu
 
 typedef struct {
     uint8_t item, target, killed;
@@ -32,12 +41,34 @@ void inv_clear_all(void) CORE_API;                                 /* every reco
 
 /* validity of using the item in 'slot' of user (standing at its current cell) on cell (tx, ty) */
 uint8_t item_check(const Battle *b, uint8_t user, uint8_t slot, uint8_t tx, uint8_t ty) CORE_API;
-/* apply (no RNG is drawn, no counter, no XP: design doc 7.3); consumes the item and the action */
+/* apply (no RNG is drawn except strategy books, no counter, no XP: design doc 7.3); consumes the item and
+ * the action. Strategy books (IK_BOOK) must go through item_use_book. */
 uint8_t item_use(Battle *b, uint8_t user, uint8_t slot, uint8_t tx, uint8_t ty, ItemResult *r) CORE_API;
+/* strategy book: no MP, ignores class/learn level/SILENCE, MAG = ITEM_SCROLL_MAG, no XP; consumed even
+ * when it misses (7.3) */
+uint8_t item_use_book(Battle *b, uint8_t user, uint8_t slot, uint8_t cx, uint8_t cy, StrategyResult *sr) CORE_API;
 /* expected value of an item for AI scoring: amount it would restore/deal on target t (0 = useless) */
 uint16_t item_value(const Battle *b, uint8_t item, const ActiveUnit *t) CORE_API;
 
 /* battle exchange (7.3): adjacent allies, actor slot sa <-> receiver slot sb (sb may be empty);
- * consumes the actor's action only */
+ * consumes the actor's action only; equipped items never move in battle */
 uint8_t item_exchange(uint8_t actor, uint8_t sa, uint8_t recv, uint8_t sb) CORE_API;
+/* between battles (camp): any two units, no distance, no action; equipped items are unequipped first */
+uint8_t item_exchange_camp(uint8_t a, uint8_t sa, uint8_t b, uint8_t sb) CORE_API;
+
+/* equipment (7.1): category of an item (EQ_* or EQ_NONE); equipped slot of a category or ITEM_NONE */
+uint8_t item_category(uint8_t item) CORE_API;
+uint8_t inv_equipped(uint8_t unit, uint8_t cat) CORE_API;
+uint8_t inv_slot_equipped(uint8_t unit, uint8_t slot) CORE_API;
+/* camp only: equip the item in slot (replaces the category's previous one) / unequip; stats re-derived */
+uint8_t item_equip(uint8_t unit, uint8_t slot) CORE_API;
+void item_unequip(uint8_t unit, uint8_t cat) CORE_API;
+/* equipment bonuses into the derivation input (called by every stat derivation) */
+void item_mods(uint8_t unit, StatIn *s) CORE_API;
+/* re-derive unit stats from class/level/base/equipment, keeping the hp/mp deficit (5.4/5.5) */
+void item_rederive(uint8_t unit) CORE_API;
+/* 青囊书-style heal bonus percent of the unit's equipped manual */
+uint8_t item_heal_bonus(uint8_t unit) CORE_API;
+/* shop (7.3): sell price floor(price/2); 0 = cannot be sold */
+uint16_t item_sell_price(uint8_t item) CORE_API;
 #endif

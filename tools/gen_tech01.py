@@ -231,6 +231,11 @@ UNITS = [  # (name, char_tag, class, faction, x, y)
     ("简雍", "CH_JIANYONG", 9, "PLAYER", 3, 13),   # 文士: strategies (design doc 6.3)
 ]
 # starting inventory (design doc 7.1): (unit index, item id from content/items.json)
+# AI groups (design doc 8.2): group 0 attacks; group 1 (the east archer) holds its post until threatened
+AI_GROUPS = [{"id": 0, "mode": "AGGRESSIVE", "target": None, "leash": 3},
+             {"id": 1, "mode": "HOLD", "target": None, "leash": 3}]
+UNIT_AI = {6: 1}           # unit index -> group (default 0)
+AI_MODES = {"HOLD": 0, "AGGRESSIVE": 1, "GUARD_POINT": 2, "ESCORT": 3, "ESCAPE": 4}
 START_ITEMS = [(0, 1), (0, 7), (1, 3), (2, 0), (7, 8), (7, 9), (3, 0)]
 
 
@@ -265,7 +270,8 @@ def main():
          "#define UNIT_BODY_FOOT 0u\n#define UNIT_BODY_BOW 1u\n#define UNIT_BODY_HORSE 2u",
          "#define UNIT_TILE_BYTES 24u   /* 16 B 2bpp + 8 B mask; 6 tiles per body (2 x 3) */",
          "extern const uint8_t tech01_unit_tiles[];",
-         "typedef struct { uint8_t cls, faction, x, y; } Tech01Unit;",
+         "typedef struct { uint8_t cls, faction, x, y, ai; } Tech01Unit;",
+         f"#define TECH01_AI_GROUPS {len(AI_GROUPS)}u", "extern const uint8_t tech01_ai_groups[];   /* {id, mode, target lo, hi, leash} */",
          "extern const uint8_t tech01_bg_tiles[];", "extern const uint8_t tech01_obj_tiles[];",
          "extern const uint16_t tech01_bg_pals[32];", "extern const uint16_t tech01_obj_pals[16];",
          "extern const uint8_t tech01_meta[10][4];", "extern const uint8_t tech01_terrain_pal[10];",
@@ -292,9 +298,14 @@ def main():
     ci.append("const uint8_t tech01_terrain_pal[10] = {" + ", ".join(str(TERRAIN_PAL[i]) for i in range(10)) + "};")
     fac = {"PLAYER": 0, "ALLY": 1, "ENEMY": 2}
     ci.append("const uint8_t tech01_start_items[][2] = {" + ", ".join(f"{{{u}, {i}}}" for u, i in START_ITEMS) + "};")
+    recs = []
+    for g in AI_GROUPS:
+        tgt = 0xFFFF if g["target"] is None else g["target"]
+        recs += [g["id"], AI_MODES[g["mode"]], tgt & 0xFF, tgt >> 8, g["leash"]]
+    ci.append("const uint8_t tech01_ai_groups[] = {" + ", ".join(map(str, recs)) + "};")
     ci.append("const Tech01Unit tech01_units[] = {")
-    for n, _, cl, f, x, y in UNITS:
-        ci.append(f"    {{{cl}, {fac[f]}, {x}, {y}}}, /* {n} */")
+    for k, (n, _, cl, f, x, y) in enumerate(UNITS):
+        ci.append(f"    {{{cl}, {fac[f]}, {x}, {y}, {UNIT_AI.get(k, 0)}}}, /* {n} */")
     ci.append("};")
     (ROOT / "src/gen/tech01_data.h").write_text("\n".join(h) + "\n", encoding="utf-8")
     (ROOT / "src/gen/tech01_data.c").write_text("\n".join(c) + "\n", encoding="utf-8")
@@ -311,9 +322,9 @@ def main():
                        "items": [None] * 8, "equipment": [None] * 3, "instance_id": 3 + i,
                        "blocks_victory": True, "appearance_variant": 0}
                       for i, (n, tag, cl, f, x, y) in enumerate(u for u in UNITS if u[3] == "ENEMY")],
-        "units": [{"template": i, "x": x, "y": y, "faction": "ENEMY", "ai_group": 0, "hp": "max", "status": []}
+        "units": [{"template": i, "x": x, "y": y, "faction": "ENEMY", "ai_group": UNIT_AI.get(3 + i, 0), "hp": "max", "status": []}
                   for i, (n, tag, cl, f, x, y) in enumerate(u for u in UNITS if u[3] == "ENEMY")],
-        "ai_groups": [{"id": 0, "mode": "AGGRESSIVE", "target": None, "leash": 3}],
+        "ai_groups": AI_GROUPS,
         "treasures": [], "zones": [],
         "reinforcements": [   # SPAWN templates: compile-time reserved instance slots (design doc 9.3)
             {"template": 0, "character": "ANON", "class": 6, "level": 2, "faction": "ENEMY", "instance_id": 8},
@@ -325,7 +336,8 @@ def main():
                       ["TEXT", "P0003", "TXD_T01_OPEN_ZHANGFEI"]]},
             {"id": 2, "trigger": "PHASE_START", "param": "ENEMY", "priority": 0, "once": True,
              "condition": {"leaf": "turn_cmp", "op": "eq", "n": 3},
-             "code": [["TEXT", "NARRATOR", "TXD_T01_REINF"], ["SPAWN", 0, 30, 10], ["SPAWN", 1, 30, 14]]},
+             "code": [["TEXT", "NARRATOR", "TXD_T01_REINF"], ["SPAWN", 0, 30, 10], ["SPAWN", 1, 30, 14],
+                      ["SET_AI", 8, "AGGRESSIVE", 0, 3]]},   # the cavalry hunts 刘备 (designated target)
             {"id": 3, "trigger": "UNIT_RETREAT", "param": None, "priority": 0, "once": True,
              "condition": {"any": [{"leaf": "target_eq", "unit": u} for u in (3, 4, 5, 6, 8, 9)]},
              "code": [["TEXT", "P0003", "TXD_T01_FIRST_KILL"]]},

@@ -2,6 +2,7 @@
 #pragma bank 4
 #endif
 #include "battle.h"
+#include "item.h"
 #include "grid.h"
 #include "path.h"
 #include "types.h"
@@ -26,6 +27,7 @@ static void derive_into(uint8_t i, ActiveUnit *u)
     s.cls = u->class_id; s.level = u->level; s.str = base.str; s.intl = base.intl; s.cmd = base.cmd;
     s.mod_hp = s.mod_mp = s.mod_atk = s.mod_def = s.mod_mag = s.mod_res = 0;
     s.mod_agi = 0; s.mod_move = 0;
+    item_mods(i, &s);                     /* equipment bonuses (7.1) */
     rules_derive(&s, &d);
     u->max_hp = d.max_hp; u->max_mp = d.max_mp; u->atk = d.atk; u->def = d.def;
     u->mag = d.mag; u->res = d.res; u->agility = d.agi; u->move = d.move;

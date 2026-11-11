@@ -16,7 +16,8 @@ OUT_C = ROOT / "src" / "gen" / "rules_data.c"
 
 EFFECTS = ["fire", "water", "rock", "heal", "morale", "status", "cleanse"]
 CONDS = ["any", "fire", "water", "rock", "flood"]
-IKINDS = ["hp", "morale", "mp", "cleanse", "fire", "rain", "clear"]
+IKINDS = ["none", "hp", "morale", "mp", "cleanse", "fire", "rain", "clear", "book", "promote", "reclass",
+          "weapon", "manual", "mount", "plot"]
 STATUS = ["ROOT", "CONFUSE", "SILENCE", "POISON", "BURN"]
 
 
@@ -33,10 +34,11 @@ def main():
     terrain = d["terrain"]
     strats = d["strategies"]
     items = json.loads((ROOT / "content" / "items.json").read_text(encoding="utf-8"))["items"]
-    if [it["id"] for it in items] != list(range(len(items))):
-        die("item ids must be dense 0..n-1 (append-only)")
-    if len(items) >= 255:
-        die("item ids must fit u8 (0xFF = empty slot)")
+    ids = [it["id"] for it in items]
+    if ids != sorted(set(ids)):
+        die("item ids must be unique and ascending (append-only, gaps allowed)")
+    if ids[-1] >= 255:
+        die("item ids must fit u8 here (0xFF = empty slot)")
     for it in items:
         if it["kind"] not in IKINDS:
             die(f"item {it['id']}: unknown kind {it['kind']}")
@@ -86,7 +88,8 @@ def main():
     h.append(f"#define RULES_PROFILE_CRC 0x{profile_crc:08X}ul")
     h.append(f"#define NUM_CLASSES {len(classes)}u\n#define NUM_TERRAIN {len(terrain)}u\n#define NUM_STRATEGIES {len(strats)}u")
     h.append(f"#define NUM_FAMILIES {len(fams)}u")
-    h.append(f"#define NUM_ITEMS {len(items)}u")
+    h.append(f"#define NUM_ITEMS {ids[-1] + 1}u   /* sparse: kind IK_NONE marks unused ids */")
+    h.append("#define IF_SELL 0x01u")
     for i, k in enumerate(IKINDS):
         h.append(f"#define IK_{k.upper()} {i}u")
     h.append(f"#define PROMO_L1 {d['promotion_levels'][0]}u\n#define PROMO_L2 {d['promotion_levels'][1]}u")
@@ -126,7 +129,10 @@ typedef struct {
 
 typedef struct {
     uint8_t kind, range;
-    uint16_t power, price;
+    uint16_t power, price;            /* price 0 = not sold */
+    int8_t atk, mag, res, agi, move;  /* equipment bonuses */
+    uint8_t p1, p2, p3;               /* book: sid | promote: from, to, level | reclass: to | manual: heal % */
+    uint8_t flags;                    /* IF_SELL */
 } ItemDef;
 
 extern const ItemDef item_defs[NUM_ITEMS];
@@ -161,8 +167,22 @@ extern const uint8_t type_percent_table[NUM_FAMILIES][NUM_FAMILIES];
                  f"{s['power']}, {s['radius']}, {st}, {s['ttl']}, SC_{s['cond'].upper()}, {s['learn']}}},")
     c.append("};\n")
     c.append("const ItemDef item_defs[NUM_ITEMS] = {")
-    for it in items:
-        c.append(f"    /* {it['id']:2d} {it['name']} */ {{IK_{it['kind'].upper()}, {it['range']}, {it['power']}, {it['price']}}},")
+    by = {it["id"]: it for it in items}
+    for i in range(ids[-1] + 1):
+        it = by.get(i)
+        if it is None:
+            c.append(f"    /* {i:3d} (unused) */ {{IK_NONE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},")
+            continue
+        k = it["kind"]
+        p1 = p2 = p3 = 0
+        if k == "book": p1 = it["strategy"]
+        elif k == "promote": p1, p2, p3 = it["from_class"], it["to_class"], it["level"]
+        elif k == "reclass": p1 = it["to_class"]
+        elif k == "manual": p1 = it.get("heal_pct", 0)
+        rng_ = it.get("range", 0 if k not in ("book",) else 0)
+        c.append(f"    /* {i:3d} {it['name']} */ {{IK_{k.upper()}, {rng_}, {it.get('power', 0)}, {it['price']}, "
+                 f"{it.get('atk', 0)}, {it.get('mag', 0)}, {it.get('res', 0)}, {it.get('agi', 0)}, {it.get('move', 0)}, "
+                 f"{p1}, {p2}, {p3}, {'IF_SELL' if it['sellable'] else 0}}},")
     c.append("};\n")
     c.append("const uint8_t type_percent_table[NUM_FAMILIES][NUM_FAMILIES] = {")
     for i, row in enumerate(adv):

@@ -47,6 +47,7 @@
 #define OP_GIVE_GOLD 0x09u    /* amount u16 */
 #define OP_HP_SET 0x0Au       /* unit u8, value u16 */
 #define OP_DUEL 0x0Bu         /* winner u8, loser u8, loser_hp u16: replaces the pending normal attack, 0 draws */
+#define OP_SET_AI 0x0Du       /* subject u16 (0..95 instance, 0x8000|g group), mode u8, target u16, leash u8 */
 #define OP_FACTION_SET 0x0Cu  /* unit u8, faction u8: clears the unit's action for this phase (9.3) */
 
 #define SCOPE_GLOBAL 0u

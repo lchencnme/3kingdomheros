@@ -16,7 +16,9 @@
 #define UNIT_BODY_HORSE 2u
 #define UNIT_TILE_BYTES 24u   /* 16 B 2bpp + 8 B mask; 6 tiles per body (2 x 3) */
 extern const uint8_t tech01_unit_tiles[];
-typedef struct { uint8_t cls, faction, x, y; } Tech01Unit;
+typedef struct { uint8_t cls, faction, x, y, ai; } Tech01Unit;
+#define TECH01_AI_GROUPS 2u
+extern const uint8_t tech01_ai_groups[];   /* {id, mode, target lo, hi, leash} */
 extern const uint8_t tech01_bg_tiles[];
 extern const uint8_t tech01_obj_tiles[];
 extern const uint16_t tech01_bg_pals[32];

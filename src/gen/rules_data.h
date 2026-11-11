@@ -9,14 +9,23 @@
 #define NUM_TERRAIN 10u
 #define NUM_STRATEGIES 20u
 #define NUM_FAMILIES 8u
-#define NUM_ITEMS 11u
-#define IK_HP 0u
-#define IK_MORALE 1u
-#define IK_MP 2u
-#define IK_CLEANSE 3u
-#define IK_FIRE 4u
-#define IK_RAIN 5u
-#define IK_CLEAR 6u
+#define NUM_ITEMS 114u   /* sparse: kind IK_NONE marks unused ids */
+#define IF_SELL 0x01u
+#define IK_NONE 0u
+#define IK_HP 1u
+#define IK_MORALE 2u
+#define IK_MP 3u
+#define IK_CLEANSE 4u
+#define IK_FIRE 5u
+#define IK_RAIN 6u
+#define IK_CLEAR 7u
+#define IK_BOOK 8u
+#define IK_PROMOTE 9u
+#define IK_RECLASS 10u
+#define IK_WEAPON 11u
+#define IK_MANUAL 12u
+#define IK_MOUNT 13u
+#define IK_PLOT 14u
 #define PROMO_L1 12u
 #define PROMO_L2 24u
 #define ITEM_SCROLL_MAG 60u
@@ -84,7 +93,10 @@ typedef struct {
 
 typedef struct {
     uint8_t kind, range;
-    uint16_t power, price;
+    uint16_t power, price;            /* price 0 = not sold */
+    int8_t atk, mag, res, agi, move;  /* equipment bonuses */
+    uint8_t p1, p2, p3;               /* book: sid | promote: from, to, level | reclass: to | manual: heal % */
+    uint8_t flags;                    /* IF_SELL */
 } ItemDef;
 
 extern const ItemDef item_defs[NUM_ITEMS];

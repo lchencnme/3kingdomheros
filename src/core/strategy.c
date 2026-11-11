@@ -5,6 +5,7 @@
 #include "grid.h"
 #include "path.h"
 #include "rules.h"
+#include "item.h"
 
 static uint8_t manhattan(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 {
@@ -62,15 +63,18 @@ uint8_t strategy_known(const ActiveUnit *c, uint8_t sid) CORE_API
     return (class_defs[c->class_id].learn_mask >> sid) & 1u && c->level >= strategy_defs[sid].learn;
 }
 
-uint8_t strategy_check(const Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy) CORE_API
+/* book = 1: strategy book (7.3) - no MP, ignores class, learn level and SILENCE */
+static uint8_t check_ex(const Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy, uint8_t book)
 {
     ActiveUnit c;
     const StrategyDef *s = &strategy_defs[sid];
     uint8_t d;
     unit_load(caster, &c);
-    if (!strategy_known(&c, sid)) return SR_NOT_LEARNED;
-    if (c.status_mask & (1u << ST_SILENCE)) return SR_SILENCED;
-    if (c.mp < s->mp) return SR_NO_MP;
+    if (!book) {
+        if (!strategy_known(&c, sid)) return SR_NOT_LEARNED;
+        if (c.status_mask & (1u << ST_SILENCE)) return SR_SILENCED;
+        if (c.mp < s->mp) return SR_NO_MP;
+    }
     if (cx >= grid_w || cy >= grid_h) return SR_RANGE;
     d = manhattan(c.x, c.y, cx, cy);
     if (d > s->range) return SR_RANGE;
@@ -78,6 +82,16 @@ uint8_t strategy_check(const Battle *b, uint8_t caster, uint8_t sid, uint8_t cx,
     if ((s->cond == SC_FIRE && b->weather) || (s->cond == SC_FLOOD && !b->weather)) return SR_WEATHER;
     if (target_at(b, &c, s, cx, cy) == 0xFF || !cell_ok(s, cx, cy, b->weather)) return SR_NO_TARGET;
     return SR_OK;
+}
+
+uint8_t strategy_check(const Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy) CORE_API
+{
+    return check_ex(b, caster, sid, cx, cy, 0);
+}
+
+uint8_t strategy_book_check(const Battle *b, uint8_t user, uint8_t sid, uint8_t cx, uint8_t cy) CORE_API
+{
+    return check_ex(b, user, sid, cx, cy, 1);
 }
 
 static void apply_status(ActiveUnit *u, uint8_t st, uint8_t ttl)
@@ -95,6 +109,7 @@ static void relevel(uint8_t caster, ActiveUnit *u, uint16_t old_mhp, uint16_t ol
     unit_base(caster, &base);
     si.cls = u->class_id; si.level = u->level; si.str = base.str; si.intl = base.intl; si.cmd = base.cmd;
     si.mod_hp = si.mod_mp = si.mod_atk = si.mod_def = si.mod_mag = si.mod_res = 0; si.mod_agi = 0; si.mod_move = 0;
+    item_mods(caster, &si);
     rules_derive(&si, &d);
     u->hp = rules_keep_deficit(old_mhp, u->hp, d.max_hp, 1);
     u->mp = rules_keep_deficit(old_mmp, u->mp, d.max_mp, 0);
@@ -103,17 +118,19 @@ static void relevel(uint8_t caster, ActiveUnit *u, uint16_t old_mhp, uint16_t ol
     unit_store(caster, u);
 }
 
-uint8_t strategy_cast(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy, StrategyResult *r) CORE_API
+static uint8_t cast_ex(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy, StrategyResult *r, uint8_t book)
 {
     static const int8_t DX[5] = {0, 0, -1, 1, 0}, DY[5] = {0, -1, 0, 0, 1};   /* centre, N, W, E, S */
     const StrategyDef *s = &strategy_defs[sid];
     ActiveUnit c, u;
     uint8_t k, cells = s->radius ? 5u : 1u, order[STRAT_MAX_TARGETS], n = 0, i, j;
     uint16_t xp = 0;
-    uint8_t chk = strategy_check(b, caster, sid, cx, cy);
+    uint8_t chk = check_ex(b, caster, sid, cx, cy, book);
+    uint16_t mag;
     r->n = 0; r->xp = 0; r->levels = 0;
     if (chk != SR_OK) return chk;
     unit_load(caster, &c);
+    mag = book ? ITEM_SCROLL_MAG : c.mag;              /* books use a fixed MAG (7.3) */
     /* collect valid targets, then process in instance order (design doc 4.4) */
     for (k = 0; k < cells; k++) {
         int16_t x = (int16_t)cx + DX[k], y = (int16_t)cy + DY[k];
@@ -126,7 +143,7 @@ uint8_t strategy_cast(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_
     }
     for (i = 1; i < n; i++)
         for (j = i; j > 0 && order[j - 1] > order[j]; j--) { uint8_t tmp = order[j]; order[j] = order[j - 1]; order[j - 1] = tmp; }
-    c.mp = (uint16_t)(c.mp - s->mp);
+    if (!book) c.mp = (uint16_t)(c.mp - s->mp);
     for (i = 0; i < n; i++) {
         uint8_t t = order[i], hit = 1, killed = 0;
         uint16_t amount = 0;
@@ -143,7 +160,7 @@ uint8_t strategy_cast(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_
             hit = roll < pct;
             if (hit && s->effect != FX_STATUS) {
                 uint8_t tt = grid_terrain(u.x, u.y) & 0x0F;
-                amount = rules_mag_damage(s->power, c.mag, u.res, c.morale,
+                amount = rules_mag_damage(s->power, mag, u.res, c.morale,
                                           rules_element_percent(s->effect, tt, b->weather), var, 0);
                 if (amount >= u.hp) {
                     amount = u.hp;
@@ -162,7 +179,9 @@ uint8_t strategy_cast(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_
                 xp += 1;
             }
         } else if (s->effect == FX_HEAL) {
-            uint16_t want = (uint16_t)(s->power + c.mag / 2u), gap = (uint16_t)(u.max_hp - u.hp);
+            uint16_t want = (uint16_t)(s->power + mag / 2u), gap = (uint16_t)(u.max_hp - u.hp);
+            uint8_t bonus = book ? 0u : item_heal_bonus(caster);       /* 青囊书 (7.2) */
+            if (bonus) want = (uint16_t)(((uint32_t)want * (100u + bonus)) / 100u);
             amount = want < gap ? want : gap;
             u.hp = (uint16_t)(u.hp + amount);
             hit = amount > 0;
@@ -183,6 +202,7 @@ uint8_t strategy_cast(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_
         r->unit[r->n] = t; r->hit[r->n] = hit; r->amount[r->n] = amount; r->killed[r->n] = killed; r->n++;
     }
     if (xp > 60u) xp = 60u;                            /* one group command: at most 60 XP (5.4) */
+    if (book) xp = 0;                                  /* using an item never gives XP (7.3) */
     r->xp = (uint8_t)xp;
     unit_load(caster, &u);
     if (unit_alive(&u)) {
@@ -197,6 +217,16 @@ uint8_t strategy_cast(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_
     return SR_OK;
 }
 
+uint8_t strategy_cast(Battle *b, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy, StrategyResult *r) CORE_API
+{
+    return cast_ex(b, caster, sid, cx, cy, r, 0);
+}
+
+uint8_t strategy_book_cast(Battle *b, uint8_t user, uint8_t sid, uint8_t cx, uint8_t cy, StrategyResult *r) CORE_API
+{
+    return cast_ex(b, user, sid, cx, cy, r, 1);
+}
+
 uint8_t strategy_estimate(const Battle *b, const ActiveUnit *c, uint8_t caster, uint8_t sid, uint8_t cx, uint8_t cy,
                           StratEstimate *e, ActiveUnit *tmp) CORE_API
 {
@@ -207,8 +237,8 @@ uint8_t strategy_estimate(const Battle *b, const ActiveUnit *c, uint8_t caster, 
 #define u (*tmp)
     UnitBase bc, bt;
     uint8_t k, cells = s->radius ? 5u : 1u;
-    e->dmg = 0; e->kills = 0; e->ctrl = 0;
-    if (!offensive(s->effect)) return 0;
+    e->dmg = 0; e->kills = 0; e->ctrl = 0; e->heal = 0; e->morale = 0;
+    if (s->effect == FX_CLEANSE) return 0;
     if (!strategy_known(c, sid) || (c->status_mask & (1u << ST_SILENCE)) || c->mp < s->mp) return 0;
     if ((s->cond == SC_FIRE && b->weather) || (s->cond == SC_FLOOD && !b->weather)) return 0;
     if (!cell_ok(s, cx, cy, b->weather) || target_at_buf(b, c, s, cx, cy, &u) == 0xFF) return 0;
@@ -222,7 +252,15 @@ uint8_t strategy_estimate(const Battle *b, const ActiveUnit *c, uint8_t caster, 
         if (t == 0xFF) continue;
         unit_base(t, &bt);
         pct = rules_mag_hit(bc.intl, bt.intl, c->morale);
-        if (s->effect == FX_STATUS) {
+        if (s->effect == FX_HEAL) {
+            uint16_t want = (uint16_t)(s->power + c->mag / 2u), gap = (uint16_t)(u.max_hp - u.hp);
+            uint8_t bonus = item_heal_bonus(caster);
+            if (bonus) want = (uint16_t)(((uint32_t)want * (100u + bonus)) / 100u);
+            e->heal = (uint16_t)(e->heal + (want < gap ? want : gap));
+        } else if (s->effect == FX_MORALE) {
+            uint8_t gap = (uint8_t)(u.morale < 100u ? 100u - u.morale : 0u);
+            e->morale = (uint16_t)(e->morale + (s->power < gap ? s->power : gap));
+        } else if (s->effect == FX_STATUS) {
             if (!(u.status_mask & (1u << s->status)) && pct >= 50u) e->ctrl++;
         } else {
             uint8_t tt = grid_terrain(u.x, u.y) & 0x0F;

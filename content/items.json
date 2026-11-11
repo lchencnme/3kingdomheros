@@ -1,16 +1,539 @@
 {
-  "_comment": "道具表（设计文档 7.2，原创）。内部 ID 只追加，不重排。本表是战斗中可用的消耗品；装备、策略书、转职物尚未实现。range = 曼哈顿距离上限（0 = 只能自用）。",
-  "items": [
-    {"id": 0,  "name": "干粮",   "kind": "hp",      "power": 100, "range": 1, "price": 50},
-    {"id": 1,  "name": "军粮",   "kind": "hp",      "power": 300, "range": 1, "price": 150},
-    {"id": 2,  "name": "大军粮", "kind": "hp",      "power": 600, "range": 1, "price": 300},
-    {"id": 3,  "name": "浊酒",   "kind": "morale",  "power": 20,  "range": 1, "price": 40},
-    {"id": 4,  "name": "美酒",   "kind": "morale",  "power": 40,  "range": 1, "price": 80},
-    {"id": 5,  "name": "御酒",   "kind": "morale",  "power": 60,  "range": 1, "price": 120},
-    {"id": 6,  "name": "清茶",   "kind": "mp",      "power": 20,  "range": 1, "price": 60},
-    {"id": 7,  "name": "金疮药", "kind": "cleanse", "power": 0,   "range": 1, "price": 100},
-    {"id": 8,  "name": "火油罐", "kind": "fire",    "power": 120, "range": 2, "price": 200},
-    {"id": 9,  "name": "祈雨符", "kind": "rain",    "power": 0,   "range": 0, "price": 100},
-    {"id": 10, "name": "止雨符", "kind": "clear",   "power": 0,   "range": 0, "price": 100}
-  ]
+ "_comment": "道具表（设计文档 7.2，原创）。ID 即存档里的 item_id（u16，只追加，不重排；中间的空号保留）。price 0 = 不售。range = 曼哈顿距离上限（0 = 只能自用）。数值属于平衡参数，只在这里改。",
+ "items": [
+  {
+   "id": 0,
+   "name": "干粮",
+   "kind": "hp",
+   "price": 50,
+   "sellable": true,
+   "power": 100,
+   "range": 1
+  },
+  {
+   "id": 1,
+   "name": "军粮",
+   "kind": "hp",
+   "price": 150,
+   "sellable": true,
+   "power": 300,
+   "range": 1
+  },
+  {
+   "id": 2,
+   "name": "大军粮",
+   "kind": "hp",
+   "price": 300,
+   "sellable": true,
+   "power": 600,
+   "range": 1
+  },
+  {
+   "id": 3,
+   "name": "浊酒",
+   "kind": "morale",
+   "price": 40,
+   "sellable": true,
+   "power": 20,
+   "range": 1
+  },
+  {
+   "id": 4,
+   "name": "美酒",
+   "kind": "morale",
+   "price": 80,
+   "sellable": true,
+   "power": 40,
+   "range": 1
+  },
+  {
+   "id": 5,
+   "name": "御酒",
+   "kind": "morale",
+   "price": 120,
+   "sellable": true,
+   "power": 60,
+   "range": 1
+  },
+  {
+   "id": 6,
+   "name": "清茶",
+   "kind": "mp",
+   "price": 60,
+   "sellable": true,
+   "power": 20,
+   "range": 1
+  },
+  {
+   "id": 7,
+   "name": "金疮药",
+   "kind": "cleanse",
+   "price": 100,
+   "sellable": true,
+   "range": 1
+  },
+  {
+   "id": 8,
+   "name": "火油罐",
+   "kind": "fire",
+   "price": 200,
+   "sellable": true,
+   "power": 120,
+   "range": 2
+  },
+  {
+   "id": 9,
+   "name": "祈雨符",
+   "kind": "rain",
+   "price": 100,
+   "sellable": true,
+   "range": 0
+  },
+  {
+   "id": 10,
+   "name": "止雨符",
+   "kind": "clear",
+   "price": 100,
+   "sellable": true,
+   "range": 0
+  },
+  {
+   "id": 16,
+   "name": "火攻书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 0
+  },
+  {
+   "id": 17,
+   "name": "烈焰书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 1
+  },
+  {
+   "id": 18,
+   "name": "焚营书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 2
+  },
+  {
+   "id": 19,
+   "name": "激流书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 3
+  },
+  {
+   "id": 20,
+   "name": "决堤书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 4
+  },
+  {
+   "id": 21,
+   "name": "怒涛书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 5
+  },
+  {
+   "id": 22,
+   "name": "滚木书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 6
+  },
+  {
+   "id": 23,
+   "name": "崩石书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 7
+  },
+  {
+   "id": 24,
+   "name": "暴洪书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 8
+  },
+  {
+   "id": 25,
+   "name": "补给书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 9
+  },
+  {
+   "id": 26,
+   "name": "增援书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 10
+  },
+  {
+   "id": 27,
+   "name": "犒军书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 11
+  },
+  {
+   "id": 28,
+   "name": "激励书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 12
+  },
+  {
+   "id": 29,
+   "name": "振奋书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 13
+  },
+  {
+   "id": 30,
+   "name": "擂鼓书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 14
+  },
+  {
+   "id": 31,
+   "name": "绊马书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 15
+  },
+  {
+   "id": 32,
+   "name": "疑兵书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 16
+  },
+  {
+   "id": 33,
+   "name": "断谋书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 17
+  },
+  {
+   "id": 34,
+   "name": "投毒书",
+   "kind": "book",
+   "price": 100,
+   "sellable": true,
+   "strategy": 18
+  },
+  {
+   "id": 48,
+   "name": "长戟",
+   "kind": "promote",
+   "price": 600,
+   "sellable": true,
+   "from_class": 0,
+   "to_class": 1,
+   "level": 12
+  },
+  {
+   "id": 49,
+   "name": "重甲",
+   "kind": "promote",
+   "price": 600,
+   "sellable": true,
+   "from_class": 1,
+   "to_class": 2,
+   "level": 24
+  },
+  {
+   "id": 50,
+   "name": "劲弩",
+   "kind": "promote",
+   "price": 600,
+   "sellable": true,
+   "from_class": 3,
+   "to_class": 4,
+   "level": 12
+  },
+  {
+   "id": 51,
+   "name": "霹雳车图",
+   "kind": "promote",
+   "price": 600,
+   "sellable": true,
+   "from_class": 4,
+   "to_class": 5,
+   "level": 24
+  },
+  {
+   "id": 52,
+   "name": "铁骑甲",
+   "kind": "promote",
+   "price": 600,
+   "sellable": true,
+   "from_class": 6,
+   "to_class": 7,
+   "level": 12
+  },
+  {
+   "id": 53,
+   "name": "骁骑令",
+   "kind": "promote",
+   "price": 600,
+   "sellable": true,
+   "from_class": 7,
+   "to_class": 8,
+   "level": 24
+  },
+  {
+   "id": 54,
+   "name": "兵法要略",
+   "kind": "promote",
+   "price": 600,
+   "sellable": true,
+   "from_class": 9,
+   "to_class": 10,
+   "level": 12
+  },
+  {
+   "id": 55,
+   "name": "军师印",
+   "kind": "promote",
+   "price": 600,
+   "sellable": true,
+   "from_class": 10,
+   "to_class": 11,
+   "level": 24
+  },
+  {
+   "id": 56,
+   "name": "刀盾指南",
+   "kind": "reclass",
+   "price": 600,
+   "sellable": true,
+   "to_class": 0
+  },
+  {
+   "id": 57,
+   "name": "弓术指南",
+   "kind": "reclass",
+   "price": 600,
+   "sellable": true,
+   "to_class": 3
+  },
+  {
+   "id": 58,
+   "name": "骑术指南",
+   "kind": "reclass",
+   "price": 600,
+   "sellable": true,
+   "to_class": 6
+  },
+  {
+   "id": 64,
+   "name": "雌雄双股剑",
+   "kind": "weapon",
+   "price": 0,
+   "sellable": false,
+   "atk": 10,
+   "agi": 0
+  },
+  {
+   "id": 65,
+   "name": "青龙偃月刀",
+   "kind": "weapon",
+   "price": 0,
+   "sellable": false,
+   "atk": 12,
+   "agi": 0
+  },
+  {
+   "id": 66,
+   "name": "丈八蛇矛",
+   "kind": "weapon",
+   "price": 0,
+   "sellable": false,
+   "atk": 12,
+   "agi": 0
+  },
+  {
+   "id": 67,
+   "name": "青釭剑",
+   "kind": "weapon",
+   "price": 0,
+   "sellable": false,
+   "atk": 10,
+   "agi": 5
+  },
+  {
+   "id": 68,
+   "name": "倚天剑",
+   "kind": "weapon",
+   "price": 0,
+   "sellable": false,
+   "atk": 10,
+   "agi": 5
+  },
+  {
+   "id": 69,
+   "name": "古锭刀",
+   "kind": "weapon",
+   "price": 0,
+   "sellable": false,
+   "atk": 8,
+   "agi": 0
+  },
+  {
+   "id": 70,
+   "name": "七星宝刀",
+   "kind": "weapon",
+   "price": 0,
+   "sellable": false,
+   "atk": 6,
+   "agi": 8
+  },
+  {
+   "id": 71,
+   "name": "铁脊矛",
+   "kind": "weapon",
+   "price": 500,
+   "sellable": true,
+   "atk": 6,
+   "agi": 0
+  },
+  {
+   "id": 80,
+   "name": "孙子兵法",
+   "kind": "manual",
+   "price": 0,
+   "sellable": false,
+   "mag": 10,
+   "res": 5,
+   "heal_pct": 0
+  },
+  {
+   "id": 81,
+   "name": "吴子兵法",
+   "kind": "manual",
+   "price": 0,
+   "sellable": false,
+   "mag": 8,
+   "res": 8,
+   "heal_pct": 0
+  },
+  {
+   "id": 82,
+   "name": "六韬",
+   "kind": "manual",
+   "price": 500,
+   "sellable": true,
+   "mag": 8,
+   "res": 5,
+   "heal_pct": 0
+  },
+  {
+   "id": 83,
+   "name": "三略",
+   "kind": "manual",
+   "price": 500,
+   "sellable": true,
+   "mag": 6,
+   "res": 8,
+   "heal_pct": 0
+  },
+  {
+   "id": 84,
+   "name": "孟德新书",
+   "kind": "manual",
+   "price": 0,
+   "sellable": false,
+   "mag": 12,
+   "res": 0,
+   "heal_pct": 0
+  },
+  {
+   "id": 85,
+   "name": "青囊书",
+   "kind": "manual",
+   "price": 0,
+   "sellable": false,
+   "mag": 0,
+   "res": 0,
+   "heal_pct": 20
+  },
+  {
+   "id": 96,
+   "name": "的卢",
+   "kind": "mount",
+   "price": 0,
+   "sellable": false,
+   "move": 1,
+   "agi": 0
+  },
+  {
+   "id": 97,
+   "name": "赤兔",
+   "kind": "mount",
+   "price": 0,
+   "sellable": false,
+   "move": 1,
+   "agi": 10
+  },
+  {
+   "id": 98,
+   "name": "绝影",
+   "kind": "mount",
+   "price": 0,
+   "sellable": false,
+   "move": 1,
+   "agi": 5
+  },
+  {
+   "id": 99,
+   "name": "驿马",
+   "kind": "mount",
+   "price": 800,
+   "sellable": true,
+   "move": 1,
+   "agi": 0
+  },
+  {
+   "id": 112,
+   "name": "传国玉玺",
+   "kind": "plot",
+   "price": 0,
+   "sellable": false
+  },
+  {
+   "id": 113,
+   "name": "衣带诏",
+   "kind": "plot",
+   "price": 0,
+   "sellable": false
+  }
+ ]
 }

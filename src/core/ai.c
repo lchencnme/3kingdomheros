@@ -6,6 +6,7 @@
 #include "types.h"
 #include "strategy.h"
 #include "item.h"
+#include "save.h"
 
 typedef char ai_strat_fits[(sizeof(AiStrat) * AI_MAX_STRAT <= 256u) ? 1 : -1];   /* GB: D500..D5FF */
 #ifndef __SDCC
@@ -32,6 +33,8 @@ extern volatile uint16_t dbg_ai_t_range, dbg_ai_t_field, dbg_ai_t_cand;
 #define W_CTRL 3000l
 #define W_HEAL 80l
 #define W_PRICE 10l
+#define W_MORALE 30l
+#define W_MISSION 100000000l
 
 static uint8_t manhattan(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 {
@@ -40,6 +43,70 @@ static uint8_t manhattan(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 }
 
 void ai_invalidate(AiScratch *s) CORE_API { s->field_state = 0; }
+
+/* ---------------------------------------------------------------- groups / overrides (8.2) */
+static void rec_write(uint16_t off, const AiMode *m)
+{
+    uint8_t r[5];
+    r[0] = m->mode; r[1] = (uint8_t)(m->target & 0xFF); r[2] = (uint8_t)(m->target >> 8); r[3] = m->leash; r[4] = m->flags;
+    sram_write(AI_SRAM_BANK, off, r, 5);
+}
+
+static void rec_read(uint16_t off, AiMode *m)
+{
+    uint8_t r[5];
+    sram_read(AI_SRAM_BANK, off, r, 5);
+    m->mode = r[0]; m->target = (uint16_t)(r[1] | ((uint16_t)r[2] << 8)); m->leash = r[3]; m->flags = r[4];
+}
+
+void ai_groups_init(const uint8_t *recs, uint8_t n) CORE_API
+{
+    AiMode d;
+    uint8_t i;
+    d.mode = AI_HOLD; d.target = AI_NO_TARGET; d.leash = 3; d.flags = 0;
+    for (i = 0; i < MAX_UNITS; i++) rec_write((uint16_t)(AI_SRAM_GROUPS + (uint16_t)i * 5u), &d);
+    d.mode = 0; d.target = 0; d.leash = 0;
+    for (i = 0; i < MAX_UNITS; i++) rec_write((uint16_t)(AI_SRAM_INST + (uint16_t)i * 5u), &d);    /* no overrides */
+    for (i = 0; i < n; i++) {
+        const uint8_t *r = recs + (uint16_t)i * 5u;
+        if (r[0] >= MAX_UNITS) continue;
+        d.mode = r[1]; d.target = (uint16_t)(r[2] | ((uint16_t)r[3] << 8)); d.leash = r[4]; d.flags = 0;
+        rec_write((uint16_t)(AI_SRAM_GROUPS + (uint16_t)r[0] * 5u), &d);
+    }
+}
+
+void ai_set(uint16_t subject, uint8_t mode, uint16_t target, uint8_t leash) CORE_API
+{
+    AiMode m;
+    m.mode = mode; m.target = target; m.leash = leash;
+    if (subject & 0x8000u) {
+        if ((subject & 0x7Fu) >= MAX_UNITS) return;
+        m.flags = 0;                                     /* groups keep their instance overrides */
+        rec_write((uint16_t)(AI_SRAM_GROUPS + (subject & 0x7Fu) * 5u), &m);
+    } else if (subject < MAX_UNITS) {
+        m.flags = AIF_OVERRIDE;                          /* SET_AI resets the alert bit */
+        rec_write((uint16_t)(AI_SRAM_INST + subject * 5u), &m);
+    }
+}
+
+void ai_resolve(uint8_t unit, AiMode *m) CORE_API
+{
+    AiMode inst;
+    ActiveUnit u;
+    rec_read((uint16_t)(AI_SRAM_INST + (uint16_t)unit * 5u), &inst);
+    if (inst.flags & AIF_OVERRIDE) { *m = inst; return; }
+    unit_load(unit, &u);
+    rec_read((uint16_t)(AI_SRAM_GROUPS + (uint16_t)(u.ai_id < MAX_UNITS ? u.ai_id : 0) * 5u), m);
+    m->flags = inst.flags & AIF_ALERT;
+}
+
+static void set_alert(uint8_t unit)
+{
+    AiMode inst;
+    rec_read((uint16_t)(AI_SRAM_INST + (uint16_t)unit * 5u), &inst);
+    inst.flags |= AIF_ALERT;
+    rec_write((uint16_t)(AI_SRAM_INST + (uint16_t)unit * 5u), &inst);
+}
 
 void ai_field_request(Battle *b, AiScratch *s, uint8_t mtype, uint8_t side) CORE_API
 {
@@ -55,8 +122,17 @@ void ai_field_request(Battle *b, AiScratch *s, uint8_t mtype, uint8_t side) CORE
         cells[k] = c;
         n++;
     }
-    s->field_mtype = mtype; s->field_side = side; s->field_state = 1;
+    s->field_mtype = mtype; s->field_side = side; s->field_state = 1; s->field_src = AI_NO_TARGET;
     field_begin(&s->job, mtype, side, cells, n);
+    if (s->job.done) s->field_state = 2;
+}
+
+/* single-source field (GUARD/ESCAPE target cell, or a designated target unit's cell) */
+static void field_request_cell(AiScratch *s, uint8_t mtype, uint8_t side, uint16_t cell)
+{
+    s->cells[0] = cell;
+    s->field_mtype = mtype; s->field_side = side; s->field_state = 1; s->field_src = cell;
+    field_begin(&s->job, mtype, side, s->cells, 1);
     if (s->job.done) s->field_state = 2;
 }
 
@@ -124,11 +200,29 @@ static void prepare_special(Battle *b, AiScratch *s, const ActiveUnit *ap, uint8
 #define a (*ap)
     uint8_t i;
     s->n_strat = 0;
-    if (class_defs[a.class_id].learn_mask && a.mp && !(a.status_mask & (1u << ST_SILENCE))) {
+    if (class_defs[a.class_id].learn_mask && a.mp && !(a.status_mask & (1u << ST_SILENCE))
+        && class_defs[a.class_id].family != FAM_CIVILIAN) {
         uint8_t sid;
         for (sid = 0; sid < NUM_STRATEGIES; sid++) {
             const StrategyDef *sd = &strategy_defs[sid];
             if (!strategy_known(&a, sid) || a.mp < sd->mp) continue;
+            if (sd->effect == FX_HEAL || sd->effect == FX_MORALE) {
+                /* support strategies on damaged / shaken allies (incl. self: centre = the endpoint) */
+                for (i = 0; i < b->n_units && s->n_strat < AI_MAX_STRAT; i++) {
+                    StratEstimate se;
+                    uint8_t ux, uy;
+                    unit_load(i, AI_TMP_UNIT);
+                    if (!unit_alive(AI_TMP_UNIT) || factions_hostile(a.faction, AI_TMP_UNIT->faction)) continue;
+                    ux = AI_TMP_UNIT->x; uy = AI_TMP_UNIT->y;
+                    if (manhattan(a.x, a.y, ux, uy) > (uint8_t)(a.move + sd->range)) continue;
+                    if (!strategy_estimate(b, &a, actor, sid, ux, uy, &se, AI_TMP_UNIT) || (!se.heal && !se.morale)) continue;
+                    SB[s->n_strat].sid = sid; SB[s->n_strat].range = sd->range;
+                    SB[s->n_strat].cx = i == actor ? 0xFFu : ux; SB[s->n_strat].cy = uy;
+                    SB[s->n_strat].val = W_HEAL * (int32_t)se.heal + W_MORALE * (int32_t)se.morale;
+                    s->n_strat++;
+                }
+                continue;
+            }
             for (i = 0; i < s->n_opp && s->n_strat < AI_MAX_STRAT; i++) {
                 AiOpp *o = &s->opp[i];
                 StratEstimate se;
@@ -140,6 +234,22 @@ static void prepare_special(Battle *b, AiScratch *s, const ActiveUnit *ap, uint8
                 s->n_strat++;
             }
         }
+    }
+    /* fire pot (7.2): fixed 120, range 2, no counter; scored like a strategy minus 10 x price */
+    for (i = 0; i < INV_SLOTS; i++) {
+        uint8_t it = inv_get(actor, i), k;
+        if (it == ITEM_NONE || item_defs[it].kind != IK_FIRE) continue;
+        for (k = 0; k < s->n_opp && s->n_strat < AI_MAX_STRAT; k++) {
+            AiOpp *o = &s->opp[k];
+            uint16_t dmg = item_defs[it].power < o->hp ? item_defs[it].power : o->hp;
+            if (manhattan(a.x, a.y, o->x, o->y) > (uint8_t)(a.move + item_defs[it].range)) continue;
+            SB[s->n_strat].sid = (uint8_t)(0x80u | i); SB[s->n_strat].range = item_defs[it].range;
+            SB[s->n_strat].cx = o->x; SB[s->n_strat].cy = o->y;
+            SB[s->n_strat].val = W_DMG * (int32_t)dmg + (item_defs[it].power >= o->hp ? W_KILL : 0)
+                                 - W_PRICE * (int32_t)item_defs[it].price;
+            s->n_strat++;
+        }
+        break;                                           /* one pot is enough to value */
     }
     /* sort by value, best first (stable insertion sort; n <= 32): the endpoint loop can then stop at the
      * first candidate in range + LOS, so LOS is computed about once per endpoint */
@@ -168,15 +278,100 @@ static void prepare_special(Battle *b, AiScratch *s, const ActiveUnit *ap, uint8
 static ActiveUnit ai_t;   /* static (fixed RAM) to keep the deepest call chain off the 512B stack */
 
 
+/* HOLD alert (8.4, rule): can any opponent reach a cell from which it attacks a's cell? Exact local SPFA
+ * per opponent passing the coarse distance test; uses mr as scratch (the caller recomputes a's range). */
+static uint8_t hold_threatened(Battle *b, MoveRange *mr, const ActiveUnit *a)
+{
+    uint8_t i, ly, lx;
+    for (i = 0; i < b->n_units; i++) {
+        const ClassDef *c;
+        uint8_t mv;
+        unit_load(i, &ai_t);
+        if (!unit_alive(&ai_t) || !factions_hostile(a->faction, ai_t.faction)) continue;
+        c = &class_defs[ai_t.class_id];
+        if (c->range_max == 0) continue;
+        mv = (ai_t.status_mask & (1u << ST_ROOT)) ? 0 : ai_t.move;
+        if (manhattan(ai_t.x, ai_t.y, a->x, a->y) > (uint8_t)(mv + c->range_max)) continue;
+        path_move_range(mr, ai_t.x, ai_t.y, mv, c->move_type, faction_side(ai_t.faction));
+        for (ly = 0; ly < MR_DIM; ly++) {
+            int16_t gy = mr->by + ly;
+            if (gy < 0 || gy >= grid_h) continue;
+            for (lx = 0; lx < MR_DIM; lx++) {
+                int16_t gx = mr->bx + lx;
+                uint8_t d;
+                if (gx < 0 || gx >= grid_w || mr->dist[(uint16_t)ly * MR_DIM + lx] == MR_INF) continue;
+                if (!path_endpoint_ok(mr, (uint8_t)gx, (uint8_t)gy)) continue;
+                d = manhattan((uint8_t)gx, (uint8_t)gy, a->x, a->y);
+                if (d < c->range_min || d > c->range_max) continue;
+                if (d > 1 && !los_clear((uint8_t)gx, (uint8_t)gy, a->x, a->y)) continue;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* the approach field a unit's decision will use (8.4): all opponents, or one source cell */
+static uint16_t field_src_for(Battle *b, const ActiveUnit *a, const AiMode *md)
+{
+    uint8_t mode = md->mode;
+    if (mode == AI_HOLD && (md->flags & AIF_ALERT)) mode = AI_AGGRESSIVE;
+    if (mode == AI_ESCAPE && md->target < (uint16_t)grid_w * grid_h) return md->target;
+    if (mode == AI_AGGRESSIVE && md->target < b->n_units) {
+        ActiveUnit t_;
+        unit_load((uint8_t)md->target, &t_);
+        if (unit_alive(&t_)) return (uint16_t)t_.y * grid_w + t_.x;
+    }
+    (void)a;
+    return AI_NO_TARGET;
+}
+
+void ai_field_prepare(Battle *b, AiScratch *s, uint8_t unit) CORE_API
+{
+    AiMode m;
+    ActiveUnit u;
+    uint8_t mtype, side;
+    uint16_t src;
+    ai_resolve(unit, &m);
+    unit_load(unit, &u);
+    mtype = class_defs[u.class_id].move_type; side = faction_side(u.faction);
+    src = field_src_for(b, &u, &m);
+    if (s->field_state != 0 && s->field_mtype == mtype && s->field_side == side && s->field_src == src) return;
+    if (src == AI_NO_TARGET) ai_field_request(b, s, mtype, side);
+    else field_request_cell(s, mtype, side, src);
+}
+
+uint8_t ai_hold_update(Battle *b, MoveRange *mr, uint8_t unit) CORE_API
+{
+    AiMode m;
+    ActiveUnit u;
+    ai_resolve(unit, &m);
+    if (m.mode != AI_HOLD || (m.flags & AIF_ALERT)) return (uint8_t)((m.flags & AIF_ALERT) != 0);
+    unit_load(unit, &u);
+    if (!unit_alive(&u) || !hold_threatened(b, mr, &u)) return 0;
+    set_alert(unit);
+    return 1;
+}
+
 void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mode, AiCommand *out) CORE_API
+{
+    AiMode m;
+    m.mode = mode; m.target = AI_NO_TARGET; m.leash = 3;
+    m.flags = mode == AI_HOLD ? AIF_ALERT : 0;     /* legacy entry: plain HOLD never leaves its cell */
+    if (mode == AI_HOLD) m.mode = AI_HOLD | 0x40u;
+    ai_decide_mode(b, s, mr, actor, &m, out);
+}
+
+void ai_decide_mode(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, const AiMode *md, AiCommand *out) CORE_API
 {
     ActiveUnit a;
 #define t ai_t
-    uint8_t i, side, mtype, ly, lx, have = 0, armin, armax;
-    uint16_t here_field, bcnt = 0, bcell = 0;
+    uint8_t i, side, mtype, ly, lx, have = 0, armin, armax, mode, leash, gpx = 0, gpy = 0;
+    uint16_t here_field, bcnt = 0, bcell = 0, src = AI_NO_TARGET;
     uint8_t bcost = 0;
     uint16_t pt0;
     unit_load(actor, &a);
+    mode = md->mode; leash = md->leash;
     side = faction_side(a.faction);
     mtype = class_defs[a.class_id].move_type;
     armin = class_defs[a.class_id].range_min;
@@ -185,6 +380,21 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
     out->x = a.x; out->y = a.y; out->action = ACT_WAIT; out->target = 0xFF; out->score = 0;
     out->param = 0xFF; out->tx = a.x; out->ty = a.y;
     if (!battle_can_act(&a)) return;
+
+    /* 8.2 modes. 0x40 marks the legacy never-alerting HOLD of ai_decide(). */
+    if (mode == (AI_HOLD | 0x40u)) mode = AI_HOLD;
+    else if (mode == AI_HOLD && (md->flags & AIF_ALERT)) mode = AI_AGGRESSIVE;   /* alert: ai_hold_update */
+    if ((mode == AI_GUARD_POINT || mode == AI_ESCAPE) && md->target < (uint16_t)grid_w * grid_h) {
+        src = md->target;
+        gpy = (uint8_t)(md->target / grid_w); gpx = (uint8_t)(md->target - (uint16_t)gpy * grid_w);   /* once */
+        if (mode == AI_GUARD_POINT) src = AI_NO_TARGET;   /* guards intercept: approach opponents, leash-limited */
+    } else if ((mode == AI_ESCORT || mode == AI_AGGRESSIVE) && md->target < b->n_units) {
+        unit_load((uint8_t)md->target, &t);
+        if (unit_alive(&t)) {
+            gpx = t.x; gpy = t.y;
+            if (mode == AI_AGGRESSIVE) src = (uint16_t)t.y * grid_w + t.x;    /* designated target */
+        } else if (mode == AI_ESCORT) mode = AI_AGGRESSIVE;                  /* escortee gone */
+    } else if (mode == AI_GUARD_POINT || mode == AI_ESCAPE || mode == AI_ESCORT) mode = AI_AGGRESSIVE;
 
     pt0 = PROF_T();
     path_move_range(mr, a.x, a.y, (a.status_mask & (1u << ST_ROOT)) ? 0 : a.move, mtype, side);
@@ -214,7 +424,11 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
         for (q = 0; q < 10; q++) o->threat[q] = 0xFFFF;
     }
 
-    if (s->field_state == 0 || s->field_mtype != mtype || s->field_side != side) ai_field_request(b, s, mtype, side);
+    if (src == AI_NO_TARGET) {
+        if (s->field_state == 0 || s->field_mtype != mtype || s->field_side != side || s->field_src != AI_NO_TARGET)
+            ai_field_request(b, s, mtype, side);
+    } else if (s->field_state == 0 || s->field_mtype != mtype || s->field_side != side || s->field_src != src)
+        field_request_cell(s, mtype, side, src);           /* replaces the cache (8.4) */
     while (!ai_field_pump(s, 1024)) {}             /* finish synchronously if the phase-start job is not done */
     PROF_SET(dbg_ai_t_field, PROF_T() - pt0); pt0 = PROF_T();
     here_field = fld_get((uint16_t)a.y * grid_w + a.x);
@@ -237,11 +451,14 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
             if (!(ex == a.x && ey == a.y)) {
                 if (mode == AI_HOLD) continue;
                 if (grid_occ(ex, ey)) continue;              /* allies may be crossed, not ended on */
+                /* leash constraints are filters, never penalties (8.2) */
+                if ((mode == AI_GUARD_POINT || mode == AI_ESCORT) && manhattan(ex, ey, gpx, gpy) > leash) continue;
             }
             cell = (uint16_t)ey * grid_w + ex;
             et = grid_terrain(ex, ey) & 0x0F;
 
             base = -W_MOVECOST * cost;
+            if (mode == AI_ESCAPE && ex == gpx && ey == gpy) base += W_MISSION;   /* reaches the exit */
             ef = fld_get(cell);
             if (here_field != FIELD_INF && ef != FIELD_INF) {
                 int32_t gain = (int32_t)here_field - (int32_t)ef;
@@ -269,15 +486,17 @@ void ai_decide(Battle *b, AiScratch *s, MoveRange *mr, uint8_t actor, uint8_t mo
             /* STRATEGY candidates: range + LOS from this endpoint */
             for (oi = 0; oi < s->n_strat; oi++) {
                 AiStrat *c = &SB[oi];
-                uint8_t d = manhattan(ex, ey, c->cx, c->cy);
+                uint8_t cx = c->cx == 0xFFu ? ex : c->cx, cy = c->cx == 0xFFu ? ey : c->cy;
+                uint8_t d = manhattan(ex, ey, cx, cy), act = (c->sid & 0x80u) ? ACT_ITEM : ACT_STRATEGY;
                 int32_t sc;
                 if (d > c->range) continue;
+                if (c->cx != 0xFFu && cx == a.x && cy == a.y && !(ex == a.x && ey == a.y)) continue;   /* centre moved away */
                 sc = base + c->val;
-                if (!better(sc, 0, cost, 0xFF, cell, ACT_STRATEGY, out, bcnt, bcost, bcell)) break;   /* sorted: none later wins */
-                if (d > 1 && !los_clear(ex, ey, c->cx, c->cy)) continue;
+                if (!better(sc, 0, cost, 0xFF, cell, act, out, bcnt, bcost, bcell)) break;   /* sorted: none later wins */
+                if (d > 1 && !los_clear(ex, ey, cx, cy)) continue;
                 {
-                    out->x = ex; out->y = ey; out->action = ACT_STRATEGY; out->target = 0xFF; out->score = sc;
-                    out->param = c->sid; out->tx = c->cx; out->ty = c->cy;
+                    out->x = ex; out->y = ey; out->action = act; out->target = 0xFF; out->score = sc;
+                    out->param = (c->sid & 0x80u) ? (uint8_t)(c->sid & 0x7Fu) : c->sid; out->tx = cx; out->ty = cy;
                     bcnt = 0; bcost = cost; bcell = cell;
                 }
                 break;                                   /* best legal strategy at this endpoint */
