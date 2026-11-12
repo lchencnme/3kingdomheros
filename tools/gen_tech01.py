@@ -293,7 +293,7 @@ def main():
          "#define UNIT_BODY_FOOT 0u\n#define UNIT_BODY_BOW 1u\n#define UNIT_BODY_HORSE 2u",
          "#define UNIT_TILE_BYTES 24u   /* 16 B 2bpp + 8 B mask; 6 tiles per body (2 x 3) */",
          "extern const uint8_t tech01_unit_tiles[];",
-         "typedef struct { uint8_t cls, faction, x, y, ai; } Tech01Unit;",
+         "typedef struct { uint8_t cls, faction, x, y, ai, ch; } Tech01Unit;   /* ch: character id, 0 = anonymous */",
          f"#define TECH01_AI_GROUPS {len(AI_GROUPS)}u",
          "extern const uint8_t tech01_shop[];", "extern const uint8_t tech01_remap[8][4];", f"#define TECH01_TREASURES {len(TREASURES)}u",
          "#define TECH01_TREASURE_FLAG0 0x100u", "extern const uint8_t tech01_treasures[][3];", "extern const uint16_t tech01_council[][2];",
@@ -356,7 +356,7 @@ def main():
     ci.append("const uint8_t tech01_levels[] = {" + ", ".join("1" for _ in UNITS) + "};")
     ci.append("const Tech01Unit tech01_units[] = {")
     for k, (n, _, cl, f, x, y) in enumerate(UNITS):
-        ci.append(f"    {{{cl}, {fac[f]}, {x}, {y}, {UNIT_AI.get(k, 0)}}}, /* {n} */")
+        ci.append(f"    {{{cl}, {fac[f]}, {x}, {y}, {UNIT_AI.get(k, 0)}, 0}}, /* {n} */")
     ci.append("};")
     (ROOT / "src/gen/tech01_data.h").write_text("\n".join(h) + "\n", encoding="utf-8")
     (ROOT / "src/gen/tech01_data.c").write_text("\n".join(c) + "\n", encoding="utf-8")

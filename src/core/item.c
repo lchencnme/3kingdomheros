@@ -85,6 +85,14 @@ void item_def(uint8_t item, ItemDef *out) CORE_API
     if (item < NUM_ITEMS) *out = item_defs[item]; else memset(out, 0, sizeof *out);
 }
 
+uint8_t item_kind(uint8_t item) CORE_API { return item < NUM_ITEMS ? item_defs[item].kind : IK_NONE; }
+
+uint16_t item_field(uint8_t item, uint8_t which) CORE_API
+{
+    if (item >= NUM_ITEMS) return 0;
+    return which == 0 ? item_defs[item].power : (which == 1 ? item_defs[item].price : item_defs[item].range);
+}
+
 /* ---------------------------------------------------------------- equipment (7.1) */
 uint8_t item_category(uint8_t item) CORE_API
 {

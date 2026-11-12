@@ -120,7 +120,8 @@ void hud_raster(uint8_t line)
         uint8_t w = glyph_width[g], col, sh, last;
         uint8_t rows[24];
         if ((uint16_t)x + w > LINE_TILES * 8u) break;
-        rom_copy(TEXT_BANK, rows, &glyph_rows[(uint16_t)g * 24u], 24);
+        if (g < GLYPH_SPLIT) rom_copy(TEXT_BANK, rows, &glyph_rows[(uint16_t)g * 24u], 24);
+        else rom_copy(TEXT_BANK_B, rows, &glyph_rows_b[(uint16_t)(g - GLYPH_SPLIT) * 24u], 24);   /* second glyph bank */
         col = (uint8_t)(x >> 3); sh = (uint8_t)(x & 7);
         last = (uint8_t)(col + 2u < LINE_TILES);
         blit_rows(&hud_bits[(uint16_t)col * 8u + 2u], rows, 6, sh, last);                     /* rows 2..7 */

@@ -29,10 +29,8 @@ static int8_t unit_at(uint8_t x, uint8_t y)
 
 static uint8_t unit_name_tx(const ActiveUnit *u)
 {
-    if (u->character_id == 1) return TX_NAME_LIUBEI;
-    if (u->character_id == 2) return TX_NAME_GUANYU;
-    if (u->character_id == 3) return TX_NAME_ZHANGFEI;
-    if (u->character_id == 8) return TX_NAME_JIANYONG;
+    uint8_t k;                                 /* named characters (content/characters.json), else the class */
+    for (k = 0; k < N_CHARS; k++) if (char_name[k][0] == u->character_id) return char_name[k][1];
     return class_name_tx[u->class_id];
 }
 
@@ -338,7 +336,7 @@ void hud_result(const AttackResult *r) BANKED
 void hud_banner(uint8_t phase) BANKED
 {
     hud_begin();
-    hud_tx(0, phase == FAC_ENEMY ? TX_PHASE_ENEMY : TX_PHASE_PLAYER, B.round);
+    hud_tx(0, phase == FAC_ENEMY ? TX_PHASE_ENEMY : (phase == FAC_ALLY ? TX_PHASE_ALLY : TX_PHASE_PLAYER), B.round);
     hud_end();
 }
 
@@ -365,22 +363,28 @@ static uint8_t count_alive(void)
 }
 
 /* play the VM output queue in order: runs of text pages, and the duel presentation */
+/* the queued duel presentation; own frame (play_queue sits under every scripted dialogue) */
+static void play_duel(void)
+{
+    DuelInfo *d = DUEL_INFO;
+    FsSide sw, sl;
+    AttackResult r;
+    ActiveUnit u;
+    load(d->winner, &u); sw.name_tx = unit_name_tx(&u);
+    load(d->loser, &u); sl.name_tx = unit_name_tx(&u);
+    sw.cls = d->w_cls; sw.fac = d->w_fac; sw.hp = d->w_hp;
+    sl.cls = d->l_cls; sl.fac = d->l_fac; sl.hp = d->l_hp;
+    memset(&r, 0, sizeof r);
+    r.hit = 1; r.dmg = (uint16_t)(d->l_hp - u.hp); r.killed = d->retreated;
+    fs_present(&sw, &sl, &r);
+}
+
 void play_queue(void) BANKED
 {
     uint8_t i = 0;
     while (i < DQ->n) {
         if (DQ->speaker[i] == DQ_DUEL) {
-            DuelInfo *d = DUEL_INFO;
-            FsSide sw, sl;
-            AttackResult r;
-            ActiveUnit u;
-            load(d->winner, &u); sw.name_tx = unit_name_tx(&u);
-            load(d->loser, &u); sl.name_tx = unit_name_tx(&u);
-            sw.cls = d->w_cls; sw.fac = d->w_fac; sw.hp = d->w_hp;
-            sl.cls = d->l_cls; sl.fac = d->l_fac; sl.hp = d->l_hp;
-            memset(&r, 0, sizeof r);
-            r.hit = 1; r.dmg = (uint16_t)(d->l_hp - u.hp); r.killed = d->retreated;
-            fs_present(&sw, &sl, &r);
+            play_duel();
             i++;
         } else {
             i = dialog_run_from(i);

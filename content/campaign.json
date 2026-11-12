@@ -1,10 +1,13 @@
 {
-  "_comment": "战役顺序（设计文档 2.1、2.4）。camp = 战后进入的营地（null = 连续战，直接进入下一关，只先分配战利品）；next = null 表示结局。",
+  "_comment": "战役顺序（设计文档 2.1、2.4、15.2 第一章）。camp = 战后进入的营地（null = 连续战：只先分配战利品，直接进入下一关）；next = null 表示本章结局。",
   "start": "BT_TECH01",
   "battles": [
-    {"id": "BT_TECH01", "title": "TX_BT_TITLE_0", "camp": "CAMP_TECH01", "next": "BT_TECH02"},
-    {"id": "BT_TECH02", "title": "TX_BT_TITLE_1", "camp": null, "next": "BT_TECH03"},
-    {"id": "BT_TECH03", "title": "TX_BT_TITLE_2", "camp": null, "next": null}
+    {"id": "BT_TECH01", "title": "TX_BT_TITLE_0", "camp": "CAMP_TECH01", "next": "BT_01"},
+    {"id": "BT_01", "title": "TX_BT_TITLE_3", "camp": "CAMP_C1_ZHUO", "next": "BT_02"},
+    {"id": "BT_02", "title": "TX_BT_TITLE_4", "camp": null, "next": "BT_03"},
+    {"id": "BT_03", "title": "TX_BT_TITLE_5", "camp": "CAMP_C1_GUANGZONG", "next": "BT_04"},
+    {"id": "BT_04", "title": "TX_BT_TITLE_6", "camp": "CAMP_C1_SISHUI", "next": "BT_05"},
+    {"id": "BT_05", "title": "TX_BT_TITLE_7", "camp": null, "next": null}
   ],
   "ending": [["LIUBEI", "TXD_END_1"], ["NARRATOR", "TXD_END_2"], ["NARRATOR", "TXD_END_3"]]
 }

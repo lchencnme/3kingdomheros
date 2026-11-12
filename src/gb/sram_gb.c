@@ -10,10 +10,10 @@
 /* 11.6: inside a script transaction, log the old bytes first (own frame: sram_write is everywhere) */
 static uint8_t log_old(uint8_t bank, uint16_t off, uint16_t n)
 {
-    uint8_t old[32];
+    uint8_t old[16];
     uint16_t k;
-    for (k = 0; k < n; k += 32u) {
-        uint8_t m = (uint8_t)((n - k) < 32u ? (n - k) : 32u);
+    for (k = 0; k < n; k += 16u) {
+        uint8_t m = (uint8_t)((n - k) < 16u ? (n - k) : 16u);
         sram_read(bank, (uint16_t)(off + k), old, m);
         if (!undo_log(bank == 12u ? US_SRAM12 : US_SRAM15, bank, (uint16_t)(off + k), m, old)) return 0;
     }

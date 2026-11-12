@@ -252,18 +252,23 @@ void battle_phase_end(Battle *b) CORE_API
     }
 }
 
+/* stack-lean (it runs at the bottom of the attack / strategy / script chains): no 40 B unit copies */
 uint8_t battle_check_outcome(Battle *b, uint8_t round_end_checkpoint) CORE_API
 {
     uint8_t i, enemies = 0;
-    ActiveUnit u;
     if (b->outcome != OUT_NONE) return b->outcome;
-    unit_load(b->leader, &u);
-    if (!unit_alive(&u)) { b->outcome = OUT_LOSE; return b->outcome; }   /* leader loss first */
-    for (i = 0; i < b->n_units; i++) {
-        unit_load(i, &u);
-        if (u.faction == FAC_ENEMY && unit_alive(&u)) enemies++;
+    if (!(unit_state_bits(b->leader) & USB_ALIVE)) { b->outcome = OUT_LOSE; return b->outcome; }   /* leader loss first */
+    if (b->protect != NO_UNIT && b->protect < b->n_units && !(unit_state_bits(b->protect) & USB_ALIVE)) {
+        b->outcome = OUT_LOSE; return b->outcome;                          /* 6.6: a protected NPC fell */
     }
+    for (i = 0; i < b->n_units; i++)
+        if ((unit_state_bits(i) & (USB_ALIVE | USB_ENEMY)) == (USB_ALIVE | USB_ENEMY)) enemies++;
     if (!enemies) { b->outcome = OUT_WIN; return b->outcome; }
+    if ((b->vic_kind == VIC_DEFEAT_UNIT || b->vic_kind == VIC_SURVIVE) && b->vic_unit != NO_UNIT && b->vic_unit < b->n_units
+        && (unit_state_bits(b->vic_unit) & (USB_ALIVE | USB_SPAWNED)) == USB_SPAWNED) {
+        b->outcome = OUT_WIN; return b->outcome;                           /* the target general is gone */
+    }
+    if (round_end_checkpoint && b->vic_kind == VIC_SURVIVE && b->round >= b->vic_round) { b->outcome = OUT_WIN; return b->outcome; }
     if (round_end_checkpoint && b->round >= b->turn_limit) b->outcome = OUT_LOSE;
     return b->outcome;
 }

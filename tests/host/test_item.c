@@ -538,6 +538,24 @@ int main(void)
         CHECK(host_sram[13][0] == 'Y' || host_sram[14][0] == 'Y', "lives in SRAM bank 13/14");
     }
 
+    /* 6.6 objectives: defeat a named general, hold out, protect an NPC */
+    reset();
+    battle_spawn(&B, 3, 0xFFFF, 0, FAC_ENEMY, 1, 9, 9);
+    B.vic_kind = VIC_DEFEAT_UNIT; B.vic_unit = 3; B.protect = NO_UNIT;
+    CHECK(battle_check_outcome(&B, 0) == OUT_NONE, "target general still standing");
+    host_units[3].hp = 0; host_units[3].action_flags |= AF_RETREAT;
+    CHECK(battle_check_outcome(&B, 0) == OUT_WIN, "target general removed -> win with enemies left");
+    reset();
+    B.vic_kind = VIC_SURVIVE; B.vic_round = 5; B.vic_unit = NO_UNIT; B.protect = 1;
+    B.round = 4;
+    CHECK(battle_check_outcome(&B, 1) == OUT_NONE, "round 4 of 5: keep holding");
+    B.round = 5;
+    CHECK(battle_check_outcome(&B, 0) == OUT_NONE && battle_check_outcome(&B, 1) == OUT_WIN, "survive: win at the end of round 5");
+    reset();
+    B.vic_kind = VIC_ALL_ENEMIES; B.protect = 1;
+    host_units[1].hp = 0; host_units[1].action_flags |= AF_RETREAT;
+    CHECK(battle_check_outcome(&B, 0) == OUT_LOSE, "protected ally lost -> defeat");
+
     /* battle save carries the inventory block (tag 9) */
     reset();
     {

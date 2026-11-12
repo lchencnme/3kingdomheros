@@ -1,0 +1,5 @@
+{"_comment": "汜水关外营（第四战后）。", "id": "CAMP_C1_SISHUI",
+ "commands": ["COUNCIL", "EQUIP", "EXCHANGE", "SHOP", "DEPLOY"],
+ "council": [["NARRATOR", "TXD_C1C_1"], ["GUANYU", "TXD_C1C_2"], ["ZHANGFEI", "TXD_C1C_3"], ["LIUBEI", "TXD_C1C_4"]],
+ "shop": [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 19, 25, 49, 52, 54, 71, 82, 83, 99],
+ "deploy": {"max_count": 4, "forced": ["CH_LIUBEI"]}}

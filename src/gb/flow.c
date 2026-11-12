@@ -43,6 +43,7 @@ uint8_t do_suspend_load(void) BANKED
     if (r != SAVE_OK) return r;
     pending_start = 0; end_fired = 0; DQ->n = 0;
     B.turn_limit = BD->turn_limit;              /* from the battle definition, not the save */
+    B.vic_kind = BD->vic_kind; B.vic_unit = BD->vic_unit; B.vic_round = BD->vic_round; B.protect = BD->protect;
     options = ui.options;
     gold = (uint16_t)ui.gold;
     cam_x = ui.cam_x; cam_y = ui.cam_y; cur_x = ui.cur_x; cur_y = ui.cur_y;
@@ -71,6 +72,7 @@ void start_battle(void) BANKED
     /* 2.4: round_mode CARRY continues the previous battle's round (turn_limit is absolute) */
     B.round = (BD->round_mode == ROUND_CARRY && carry_round) ? carry_round : 1u;
     B.turn_limit = BD->turn_limit; B.leader = 0;
+    B.vic_kind = BD->vic_kind; B.vic_unit = BD->vic_unit; B.vic_round = BD->vic_round; B.protect = BD->protect;   /* 6.6 */
     units_clear();
     wram_init_grid_rom(BD->w, BD->h, BD->tbank, BD->terrain);
     vm_clear_battle_flags();                   /* once bits + battle-scope flags are per battle */
@@ -103,7 +105,7 @@ void start_battle(void) BANKED
         const Tech01Unit *t = &BD->units[i];
         ActiveUnit u;
         if (t->faction == FAC_PLAYER) continue;
-        battle_spawn(&B, i, ANON_CHARACTER, t->cls, t->faction, BD->levels[i], t->x, t->y);
+        battle_spawn(&B, i, t->ch ? (uint16_t)t->ch : ANON_CHARACTER, t->cls, t->faction, BD->levels[i], t->x, t->y);
         load(i, &u); u.ai_id = t->ai; unit_store(i, &u);
     }
     for (i = 0; i < BD->n_items; i++) { inv_add(BD->items[i][0], BD->items[i][1]); item_rederive(BD->items[i][0]); }
@@ -158,38 +160,54 @@ uint8_t player_can_act(void) BANKED
     return 0;
 }
 
-void begin_enemy_phase(void) BANKED
+static uint8_t ai_fac;                       /* faction whose AI phase is running (ALLY / ENEMY) */
+
+
+/* first unit of a faction that can act this phase, or 0xFF (own frame: keeps the record off the chain) */
+static uint8_t first_actor(uint8_t fac)
 {
-    uint8_t o = SVBK_REG;
-    danger_hide();
-    battle_phase_end(&B);                      /* PLAYER end */
-    if (B.outcome) return;
-    battle_phase_start(&B, FAC_ALLY);          /* no allies in TECH01: start/end still run */
-    fire(TR_PHASE_START, FAC_ALLY, 0xFF, 0xFF, 0xFF);
-    if (B.outcome) return;
-    battle_phase_end(&B);
-    if (B.outcome) return;
-    battle_phase_start(&B, FAC_ENEMY);
-    fire(TR_PHASE_START, FAC_ENEMY, 0xFF, 0xFF, 0xFF);
-    if (B.outcome) return;
-    SVBK_REG = WB_SCRATCH;
-    {   /* 8.2 HOLD alert test once per phase, while the banner is up (exact SPFA per nearby opponent) */
-        uint8_t i;
-        for (i = 0; i < B.n_units; i++) ai_hold_update(&B, W7_MR, i);
-    }
-    ai_invalidate(W7_AI);
-    {   /* pre-warm the field of the first enemy that will act */
-        uint8_t i;
-        ActiveUnit u;
-        for (i = 0; i < B.n_units; i++) {
-            load(i, &u);
-            if (u.faction == FAC_ENEMY && battle_can_act(&u)) { ai_field_prepare(&B, W7_AI, i); break; }
+    uint8_t i;
+    ActiveUnit u;
+    for (i = 0; i < B.n_units; i++) { load(i, &u); if (u.faction == fac && battle_can_act(&u)) return i; }
+    return 0xFF;
+}
+
+/* 4.1 phase order PLAYER -> ALLY -> ENEMY: an AI phase (the ally phase is skipped without allies).
+ * No recursion and no unit record here: PHASE_START scripts (spawns) run below this frame. */
+static void start_ai_phase(uint8_t fac)
+{
+    uint8_t o, i, first;
+    for (;;) {
+        battle_phase_start(&B, fac);
+        fire(TR_PHASE_START, fac, 0xFF, 0xFF, 0xFF);
+        if (B.outcome) return;
+        first = first_actor(fac);
+        if (fac == FAC_ALLY && first == 0xFF) {
+            battle_phase_end(&B);
+            if (B.outcome) return;
+            fac = FAC_ENEMY;
+            continue;
         }
+        break;
     }
+    ai_fac = fac;
+    o = SVBK_REG;
+    SVBK_REG = WB_SCRATCH;
+    for (i = 0; i < B.n_units; i++) ai_hold_update(&B, W7_MR, i);   /* 8.2 HOLD alert, once per phase */
+    ai_invalidate(W7_AI);
+    if (first != 0xFF) ai_field_prepare(&B, W7_AI, first);           /* pre-warm the first actor's field */
     SVBK_REG = o;
     enemy_i = 0;
     state = G_BANNER; timer = 45; next_state = G_ENEMY;
-    hud_banner(FAC_ENEMY);
+    hud_banner(fac);
+}
+
+void begin_enemy_phase(void) BANKED
+{
+    danger_hide();
+    battle_phase_end(&B);                      /* PLAYER end */
+    if (B.outcome) return;
+    start_ai_phase(FAC_ALLY);
 }
 
 static void mark_acted(uint8_t i)
@@ -223,7 +241,7 @@ static void enemy_skip_idle(void)
     ActiveUnit u;
     while (enemy_i < B.n_units) {
         load(enemy_i, &u);
-        if (u.faction == FAC_ENEMY && battle_can_act(&u)) break;
+        if (u.faction == ai_fac && battle_can_act(&u)) break;
         enemy_i++;
     }
 }
@@ -251,7 +269,7 @@ static void prewarm_next(void)
     uint8_t j, m, o;
     for (j = (uint8_t)(enemy_i + 1u); j < B.n_units; j++) {
         load(j, &u);
-        if (u.faction == FAC_ENEMY && battle_can_act(&u)) break;
+        if (u.faction == ai_fac && battle_can_act(&u)) break;
     }
     if (j >= B.n_units) return;
     (void)m;
@@ -267,6 +285,12 @@ void enemy_step(void) BANKED
     uint8_t o, ux, uy;
     uint16_t t0;
     enemy_skip_idle();
+    if (enemy_i >= B.n_units && ai_fac == FAC_ALLY) {   /* allies done: the enemy phase follows */
+        battle_phase_end(&B);
+        if (B.outcome) return;
+        start_ai_phase(FAC_ENEMY);
+        return;
+    }
     if (enemy_i >= B.n_units) {
         fire(TR_ROUND_END, FAC_ENEMY, 0xFF, 0xFF, 0xFF);   /* round number of the round that ends */
         if (B.outcome) return;
@@ -290,7 +314,7 @@ void enemy_step(void) BANKED
     dbg_t_ai = sys_time - t0;
     if (c.x != ux || c.y != uy) {
         battle_move(enemy_i, c.x, c.y);
-        fire(TR_POST_MOVE, FAC_ENEMY, enemy_i, 0xFF, 0xFF);
+        fire(TR_POST_MOVE, ai_fac, enemy_i, 0xFF, 0xFF);
         if (B.outcome || !unit_pos(enemy_i, &ux, &uy)) c.action = ACT_WAIT;   /* 4.3: the move's event ended the action */
     }
     cur_x = c.x; cur_y = c.y;                  /* camera follows the actor */
@@ -382,7 +406,7 @@ void battle_won(void) BANKED
     if (camp != 0xFF || prize_count()) {
         music_play(&song_camp);                /* 14.4: camp theme */
         camp_prepare();
-        camp_run(&gold, &deploy, camp == 0xFF ? CAMP_PRIZES_ONLY : CAMP_FULL, next);   /* LCD off on return */
+        camp_run(&gold, &deploy, camp == 0xFF ? CAMP_PRIZES_ONLY : CAMP_FULL, next, camp);   /* LCD off on return */
         camp_finish();
     } else DISPLAY_OFF;
     go_next(next);
@@ -401,7 +425,7 @@ void load_camp_and_go(void) BANKED
     DISPLAY_OFF;
     music_play(&song_camp);
     camp_prepare();
-    camp_run(&gold, &deploy, CAMP_FULL, BD->next);
+    camp_run(&gold, &deploy, CAMP_FULL, BD->next, BD->camp == 0xFF ? 0u : BD->camp);
     camp_finish();
     go_next(BD->next);
 }

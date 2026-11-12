@@ -3,8 +3,10 @@
 #define CAMPAIGN_DATA_H
 #include <stdint.h>
 #include "tech01_data.h"
-#define N_BATTLES 3u
+#define N_BATTLES 6u
+#define N_CAMPS 4u
 #define N_ROSTER_INIT 4u
+#define N_CHARS 10u
 #define N_ENDING_PAGES 3u
 #define CONT_NORMAL 0u
 #define CONT_NO_REPLENISH 1u
@@ -20,12 +22,14 @@ typedef struct {
     uint16_t turn_limit;
     uint8_t continuity, round_mode, deploy_max, forced, seed;        /* forced: bit k = officer k */
     uint8_t camp, next, title_tx;                                    /* 0xFF: continuous / ending */
+    uint8_t vic_kind, vic_unit, vic_round, protect;                  /* 6.6 objectives (VIC_*) */
 } BattleDef;
 typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; } CampDef;
 typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd, name_tx; uint8_t items[8]; } RosterInit;
 extern const BattleDef battle_defs[N_BATTLES];
-extern const CampDef camp_defs[1];
+extern const CampDef camp_defs[N_CAMPS];
 extern const RosterInit roster_init[N_ROSTER_INIT];
 extern const uint16_t ending_pages[][2];
+extern const uint8_t char_name[N_CHARS][2];   /* character id -> TX name */
 extern const uint8_t tech01_levels[];
 #endif

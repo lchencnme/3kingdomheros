@@ -1,0 +1,15 @@
+{
+  "_comment": "具名人物登记（设计文档 15.3，节选第一章）。id 是 character_id（只追加）；portrait = 画像序号（P0001 起为 0），null = 旁白式台词。",
+  "characters": [
+    {"id": 1,  "tag": "CH_LIUBEI",      "name": "TX_NAME_LIUBEI",      "portrait": 0},
+    {"id": 2,  "tag": "CH_GUANYU",      "name": "TX_NAME_GUANYU",      "portrait": 1},
+    {"id": 3,  "tag": "CH_ZHANGFEI",    "name": "TX_NAME_ZHANGFEI",    "portrait": 2},
+    {"id": 8,  "tag": "CH_JIANYONG",    "name": "TX_NAME_JIANYONG",    "portrait": null},
+    {"id": 10, "tag": "CH_CHENGYUANZHI", "name": "TX_NAME_CHENGYUANZHI", "portrait": null},
+    {"id": 11, "tag": "CH_DENGMAO",     "name": "TX_NAME_DENGMAO",     "portrait": null},
+    {"id": 12, "tag": "CH_GONGJING",    "name": "TX_NAME_GONGJING",    "portrait": null},
+    {"id": 13, "tag": "CH_ZHANGBAO",    "name": "TX_NAME_ZHANGBAO",    "portrait": null},
+    {"id": 14, "tag": "CH_HUAXIONG",    "name": "TX_NAME_HUAXIONG",    "portrait": null},
+    {"id": 15, "tag": "CH_LVBU",        "name": "TX_NAME_LVBU",        "portrait": null}
+  ]
+}

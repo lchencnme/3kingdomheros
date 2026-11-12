@@ -852,62 +852,134 @@ for _ in range(4):
 it.press("a", after=30)
 check(f"camp save written ({camp_cur(it)})", it.r8("_dbg_saves") == saves0 + 1 and camp_cur(it) == 6)
 it.press("up", after=16); it.press("up", after=16)
-# deployment: leave 张飞 behind, move 简雍 before 关羽, depart
+# deployment for BT_01 (max 3, 刘关张 forced): 张飞 cannot be left behind, 简雍 stays in camp
 it.press("a", after=16)
 check("出阵 opens the deployment screen after 军议", camp_wait(it, C_DEPLOY))
 it.frames(60); it.png(ROM.parent / "shot_deploy.png")
-it.press("down", after=16); it.press("down", after=16); it.press("a", after=16)        # 张飞 out
-it.press("down", after=16); it.press("select", after=16)                     # 简雍 one slot earlier
-it.press("up", after=16); it.press("up", after=16); it.press("up", after=16); it.press("a", after=16)   # 刘备 is forced: stays
+it.press("down", after=16); it.press("down", after=16); it.press("a", after=16)        # 张飞: forced, stays
+it.press("down", after=16); it.press("a", after=16)                                    # 简雍: 4th > max 3, refused
 it.press("start", after=16)
-it.wait_state([G_IDLE], 600)
-check(f"depart: battle 2 with 刘备/简雍/关羽 in slot order, 张飞 stays in camp ({it.unit(0)}, {it.unit(3)}, {it.unit(1)}, hp 张飞 {it.hp(2)})",
-      it.state() == G_IDLE and it.r8("_dbg_battle") == 1 and it.unit(0) == (2, 8) and it.unit(3) == (3, 9)
-      and it.unit(1) == (2, 10) and it.hp(2) == 0)
+it.wait_state([G_IDLE], 900)
+check(f"depart: BT_01 涿郡破黄巾 with 刘关张 in their slots, 简雍 stays in camp ({it.unit(0)}, {it.unit(1)}, {it.unit(2)}, hp 简雍 {it.hp(3)})",
+      it.state() == G_IDLE and it.r8("_dbg_battle") == 1 and it.unit(0) == (2, 5) and it.unit(1) == (2, 7)
+      and it.unit(2) == (3, 6) and it.hp(3) == 0)
 check("gold kept after departing", it.r16("_dbg_gold") == 90)
 inv4 = [it.m[SYMS["_dbg_inv"] + k] for k in range(8)]
-check(f"roster carried 刘备's items into battle 2 ({inv4})", 0x70 in inv4)
-check("battle 2 enemies on the field", all(it.hp(i) > 0 for i in range(4, 10)))
+check(f"roster carried 刘备's items into BT_01 ({inv4})", 0x70 in inv4)
+check("BT_01 enemies on the field (程远志 is unit 4)", all(it.hp(i) > 0 for i in range(4, 11)))
 it.frames(60)
-check("BG map consistent after camp (battle 2 map)", view_mismatches(it) == 0)
+check("BG map consistent after camp (BT_01 map)", view_mismatches(it) == 0)
 
 def win_now(em, enemies):
-    """remove the enemies, then end the turn: the phase change checks the outcome (6.6)"""
+    """remove the given units, then end the turn: the phase change checks the outcome (6.6)"""
     for i in enemies:
         a = 0xD000 + 40 * i
         em.m[1, a + 10] = 0; em.m[1, a + 11] = 0
         em.m[1, a + 34] = em.m[1, a + 34] | 0x08
     em.press("start")
-    em.wait_state([G_OUTCOME], 900)
+    em.wait_state([G_OUTCOME], 1500)
     em.frames(45)                                       # the outcome screen ignores presses for 40 frames
 
-a0 = 0xD000
-it.press("start")                                         # one full round first (CARRY needs round > 1)
-it.wait_state([G_IDLE], 3000)
-it.m[1, a0 + 10] = 100; it.m[1, a0 + 11] = 0               # 刘备 wounded at the end of battle 2
-win_now(it, range(4, 10))
-check("battle 2 won", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
-round2 = it.r16("_dbg_round")
+def through_camp(em, deploy=True):
+    """spoils first (hand every prize to 刘备), then 军议, then 出阵 / START"""
+    for _ in range(300):
+        if em.state() in (20, 25, G_IDLE) and em.r8("_dbg_dialog_active") == 0:
+            break
+        em.frames(1)
+    for _ in range(16):
+        if em.state() != 25:
+            break
+        em.press("a", after=16)
+    if em.state() == 20 and deploy:
+        p0 = em.r8("_dbg_dialog_pages")
+        while camp_cur(em) != 0:
+            em.press("up", after=16)
+        em.press("a", after=16)
+        for _ in range(900):
+            if em.r8("_dbg_dialog_active") == 0 and em.r8("_dbg_dialog_pages") != p0:
+                break
+            em.frames(1)
+        em.frames(20)
+        while camp_cur(em) != 4:
+            em.press("down", after=16)
+        em.press("a", after=16); em.press("start", after=16)
+    em.wait_state([G_IDLE], 1500)
+
+# BT_01: 程远志 (unit 4) alone decides the battle (VIC_DEFEAT_UNIT)
+win_now(it, [4])
+check("BT_01: driving off 程远志 wins with other rebels still on the field",
+      it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1 and it.hp(5) > 0)
+it.press("a", after=16)
+through_camp(it)
+check(f"BT_02 青州解围 follows the 涿郡 camp (battle {it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 2 and it.state() == G_IDLE)
+fac4 = it.m[1, 0xD000 + 40 * 4 + 3]
+check(f"BT_02: 龚景 (unit 4) fights on our side as an ally ({fac4})", fac4 == 1 and it.hp(4) > 0)
+it.frames(60)
+check("BT_02 map consistent", view_mismatches(it) == 0)
+# the ally phase runs: end the turn and see the allies act (or at least the phase pass) without errors
+r0 = it.r16("_dbg_round")
+it.press("start"); it.wait_state([G_IDLE], 4000)
+check(f"BT_02: a full round with the ally phase (round {r0} -> {it.r16('_dbg_round')}, vm {it.r8('_dbg_vm_err')})",
+      it.r16("_dbg_round") == r0 + 1 and it.r8("_dbg_vm_err") == 0)
+it.m[1, 0xD000 + 10] = 100; it.m[1, 0xD000 + 11] = 0      # 刘备 wounded at the end of BT_02
+win_now(it, range(7, 15))
+check("BT_02 won (all enemies)", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
 it.press("a", after=16)
 check("continuous battle: only the spoils screen (prize-only camp)", camp_wait(it, 25, 300))
-for _ in range(4):
-    if it.state() != 25:
-        break
-    it.press("a", after=16)
-it.wait_state([G_IDLE], 900)
-check(f"battle 3 follows directly ({it.r8('_dbg_battle')})", it.state() == G_IDLE and it.r8("_dbg_battle") == 2)
+through_camp(it, deploy=False)
+check(f"BT_03 破张宝妖术 follows directly ({it.r8('_dbg_battle')})", it.state() == G_IDLE and it.r8("_dbg_battle") == 3)
 check(f"NO_REPLENISH: 刘备 keeps hp 100 ({it.hp(0)})", it.hp(0) == 100)
-check(f"round CARRY: round {it.r16('_dbg_round')} continues from {round2}", it.r16("_dbg_round") >= round2 and it.r16("_dbg_round") > 1)
-check(f"张飞 (not used in battle 2) deploys fresh ({it.hp(2)})", it.hp(2) > 0)
 it.frames(60)
-check("battle 3 map consistent", view_mismatches(it) == 0)
-win_now(it, range(4, 8))
+check("BT_03 map consistent", view_mismatches(it) == 0)
+win_now(it, [4])                                          # 张宝
+check("BT_03 won by driving off 张宝", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
 it.press("a", after=16)
-for _ in range(1200):                                     # the ending pages run in dialogue mode
+through_camp(it)
+check(f"BT_04 汜水关 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 4 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_04 map consistent", view_mismatches(it) == 0)
+win_now(it, [4])                                          # 华雄
+it.press("a", after=16)
+through_camp(it)
+check(f"BT_05 虎牢关 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 5 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_05 map consistent", view_mismatches(it) == 0)
+# 吕布 rides out on round 4 (SPAWN into the reserved slot 12, SET_AI hunts 刘备). Thin out the defenders
+# (unit 4, a HOLD halberdier in the fort, stays: the win must come from the objective) and jump to round 4.
+for i in range(5, 12):
+    a = 0xD000 + 40 * i
+    it.m[1, a + 10] = 0; it.m[1, a + 11] = 0; it.m[1, a + 34] = it.m[1, a + 34] | 0x08
+it.m[SYMS["_B"] + 8] = 4; it.m[SYMS["_B"] + 9] = 0          # Battle.round (after the 8 B Rng)
+it.press("start"); it.wait_state([G_IDLE, G_OUTCOME], 4000)
+check(f"BT_05: 吕布 appears on round 4 (units {it.r8('_dbg_n_units')}, hp {it.hp(12)}, round {it.r16('_dbg_round')})",
+      it.r8("_dbg_n_units") == 13 and it.hp(12) > 0 and it.m[1, 0xD000 + 40 * 12] == 15)   # character 15
+# 三英战吕布: place 张飞 next to 吕布 and attack -> the duel replaces the attack, 吕布 retreats, the battle is won
+lx, ly = it.unit(12)
+a2 = 0xD000 + 40 * 2
+for cx, cy in ((lx - 1, ly), (lx + 1, ly), (lx, ly - 1), (lx, ly + 1)):
+    if all(it.unit(i) != (cx, cy) for i in range(13)):
+        it.m[1, a2 + 7] = cx; it.m[1, a2 + 8] = cy; it.m[1, a2 + 34] = 0
+        break
+it.frames(4)
+it.goto(*it.unit(2)); it.press("a"); it.wait_state([G_MOVE], 20)
+it.press("a"); it.wait_state([G_MENU], 60)
+it.press("a"); it.wait_state([G_TARGET], 30)             # 攻击 is the default when a target is in reach
+for _ in range(6):
+    if it.cur() == (lx, ly):
+        break
+    it.press("right")
+fs0 = it.r8("_dbg_fs_count")
+it.press("a")
+it.wait_state([G_OUTCOME], 3000)
+check(f"BT_05: 三英战吕布 duel drives 吕布 off and wins with a defender left (outcome {it.r8('_dbg_outcome')}, 吕布 hp {it.hp(12)}, unit 4 hp {it.hp(4)})",
+      it.r8("_dbg_outcome") == 1 and it.hp(12) == 0 and it.hp(4) > 0)
+it.frames(45)
+it.press("a", after=16)
+for _ in range(1500):                                     # the ending pages run in dialogue mode
     if it.state() == G_TITLE and it.r8("_dbg_dialog_active") == 0:
         break
     it.frames(1)
-check(f"last battle won -> ending -> title (state {it.state()}, battle {it.r8('_dbg_battle')}, outcome {it.r8('_dbg_outcome')})", it.state() == G_TITLE)
+check(f"chapter 1 won -> ending -> title (state {it.state()})", it.state() == G_TITLE)
 it.frames(10); it.png(ROM.parent / "shot_title.png")
 ram_end = it.power_off()
 # cold boot: the camp save is offered at the title (SELECT)

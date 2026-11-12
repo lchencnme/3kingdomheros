@@ -39,10 +39,18 @@ typedef struct { uint8_t str, intl, cmd; } UnitBase;
 #define OUT_WIN 1u
 #define OUT_LOSE 2u
 
+/* 6.6 objectives (from the battle definition, not saved: set after start / load like turn_limit) */
+#define VIC_ALL_ENEMIES 0u       /* every enemy removed */
+#define VIC_DEFEAT_UNIT 1u       /* vic_unit removed (or every enemy) */
+#define VIC_SURVIVE 2u           /* hold out until the end of round vic_round (or defeat vic_unit / all) */
+#define NO_UNIT 0xFFu
+
 typedef struct {
     Rng rng;
     uint16_t round, turn_limit;
     uint8_t phase, weather, n_units, leader, outcome;
+    uint8_t vic_kind, vic_unit, protect;   /* protect: an allied unit whose loss is a defeat (NO_UNIT) */
+    uint16_t vic_round;
 } Battle;
 
 /* ---- platform hooks (GB: bank1 records + ROM templates; host: arrays) ---- */
@@ -51,6 +59,11 @@ void unit_store(uint8_t i, const ActiveUnit *u) PLATFORM_API;
 void unit_base(uint8_t i, UnitBase *b) PLATFORM_API;
 void grid_occ_set(uint8_t x, uint8_t y, uint8_t side) PLATFORM_API;
 void grid_occ_clear(uint8_t x, uint8_t y) PLATFORM_API;
+/* bits of unit i without copying the 40 B record: bit0 alive, bit1 spawned (max_hp != 0), bit2 enemy */
+uint8_t unit_state_bits(uint8_t i) PLATFORM_API;
+#define USB_ALIVE 1u
+#define USB_SPAWNED 2u
+#define USB_ENEMY 4u
 
 uint8_t unit_alive(const ActiveUnit *u) CORE_API;
 uint8_t faction_side(uint8_t faction) CORE_API;              /* SIDE_A / SIDE_E */

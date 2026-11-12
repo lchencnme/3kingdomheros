@@ -21,13 +21,29 @@ void unit_load(uint8_t i, ActiveUnit *u) PLATFORM_API
 
 uint8_t unit_gen;          /* bumped on every unit write: lets the renderer skip unchanged frames */
 
+uint8_t unit_state_bits(uint8_t i) PLATFORM_API
+{
+    uint8_t r = 0, o = SVBK_REG;
+    const ActiveUnit *u;
+    SVBK_REG = WB_UNITS;
+    u = &W1_UNITS[i];
+    if (u->hp && !(u->action_flags & (AF_RETREAT | AF_DEAD | AF_AWAY))) r |= USB_ALIVE;
+    if (u->max_hp) r |= USB_SPAWNED;
+    if (u->faction == FAC_ENEMY) r |= USB_ENEMY;
+    SVBK_REG = o;
+    return r;
+}
+
 /* own frame: unit_store is at the bottom of the deepest chains */
 static uint8_t log_unit(uint8_t i)
 {
-    ActiveUnit old;
-    uint8_t o = SVBK_REG;
-    SVBK_REG = WB_UNITS; memcpy(&old, &W1_UNITS[i], sizeof old); SVBK_REG = o;
-    return undo_log(US_UNITS, 1, (uint16_t)((uint16_t)i * sizeof(ActiveUnit)), sizeof(ActiveUnit), (const uint8_t *)&old);
+    /* no copy: with WRAM bank1 mapped the log reads the old record in place (undo_log and sram_write
+     * never touch SVBK; their own buffers are on the stack in fixed WRAM) */
+    uint8_t r, o = SVBK_REG;
+    SVBK_REG = WB_UNITS;
+    r = undo_log(US_UNITS, 1, (uint16_t)((uint16_t)i * sizeof(ActiveUnit)), sizeof(ActiveUnit), (const uint8_t *)&W1_UNITS[i]);
+    SVBK_REG = o;
+    return r;
 }
 
 void unit_store(uint8_t i, const ActiveUnit *u) PLATFORM_API

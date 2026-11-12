@@ -20,4 +20,13 @@ extern const uint8_t bt1_script[];
 extern const VmEvent bt2_events[];
 extern const VmTemplate bt2_templates[];
 extern const uint8_t bt2_script[];
+extern const VmEvent bt3_events[];
+extern const VmTemplate bt3_templates[];
+extern const uint8_t bt3_script[];
+extern const VmEvent bt4_events[];
+extern const VmTemplate bt4_templates[];
+extern const uint8_t bt4_script[];
+extern const VmEvent bt5_events[];
+extern const VmTemplate bt5_templates[];
+extern const uint8_t bt5_script[];
 #endif

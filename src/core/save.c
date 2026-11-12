@@ -309,7 +309,7 @@ static uint8_t save_write(uint8_t slot, const Battle *b, const SaveUi *ui, uint8
     img_write(w.base, 0, hdr, 30);
     /* 4. readback CRC of body and header */
     {
-        uint8_t rb[32];
+#define rb buf                                          /* reuse the 40 B unit buffer: the stack is 512 B */
         uint32_t rc = 0xFFFFFFFFul;
         uint16_t off = 0;
         img_read(w.base, 0, rb, 30);
@@ -321,6 +321,7 @@ static uint8_t save_write(uint8_t slot, const Battle *b, const SaveUi *ui, uint8
             off += k;
         }
         if ((rc ^ 0xFFFFFFFFul) != crc) return SAVE_ERR_IO;
+#undef rb
     }
     /* 5. inverse marker, 6. commit marker last */
     hdr[31] = 0x5A; img_write(w.base, 31, &hdr[31], 1);
@@ -376,9 +377,9 @@ uint8_t save_camp(uint8_t slot, const SaveUi *ui) CORE_API
 static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *kind)
 {
     uint8_t seen[10];
-    uint8_t hdr[32], buf[32], t = 0;
+    uint8_t hdr[32], t = 0;                  /* hdr doubles as the CRC buffer: the stack is 512 B */
     uint16_t off = 0, len;
-    uint32_t crc = 0xFFFFFFFFul;
+    uint32_t crc = 0xFFFFFFFFul, body_crc, sq;
     img_read(base, 0, hdr, 32);
     if (hdr[0] != 'Y' || hdr[1] != 'J' || hdr[2] != '2' || hdr[3] != '0') return SAVE_ERR_NONE;
     if (hdr[30] != 0xA5 || hdr[31] != 0x5A) return SAVE_ERR_NONE;
@@ -388,13 +389,14 @@ static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *
     if (get32(hdr + 12) != RULES_PROFILE_CRC) return SAVE_ERR_PROFILE;
     len = get16(hdr + 6);
     if (len > SAVE_MAX_BODY) return SAVE_ERR_NONE;
+    body_crc = get32(hdr + 16); sq = get32(hdr + 8);
     while (off < len) {
         uint16_t k = (uint16_t)(len - off) < 32u ? (uint16_t)(len - off) : 32u;
-        img_read(base, (uint16_t)(32u + off), buf, k);
-        crc = crc32_update(crc, buf, k);
+        img_read(base, (uint16_t)(32u + off), hdr, k);
+        crc = crc32_update(crc, hdr, k);
         off += k;
     }
-    if ((crc ^ 0xFFFFFFFFul) != get32(hdr + 16)) return SAVE_ERR_NONE;
+    if ((crc ^ 0xFFFFFFFFul) != body_crc) return SAVE_ERR_NONE;
     /* TLV structure: exactly the battle or the camp tag set, increasing, exact lengths, inside body */
     off = 0;
     while (off < len) {
@@ -424,7 +426,7 @@ static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *
     else if (t == sizeof camp_tags && memcmp(seen, camp_tags, sizeof camp_tags) == 0) *kind = SAVE_KIND_CAMP;
     else if (t == sizeof snap_tags && memcmp(seen, snap_tags, sizeof snap_tags) == 0) *kind = SAVE_KIND_SNAPSHOT;
     else return SAVE_ERR_NONE;
-    *seq = get32(hdr + 8);
+    *seq = sq;
     *blen = len;
     return SAVE_OK;
 }

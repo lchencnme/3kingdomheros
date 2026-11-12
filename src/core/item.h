@@ -60,6 +60,9 @@ uint8_t item_exchange_camp(uint8_t a, uint8_t sa, uint8_t b, uint8_t sb) CORE_AP
 uint8_t item_category(uint8_t item) CORE_API;
 /* copy of an item's definition (the table lives in bank 13 with this module) */
 void item_def(uint8_t item, ItemDef *out) CORE_API;
+/* single fields (no struct copy: for callers deep in the AI chain) */
+uint8_t item_kind(uint8_t item) CORE_API;
+uint16_t item_field(uint8_t item, uint8_t which) CORE_API;   /* 0 power, 1 price, 2 range */
 uint8_t inv_equipped(uint8_t unit, uint8_t cat) CORE_API;
 uint8_t inv_slot_equipped(uint8_t unit, uint8_t slot) CORE_API;
 /* camp only: equip the item in slot (replaces the category's previous one) / unequip; stats re-derived */

@@ -40,10 +40,11 @@ typedef struct {
     uint16_t *gold;
     CampDeploy *dep;
     uint8_t screen, cur, off, slot, pick, pick_off, pick_slot, sell, top, msg, main_cur, council;
-    uint8_t n_off, mode, next, deploy_max, forced;
+    uint8_t n_off, mode, next, deploy_max, forced, camp;
 } Camp;
 
 static Camp *C;                                         /* 2 B global: points into camp_run's frame */
+#define CD (camp_defs[C->camp])                         /* this camp's data (shop, council) */
 
 /* no line may straddle tile ids 127/128: in LCDC.4 = 0 addressing they are not adjacent in VRAM
  * (0x97F0 vs 0x8800) and one 576 B GDMA would run on into the BG map at 0x9800 */
@@ -127,8 +128,8 @@ static void compose(uint8_t k)
             hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold);
         } else if (!C->sell && k >= 1 && k <= 6) {
             uint8_t i = (uint8_t)(C->top + k - 1u);
-            if (i < camp_defs[0].n_shop) {
-                uint8_t it = camp_defs[0].shop[i];
+            if (i < CD.n_shop) {
+                uint8_t it = CD.shop[i];
                 ItemDef d; item_def(it, &d);
                 arrow(C->cur == i); hud_tx(0, item_name_tx[it], 0); hud_space(0); hud_num(0, d.price);
             }
@@ -229,7 +230,7 @@ static void enter(uint8_t sc)
 static void council(void)
 {
     uint8_t i;
-    for (i = 0; i < camp_defs[0].n_council && i < DQ_MAX; i++) { DQ->speaker[i] = (uint8_t)camp_defs[0].council[i][0]; DQ->text[i] = camp_defs[0].council[i][1]; }
+    for (i = 0; i < CD.n_council && i < DQ_MAX; i++) { DQ->speaker[i] = (uint8_t)CD.council[i][0]; DQ->text[i] = CD.council[i][1]; }
     DQ->n = i;
     dialog_run_from(0);
     DQ->n = 0;
@@ -275,7 +276,7 @@ static uint8_t step(uint8_t pressed)
                 dbg_saves++;
             }
             else if (prize_count()) { sfx_play(SFX_ERROR); say(TX_PRIZE_FIRST); }    /* 7.4: queue must be empty */
-            else if (!C->council && camp_defs[0].n_council) { sfx_play(SFX_ERROR); say(TX_COUNCIL_FIRST); }
+            else if (!C->council && CD.n_council) { sfx_play(SFX_ERROR); say(TX_COUNCIL_FIRST); }
             else enter(SC_DEPLOY);
         }
         break;
@@ -320,13 +321,13 @@ static uint8_t step(uint8_t pressed)
         } else if (up || down) {
             uint8_t top0 = C->top, old = C->sell ? C->slot : C->cur, now;
             if (C->sell) { C->slot = (uint8_t)(up ? (C->slot + 7u) & 7u : (C->slot + 1u) & 7u); shop_scroll(C->slot, INV_SLOTS); now = C->slot; }
-            else { C->cur = (uint8_t)(up ? (C->cur + camp_defs[0].n_shop - 1u) % camp_defs[0].n_shop : (C->cur + 1u) % camp_defs[0].n_shop); shop_scroll(C->cur, camp_defs[0].n_shop); now = C->cur; }
+            else { C->cur = (uint8_t)(up ? (C->cur + CD.n_shop - 1u) % CD.n_shop : (C->cur + 1u) % CD.n_shop); shop_scroll(C->cur, CD.n_shop); now = C->cur; }
             if (C->top != top0) { uint8_t k; for (k = 1; k <= 6; k++) draw(k); }   /* scrolled */
             else { draw((uint8_t)(old - C->top + 1u)); draw((uint8_t)(now - C->top + 1u)); }
             if (C->msg) { C->msg = 0; draw(8); }
         } else if (pressed & J_B) enter(SC_MAIN);
         else if ((pressed & J_A) && !C->sell) {           /* 7.3: check gold and a free slot, then pay and give */
-            uint8_t it = camp_defs[0].shop[C->cur];
+            uint8_t it = CD.shop[C->cur];
             ItemDef d;
             uint16_t price;
             item_def(it, &d); price = d.price;
@@ -416,11 +417,12 @@ static uint8_t step(uint8_t pressed)
     return 0;
 }
 
-void camp_run(uint16_t *gold, CampDeploy *dep, uint8_t mode, uint8_t next_bt) BANKED
+void camp_run(uint16_t *gold, CampDeploy *dep, uint8_t mode, uint8_t next_bt, uint8_t camp_idx) BANKED
 {
     Camp camp;
     memset(&camp, 0, sizeof camp);
     camp.gold = gold; camp.dep = dep; camp.pick = 0xFF; camp.mode = mode; camp.next = next_bt;
+    camp.camp = camp_idx < N_CAMPS ? camp_idx : 0u;
     camp.n_off = roster_count() < 7u ? roster_count() : 7u;   /* deployment list: lines 1..7 */
     if (next_bt < N_BATTLES) { camp.deploy_max = battle_defs[next_bt].deploy_max; camp.forced = battle_defs[next_bt].forced; }
     else { camp.deploy_max = 4; camp.forced = 1; }

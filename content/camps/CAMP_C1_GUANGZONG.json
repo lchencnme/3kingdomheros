@@ -1,0 +1,5 @@
+{"_comment": "广宗营（第三战后）。", "id": "CAMP_C1_GUANGZONG",
+ "commands": ["COUNCIL", "EQUIP", "EXCHANGE", "SHOP", "DEPLOY"],
+ "council": [["NARRATOR", "TXD_C1B_1"], ["ZHANGFEI", "TXD_C1B_2"], ["LIUBEI", "TXD_C1B_3"]],
+ "shop": [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 16, 19, 25, 48, 54, 71, 82, 99],
+ "deploy": {"max_count": 4, "forced": ["CH_LIUBEI"]}}

@@ -15,6 +15,12 @@ void unit_store(uint8_t i, const ActiveUnit *u) PLATFORM_API
     host_units[i] = *u;
 }
 
+uint8_t unit_state_bits(uint8_t i) PLATFORM_API
+{
+    const ActiveUnit *u = &host_units[i];
+    return (uint8_t)((unit_alive(u) ? USB_ALIVE : 0u) | (u->max_hp ? USB_SPAWNED : 0u) | (u->faction == FAC_ENEMY ? USB_ENEMY : 0u));
+}
+
 /* 11.6 rollback hooks */
 void campaign_write(uint8_t off, const uint8_t *src, uint8_t n) PLATFORM_API;
 void sram_write(uint8_t bank, uint16_t off, const uint8_t *src, uint16_t n) PLATFORM_API;
