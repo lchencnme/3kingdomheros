@@ -184,8 +184,8 @@ def main():
     # UI strings (TX_*) first so their ids fit the u8 used by HUD calls; dialogue (TXD_*) after (u16 path)
     names = sorted(n for n in texts if not n.startswith("TXD_")) + sorted(n for n in texts if n.startswith("TXD_"))
     n_ui = sum(1 for n in names if not n.startswith("TXD_"))
-    if n_ui > 255:
-        die(f"{n_ui} UI strings: TX_* ids are u8 in the HUD API (move some to TXD_ or widen the ids)")
+    if len(names) > 65535:
+        die("too many strings")
     pool, offs = [], []
     for n in names:
         offs.append(len(pool))
@@ -212,8 +212,8 @@ def main():
           "extern const uint8_t glyph_width[];",
           "extern const uint16_t text_pool[];", "extern const uint16_t text_offset[];",
           "extern const uint8_t digit_glyph[10];",
-          "extern const uint8_t class_name_tx[];", "extern const uint8_t terrain_name_tx[];",
-          "extern const uint8_t strat_name_tx[];", "extern const uint8_t item_name_tx[];", "#endif"]
+          "extern const uint16_t class_name_tx[];", "extern const uint16_t terrain_name_tx[];",
+          "extern const uint16_t strat_name_tx[];", "extern const uint16_t item_name_tx[];", "#endif"]
     c = ["#pragma bank 2", "#include \"text_data.h\""]    # asset bank: read through rom.c gateway
     ci = ['#include "text_data.h"']
 
@@ -235,12 +235,12 @@ def main():
     ci += arr("glyph_width", "uint8_t", widths, 32)
     ci += arr("text_offset", "uint16_t", offs + [len(pool)])
     ci.append("const uint8_t digit_glyph[10] = {" + ", ".join(str(reg["glyphs"][d]) for d in "0123456789") + "};")
-    ci.append("const uint8_t class_name_tx[] = {" + ", ".join(str(names.index(f"TX_CLASS_{c_['id']}")) for c_ in rules["classes"]) + "};")
-    ci.append("const uint8_t strat_name_tx[] = {" + ", ".join(str(names.index(f"TX_STRAT_{s_['id']}")) for s_ in rules["strategies"]) + "};")
+    ci.append("const uint16_t class_name_tx[] = {" + ", ".join(str(names.index(f"TX_CLASS_{c_['id']}")) for c_ in rules["classes"]) + "};")
+    ci.append("const uint16_t strat_name_tx[] = {" + ", ".join(str(names.index(f"TX_STRAT_{s_['id']}")) for s_ in rules["strategies"]) + "};")
     ibyid = {it["id"]: it for it in items}
-    ci.append("const uint8_t item_name_tx[] = {" + ", ".join(str(names.index(f"TX_ITEM_{i}")) if i in ibyid else "0"
+    ci.append("const uint16_t item_name_tx[] = {" + ", ".join(str(names.index(f"TX_ITEM_{i}")) if i in ibyid else "0"
                                                        for i in range(max(ibyid) + 1)) + "};")
-    ci.append("const uint8_t terrain_name_tx[] = {" + ", ".join(str(names.index(f"TX_TERRAIN_{t_['id']}")) for t_ in rules["terrain"]) + "};")
+    ci.append("const uint16_t terrain_name_tx[] = {" + ", ".join(str(names.index(f"TX_TERRAIN_{t_['id']}")) for t_ in rules["terrain"]) + "};")
     OUT_H.write_text("\n".join(h) + "\n", encoding="utf-8")
     OUT_C.write_text("\n".join(c) + "\n", encoding="utf-8")
     (ROOT / "src" / "gen" / "text_index.c").write_text("\n".join(ci) + "\n", encoding="utf-8")

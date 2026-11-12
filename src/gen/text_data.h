@@ -334,8 +334,8 @@ extern const uint8_t glyph_width[];
 extern const uint16_t text_pool[];
 extern const uint16_t text_offset[];
 extern const uint8_t digit_glyph[10];
-extern const uint8_t class_name_tx[];
-extern const uint8_t terrain_name_tx[];
-extern const uint8_t strat_name_tx[];
-extern const uint8_t item_name_tx[];
+extern const uint16_t class_name_tx[];
+extern const uint16_t terrain_name_tx[];
+extern const uint16_t strat_name_tx[];
+extern const uint16_t item_name_tx[];
 #endif

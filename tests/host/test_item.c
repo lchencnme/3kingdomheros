@@ -556,6 +556,14 @@ int main(void)
     host_units[1].hp = 0; host_units[1].action_flags |= AF_RETREAT;
     CHECK(battle_check_outcome(&B, 0) == OUT_LOSE, "protected ally lost -> defeat");
 
+    /* VIC_REACH: an escorted unit reaches the safe area */
+    reset();
+    B.vic_kind = VIC_REACH; B.vic_unit = 1; B.protect = NO_UNIT;
+    B.vic_x0 = 8; B.vic_y0 = 0; B.vic_x1 = 11; B.vic_y1 = 2;
+    CHECK(battle_check_outcome(&B, 0) == OUT_NONE, "escort not there yet");
+    battle_move(1, 9, 1);
+    CHECK(battle_check_outcome(&B, 0) == OUT_WIN, "escort inside the area -> win");
+
     /* battle save carries the inventory block (tag 9) */
     reset();
     {

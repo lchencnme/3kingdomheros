@@ -80,7 +80,7 @@ extern Battle B;
 extern uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
 extern uint8_t xr_list[4], n_xr, xri, rslot;
 extern uint8_t danger_on, dz_i;
-extern uint8_t mitems[6], isel, keep_inv, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
+extern uint8_t mitems[6], isel, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
 extern uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;
 extern uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 extern uint16_t carry_round;

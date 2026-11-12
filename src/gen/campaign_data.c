@@ -32,12 +32,12 @@ static const uint8_t bt5_items[][2] = {{0xFF, 0xFF}};
 static const uint8_t bt5_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3};
 static const uint8_t bt5_tre[][3] = {{4, 4, 7}};
 const BattleDef battle_defs[N_BATTLES] = {
-    {TECH01_W, TECH01_H, TECH01_BANK, tech01_terrain, TECH01_UNITS, tech01_units, tech01_levels, TECH01_START_ITEMS, tech01_start_items, TECH01_AI_GROUPS, tech01_ai_groups, TECH01_TREASURES, tech01_treasures, 30, 0, 0, TECH01_DEPLOY_MAX, 1, 1, 0, 1, TX_BT_TITLE_0, 0, 0xFF, 0, 0xFF},
-    {24, 16, 15, bt1_terrain, 11, bt1_units, bt1_levels, 1, bt1_items, 2, bt1_ai, 1, bt1_tre, 20, 0, 0, 3, 7, 3, 1, 2, TX_BT_TITLE_3, 1, 4, 0, 255},
-    {26, 18, 15, bt2_terrain, 15, bt2_units, bt2_levels, 0, bt2_items, 3, bt2_ai, 1, bt2_tre, 25, 0, 0, 4, 1, 5, 0xFF, 3, TX_BT_TITLE_4, 0, 255, 0, 4},
-    {24, 14, 15, bt3_terrain, 11, bt3_units, bt3_levels, 2, bt3_items, 2, bt3_ai, 1, bt3_tre, 25, 1, 0, 4, 1, 9, 2, 4, TX_BT_TITLE_5, 1, 4, 0, 255},
-    {26, 14, 15, bt4_terrain, 11, bt4_units, bt4_levels, 1, bt4_items, 2, bt4_ai, 1, bt4_tre, 25, 0, 0, 4, 3, 13, 3, 5, TX_BT_TITLE_6, 1, 4, 0, 255},
-    {26, 13, 15, bt5_terrain, 12, bt5_units, bt5_levels, 0, bt5_items, 2, bt5_ai, 1, bt5_tre, 30, 0, 0, 4, 7, 17, 0xFF, 0xFF, TX_BT_TITLE_7, 2, 12, 12, 255},
+    {TECH01_W, TECH01_H, TECH01_BANK, tech01_terrain, TECH01_UNITS, tech01_units, tech01_levels, TECH01_START_ITEMS, tech01_start_items, TECH01_AI_GROUPS, tech01_ai_groups, TECH01_TREASURES, tech01_treasures, 30, 0, 0, TECH01_DEPLOY_MAX, 1, 1, 0, 1, TX_BT_TITLE_0, 0, 0xFF, 0, 0xFF, 0, 0, 0, 0},
+    {24, 16, 15, bt1_terrain, 11, bt1_units, bt1_levels, 1, bt1_items, 2, bt1_ai, 1, bt1_tre, 20, 0, 0, 3, 7, 3, 1, 2, TX_BT_TITLE_3, 1, 4, 0, 255, 0, 0, 0, 0},
+    {26, 18, 15, bt2_terrain, 15, bt2_units, bt2_levels, 0, bt2_items, 3, bt2_ai, 1, bt2_tre, 25, 0, 0, 4, 1, 5, 0xFF, 3, TX_BT_TITLE_4, 0, 255, 0, 4, 0, 0, 0, 0},
+    {24, 14, 15, bt3_terrain, 11, bt3_units, bt3_levels, 2, bt3_items, 2, bt3_ai, 1, bt3_tre, 25, 1, 0, 4, 1, 9, 2, 4, TX_BT_TITLE_5, 1, 4, 0, 255, 0, 0, 0, 0},
+    {26, 14, 15, bt4_terrain, 11, bt4_units, bt4_levels, 1, bt4_items, 2, bt4_ai, 1, bt4_tre, 25, 0, 0, 4, 3, 13, 3, 5, TX_BT_TITLE_6, 1, 4, 0, 255, 0, 0, 0, 0},
+    {26, 13, 15, bt5_terrain, 12, bt5_units, bt5_levels, 0, bt5_items, 2, bt5_ai, 1, bt5_tre, 30, 0, 0, 4, 7, 17, 0xFF, 0xFF, TX_BT_TITLE_7, 2, 12, 12, 255, 0, 0, 0, 0},
 };
 static const uint8_t camp0_shop[] = {0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 16, 19, 25, 48, 54, 71, 82, 99};
 static const uint16_t camp0_council[][2] = {{0, TXD_T01_COUNCIL_1}, {1, TXD_T01_COUNCIL_2}, {2, TXD_T01_COUNCIL_3}, {0, TXD_T01_COUNCIL_4}};
@@ -54,5 +54,5 @@ const RosterInit roster_init[N_ROSTER_INIT] = {
     {3, 6, 1, 80, 40, 66, TX_NAME_ZHANGFEI, {0, 255, 255, 255, 255, 255, 255, 255}},
     {8, 9, 1, 40, 76, 58, TX_NAME_JIANYONG, {8, 9, 255, 255, 255, 255, 255, 255}},
 };
-const uint8_t char_name[N_CHARS][2] = {{1, TX_NAME_LIUBEI}, {2, TX_NAME_GUANYU}, {3, TX_NAME_ZHANGFEI}, {8, TX_NAME_JIANYONG}, {10, TX_NAME_CHENGYUANZHI}, {11, TX_NAME_DENGMAO}, {12, TX_NAME_GONGJING}, {13, TX_NAME_ZHANGBAO}, {14, TX_NAME_HUAXIONG}, {15, TX_NAME_LVBU}};
+const uint16_t char_name[N_CHARS][2] = {{1, TX_NAME_LIUBEI}, {2, TX_NAME_GUANYU}, {3, TX_NAME_ZHANGFEI}, {8, TX_NAME_JIANYONG}, {10, TX_NAME_CHENGYUANZHI}, {11, TX_NAME_DENGMAO}, {12, TX_NAME_GONGJING}, {13, TX_NAME_ZHANGBAO}, {14, TX_NAME_HUAXIONG}, {15, TX_NAME_LVBU}};
 const uint16_t ending_pages[][2] = {{0, TXD_END_1}, {255, TXD_END_2}, {255, TXD_END_3}};

@@ -56,8 +56,10 @@ void units_snapshot(uint8_t n);
 static uint8_t n_units_seen;
 extern uint8_t unit_gen;
 static uint8_t seen_gen, have_gen, diff_gen;
-static uint8_t order[MAXU], n_order;   /* visible units sorted by (foot y, id) */
-static uint8_t cand[MAXU], n_cand;     /* subset of order that can touch the current edge / position */
+/* UI arena tail 0xCBE0..0xCBF7 (non-banked, free after the grid row buffers; design doc 11.4) */
+__at(0xCBE0) uint8_t order[MAXU];       /* visible units sorted by (foot y, id) */
+__at(0xCBEC) uint8_t cand[MAXU];        /* subset of order that can touch the current edge / position */
+static uint8_t n_order, n_cand;
 
 /* restrict compose() to units whose 16x24 box can overlap hardware columns [wx0, wx1] x rows [wy0, wy1] */
 static void filter_units(int16_t wx0, int16_t wx1, int16_t wy0, int16_t wy1)

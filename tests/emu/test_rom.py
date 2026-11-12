@@ -1009,7 +1009,7 @@ c = Emu(ram)
 c.wait_state([G_TITLE], 200)
 check("cold boot finds the suspend save (continue prompt)", c.state() == G_TITLE)
 c.press("start")
-c.wait_state([G_IDLE], 100)
+c.wait_state([G_IDLE], 400)                                # probing every slot copy takes ~100 frames
 got = dict(units=[c.unit(i) for i in range(N_UNITS)], hp=[c.hp(i) for i in range(N_UNITS)],
            rng=c.r32("_dbg_rng"), draws=c.r32("_dbg_draws"), cur=c.cur(), round=c.r16("_dbg_round"))
 check("continue restores units/hp/RNG/draws/cursor/round exactly", got == saved, f"{got} vs {saved}")

@@ -23,13 +23,14 @@ typedef struct {
     uint8_t continuity, round_mode, deploy_max, forced, seed;        /* forced: bit k = officer k */
     uint8_t camp, next, title_tx;                                    /* 0xFF: continuous / ending */
     uint8_t vic_kind, vic_unit, vic_round, protect;                  /* 6.6 objectives (VIC_*) */
+    uint8_t vic_x0, vic_y0, vic_x1, vic_y1;                          /* VIC_REACH area */
 } BattleDef;
 typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; } CampDef;
-typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd, name_tx; uint8_t items[8]; } RosterInit;
+typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd; uint16_t name_tx; uint8_t items[8]; } RosterInit;
 extern const BattleDef battle_defs[N_BATTLES];
 extern const CampDef camp_defs[N_CAMPS];
 extern const RosterInit roster_init[N_ROSTER_INIT];
 extern const uint16_t ending_pages[][2];
-extern const uint8_t char_name[N_CHARS][2];   /* character id -> TX name */
+extern const uint16_t char_name[N_CHARS][2];   /* character id -> TX name */
 extern const uint8_t tech01_levels[];
 #endif

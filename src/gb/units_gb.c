@@ -21,6 +21,12 @@ void unit_load(uint8_t i, ActiveUnit *u) PLATFORM_API
 
 uint8_t unit_gen;          /* bumped on every unit write: lets the renderer skip unchanged frames */
 
+void unit_xy(uint8_t i, uint8_t *x, uint8_t *y) PLATFORM_API
+{
+    uint8_t o = SVBK_REG;
+    SVBK_REG = WB_UNITS; *x = W1_UNITS[i].x; *y = W1_UNITS[i].y; SVBK_REG = o;
+}
+
 uint8_t unit_state_bits(uint8_t i) PLATFORM_API
 {
     uint8_t r = 0, o = SVBK_REG;

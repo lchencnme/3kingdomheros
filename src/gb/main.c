@@ -5,7 +5,7 @@ Battle B;
 uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
 uint8_t xr_list[4], n_xr, xri, rslot;
 uint8_t danger_on, dz_i;                /* enemy danger view (8.4): shown / next unit to add */
-uint8_t mitems[6], isel, keep_inv, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
+uint8_t mitems[6], isel, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
 uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
 uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 uint16_t carry_round;                   /* 2.4 round_mode CARRY */
@@ -27,7 +27,7 @@ static int8_t unit_at(uint8_t x, uint8_t y)
     return -1;
 }
 
-static uint8_t unit_name_tx(const ActiveUnit *u)
+static uint16_t unit_name_tx(const ActiveUnit *u)
 {
     uint8_t k;                                 /* named characters (content/characters.json), else the class */
     for (k = 0; k < N_CHARS; k++) if (char_name[k][0] == u->character_id) return char_name[k][1];
@@ -134,7 +134,7 @@ static void build_menu(void)
 
 static void hud_menu(void)
 {
-    static const uint8_t label[6] = {TX_ACT_ATTACK, TX_ACT_STRAT, TX_ACT_WAIT, TX_ACT_TALK, TX_ACT_ITEM, TX_ACT_EXCH};
+    static const uint16_t label[6] = {TX_ACT_ATTACK, TX_ACT_STRAT, TX_ACT_WAIT, TX_ACT_TALK, TX_ACT_ITEM, TX_ACT_EXCH};
     uint8_t i;
     hud_begin();
     for (i = 0; i < n_mitems; i++) {
@@ -179,7 +179,7 @@ static uint8_t next_item(uint8_t from, int8_t dir)
     return from;
 }
 
-static void hud_msg(uint8_t tx) { hud_begin(); hud_tx(1, tx, 0); hud_end(); }
+static void hud_msg(uint16_t tx) { hud_begin(); hud_tx(1, tx, 0); hud_end(); }
 
 static void hud_slot(uint8_t line, uint8_t unit, uint8_t s)
 {
@@ -209,7 +209,7 @@ static void hud_xrecv(void)
     hud_end();
 }
 
-static void hud_ilist(uint8_t hint)
+static void hud_ilist(uint16_t hint)
 {
     uint8_t it = inv_get(sel, isel);
     hud_begin();
@@ -238,7 +238,7 @@ static void hud_item_aim(void)
     hud_begin();
     if (it != ITEM_NONE) hud_tx(0, item_name_tx[it], 0);
     hud_space(0); hud_tx(0, TX_ITEM_HINT, 0);
-    if (r == IR_OK) hud_tx(1, TX_USE_OK, 0); else hud_tx(1, (uint8_t)(TX_IR_1 + r - 1u), 0);
+    if (r == IR_OK) hud_tx(1, TX_USE_OK, 0); else hud_tx(1, (uint16_t)(TX_IR_1 + r - 1u), 0);
     hud_end();
 }
 
@@ -280,7 +280,7 @@ static void hud_aim(void)
     uint8_t r = aim_check();
     hud_begin();
     hud_tx(0, strat_name_tx[SLIST[ssel]], 0); hud_space(0); hud_tx(0, TX_CAST_HINT, 0);
-    if (r == SR_OK) hud_tx(1, TX_CAST_OK, 0); else hud_tx(1, (uint8_t)(TX_SR_1 + r - 1u), 0);
+    if (r == SR_OK) hud_tx(1, TX_CAST_OK, 0); else hud_tx(1, (uint16_t)(TX_SR_1 + r - 1u), 0);
     hud_end();
 }
 

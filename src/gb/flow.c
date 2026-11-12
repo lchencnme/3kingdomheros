@@ -44,6 +44,7 @@ uint8_t do_suspend_load(void) BANKED
     pending_start = 0; end_fired = 0; DQ->n = 0;
     B.turn_limit = BD->turn_limit;              /* from the battle definition, not the save */
     B.vic_kind = BD->vic_kind; B.vic_unit = BD->vic_unit; B.vic_round = BD->vic_round; B.protect = BD->protect;
+    B.vic_x0 = BD->vic_x0; B.vic_y0 = BD->vic_y0; B.vic_x1 = BD->vic_x1; B.vic_y1 = BD->vic_y1;
     options = ui.options;
     gold = (uint16_t)ui.gold;
     cam_x = ui.cam_x; cam_y = ui.cam_y; cur_x = ui.cur_x; cur_y = ui.cur_y;
@@ -72,7 +73,8 @@ void start_battle(void) BANKED
     /* 2.4: round_mode CARRY continues the previous battle's round (turn_limit is absolute) */
     B.round = (BD->round_mode == ROUND_CARRY && carry_round) ? carry_round : 1u;
     B.turn_limit = BD->turn_limit; B.leader = 0;
-    B.vic_kind = BD->vic_kind; B.vic_unit = BD->vic_unit; B.vic_round = BD->vic_round; B.protect = BD->protect;   /* 6.6 */
+    B.vic_kind = BD->vic_kind; B.vic_unit = BD->vic_unit; B.vic_round = BD->vic_round; B.protect = BD->protect;
+    B.vic_x0 = BD->vic_x0; B.vic_y0 = BD->vic_y0; B.vic_x1 = BD->vic_x1; B.vic_y1 = BD->vic_y1;   /* 6.6 */
     units_clear();
     wram_init_grid_rom(BD->w, BD->h, BD->tbank, BD->terrain);
     vm_clear_battle_flags();                   /* once bits + battle-scope flags are per battle */

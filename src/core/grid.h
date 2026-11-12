@@ -11,7 +11,7 @@
 #define SIDE_E 2u   /* ENEMY */
 
 extern uint8_t grid_w, grid_h;
-/* 2 x 64-byte row buffers in non-banked RAM (GB: UI arena tail 0xCB60..0xCBDF, design doc 11.4) */
+/* 2 x 64-byte row buffers in non-banked RAM (GB: UI arena tail 0xCB60..0xCBDF, design doc 11.4; 0xCBE0..0xCBF7 mapview order/cand) */
 #ifdef __SDCC
 #define grid_rowbuf_ter ((uint8_t *)0xCB60u)
 #define grid_rowbuf_occ ((uint8_t *)0xCBA0u)

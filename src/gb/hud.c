@@ -51,7 +51,7 @@ void hud_num(uint8_t line, uint16_t n)
 void hud_space(uint8_t line) { add(line, GLYPH_SPACE); }
 void hud_glyph(uint8_t line, uint16_t g) { add(line, g); }
 
-void hud_tx(uint8_t line, uint8_t tx, uint16_t var)
+void hud_tx(uint8_t line, uint16_t tx, uint16_t var)
 {
     uint16_t *buf = LINE_BUF;
     uint16_t n = (uint16_t)(text_offset[tx + 1] - text_offset[tx]);
@@ -104,9 +104,9 @@ uint8_t hud_tx_page(uint16_t tx, uint8_t page)
 }
 
 /* append text tx + k (k selects one of consecutive TX ids) to glyph list 'list' */
-void hud_tx_list(uint8_t list, uint8_t tx, uint16_t var, uint8_t k)
+void hud_tx_list(uint8_t list, uint16_t tx, uint16_t var, uint8_t k)
 {
-    hud_tx(list, (uint8_t)(tx + k), var);
+    hud_tx(list, (uint16_t)(tx + k), var);
 }
 
 void hud_raster_list(uint8_t list) { hud_raster(list); }

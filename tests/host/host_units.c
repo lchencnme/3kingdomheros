@@ -15,6 +15,8 @@ void unit_store(uint8_t i, const ActiveUnit *u) PLATFORM_API
     host_units[i] = *u;
 }
 
+void unit_xy(uint8_t i, uint8_t *x, uint8_t *y) PLATFORM_API { *x = host_units[i].x; *y = host_units[i].y; }
+
 uint8_t unit_state_bits(uint8_t i) PLATFORM_API
 {
     const ActiveUnit *u = &host_units[i];

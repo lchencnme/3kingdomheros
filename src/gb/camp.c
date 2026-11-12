@@ -32,14 +32,15 @@ enum { SC_MAIN, SC_EQUIP, SC_EXCH, SC_SHOP, SC_DEPLOY, SC_PRIZE };
 
 #define officer(o) (o)
 #define N_CMD 7u
-static const uint8_t cmd_tx[N_CMD] = {TX_CMD_COUNCIL, TX_CMD_EQUIP, TX_CMD_EXCH, TX_CMD_SHOP, TX_CMD_DEPART, TX_CMD_PRIZE, TX_CMD_SAVE};
+static const uint16_t cmd_tx[N_CMD] = {TX_CMD_COUNCIL, TX_CMD_EQUIP, TX_CMD_EXCH, TX_CMD_SHOP, TX_CMD_DEPART, TX_CMD_PRIZE, TX_CMD_SAVE};
 extern uint8_t cur_bt, camp_save_ok;
 
 /* all camp state in one block (the C globals area is nearly full: this lives on the stack of camp_run) */
 typedef struct {
     uint16_t *gold;
     CampDeploy *dep;
-    uint8_t screen, cur, off, slot, pick, pick_off, pick_slot, sell, top, msg, main_cur, council;
+    uint8_t screen, cur, off, slot, pick, pick_off, pick_slot, sell, top, main_cur, council;
+    uint16_t msg;                                       /* text id of the status line (0 = default hint) */
     uint8_t n_off, mode, next, deploy_max, forced, camp;
 } Camp;
 
@@ -49,7 +50,7 @@ static Camp *C;                                         /* 2 B global: points in
 /* no line may straddle tile ids 127/128: in LCDC.4 = 0 addressing they are not adjacent in VRAM
  * (0x97F0 vs 0x8800) and one 576 B GDMA would run on into the BG map at 0x9800 */
 /* officer name: the starting-roster table by character, else the class name */
-static uint8_t name_tx(uint8_t o)
+static uint16_t name_tx(uint8_t o)
 {
     RosterRec r;
     uint8_t k;
@@ -218,7 +219,7 @@ static void publish(void)
     dbg_frame_lo++;
 }
 
-static void say(uint8_t tx) { C->msg = tx; draw(8); }
+static void say(uint16_t tx) { C->msg = tx; draw(8); }
 
 static void enter(uint8_t sc)
 {
