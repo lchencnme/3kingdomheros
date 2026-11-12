@@ -493,7 +493,7 @@ static void gdma16(uint8_t bank, uint16_t src, uint16_t dst, uint8_t blocks)
 
 /* VBlank tile loop (design doc 12.1), SM83 assembly: the C version cost ~300-400 M-cycles per tile
  * (a double-speed line is 228), so 16 tiles ran ~6 lines past VBlank and SameBoy/hardware dropped the
- * writes (mode 3). Per tile: check LY (start only on 144..151), then atomically: [GDMA 16 B of
+ * writes (mode 3). Per tile: check LY (start only on 144..150), then atomically: [GDMA 16 B of
  * STAGE + i*16 -> tile id] + attribute byte + id byte into the BG map. Uses the precomputed TileMeta
  * (WRAM bank7, selected by the caller). Advances n_done; the rest waits for the next VBlank. */
 static void commit_loop(void) __naked
@@ -510,7 +510,7 @@ static void commit_loop(void) __naked
     ldh  a, (_LY_REG + 0)
     cp   a, #144
     jp   c, 9$
-    cp   a, #152
+    cp   a, #151                         ; start a tile only on LY 144..150 (>= 3 lines of margin)
     jp   nc, 9$
     di
     ld   hl, #(_mv_tmeta + 16)

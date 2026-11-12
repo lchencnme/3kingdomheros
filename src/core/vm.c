@@ -4,6 +4,7 @@
 #include "vm.h"
 #include "ai.h"
 #include "item.h"
+#include "undo.h"
 #include "grid.h"
 #include "path.h"
 
@@ -302,10 +303,17 @@ uint8_t vm_fire(Battle *b, const VmFact *f) CORE_API
             if (!matches(&e, f) || e.priority != next_prio) continue;
             if (e.once_bit != VM_NO_ONCE && vm_flag_get(SCOPE_BATTLE, e.once_bit)) continue;
             if (!cond_true(b, f, e.cond_off)) continue;
-            if (e.once_bit != VM_NO_ONCE) vm_flag_set(SCOPE_BATTLE, e.once_bit, 1);   /* set before running */
-            r = run_code(b, f, e.code_off, e.code_len);
-            vm_last_ran++;
-            if (r != VM_OK) return r;
+            {   /* 11.6: one event = one transaction; a failing script leaves no trace */
+                static Battle saved;                /* static: vm_fire sits in deep call chains */
+                saved = *b;
+                undo_begin();
+                if (e.once_bit != VM_NO_ONCE) vm_flag_set(SCOPE_BATTLE, e.once_bit, 1);   /* set before running */
+                r = run_code(b, f, e.code_off, e.code_len);
+                if (r == VM_OK && undo_overflowed()) r = VM_UNDO_CAP;
+                vm_last_ran++;
+                if (r != VM_OK) { undo_rollback(); *b = saved; return r; }
+                undo_end();
+            }
             battle_check_outcome(b, 0);                 /* design doc 6.6: check after each atomic step */
             if (b->outcome != OUT_NONE) return VM_OK;   /* terminal: later events do not run */
         }

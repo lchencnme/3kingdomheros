@@ -58,6 +58,8 @@ uint8_t item_exchange_camp(uint8_t a, uint8_t sa, uint8_t b, uint8_t sb) CORE_AP
 
 /* equipment (7.1): category of an item (EQ_* or EQ_NONE); equipped slot of a category or ITEM_NONE */
 uint8_t item_category(uint8_t item) CORE_API;
+/* copy of an item's definition (the table lives in bank 13 with this module) */
+void item_def(uint8_t item, ItemDef *out) CORE_API;
 uint8_t inv_equipped(uint8_t unit, uint8_t cat) CORE_API;
 uint8_t inv_slot_equipped(uint8_t unit, uint8_t slot) CORE_API;
 /* camp only: equip the item in slot (replaces the category's previous one) / unequip; stats re-derived */

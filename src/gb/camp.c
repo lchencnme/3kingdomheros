@@ -129,7 +129,8 @@ static void compose(uint8_t k)
             uint8_t i = (uint8_t)(C->top + k - 1u);
             if (i < camp_defs[0].n_shop) {
                 uint8_t it = camp_defs[0].shop[i];
-                arrow(C->cur == i); hud_tx(0, item_name_tx[it], 0); hud_space(0); hud_num(0, item_defs[it].price);
+                ItemDef d; item_def(it, &d);
+                arrow(C->cur == i); hud_tx(0, item_name_tx[it], 0); hud_space(0); hud_num(0, d.price);
             }
         } else if (C->sell && k >= 1 && k <= 6) {
             uint8_t s = (uint8_t)(C->top + k - 1u);
@@ -326,7 +327,9 @@ static uint8_t step(uint8_t pressed)
         } else if (pressed & J_B) enter(SC_MAIN);
         else if ((pressed & J_A) && !C->sell) {           /* 7.3: check gold and a free slot, then pay and give */
             uint8_t it = camp_defs[0].shop[C->cur];
-            uint16_t price = item_defs[it].price;
+            ItemDef d;
+            uint16_t price;
+            item_def(it, &d); price = d.price;
             if (*C->gold < price) { sfx_play(SFX_ERROR); say(TX_NO_GOLD); }
             else if (inv_count(u) >= INV_SLOTS) { sfx_play(SFX_ERROR); say(TX_BAG_FULL); }
             else { *C->gold = (uint16_t)(*C->gold - price); inv_add(u, it); sfx_play(SFX_CONFIRM); C->msg = TX_BOUGHT; draw(0); draw(7); draw(8); }
@@ -364,7 +367,9 @@ static uint8_t step(uint8_t pressed)
                 if (!p) say(TX_CANT_SELL);
                 else { *C->gold = (uint16_t)(*C->gold + p); ok = 1; C->msg = TX_SOLD; }
             } else {
-                if (item_defs[it].kind == IK_PLOT) say(TX_NO_DISCARD);       /* plot items must be kept */
+                ItemDef d;
+                item_def(it, &d);
+                if (d.kind == IK_PLOT) say(TX_NO_DISCARD);       /* plot items must be kept */
                 else { ok = 1; C->msg = TX_DISCARDED; }
             }
             if (ok) {

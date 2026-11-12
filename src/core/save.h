@@ -14,6 +14,7 @@
 #define SAVE_SLOT_NORMAL0 0u   /* SRAM banks 0..3  */
 #define SAVE_SLOT_NORMAL1 1u   /* SRAM banks 4..7  */
 #define SAVE_SLOT_SUSPEND 2u   /* SRAM banks 8..11 */
+#define SAVE_SLOT_SNAPSHOT 3u  /* SRAM banks 13 / 14 (8 KiB copies): pre-battle snapshot (11.6) */
 
 #define SAVE_OK 0u
 #define SAVE_ERR_NONE 1u        /* no valid copy */
@@ -43,12 +44,18 @@ uint8_t save_probe(uint8_t slot, uint8_t *copy, uint32_t *seq) CORE_API;
  * turn_limit is not saved (it comes from the battle definition): the caller sets it. */
 uint8_t load_battle(uint8_t slot, Battle *b, SaveUi *ui) CORE_API;
 #define SAVE_KIND_BATTLE 1u      /* core @43 save_kind; battle (suspend) saves: tags 1-7, 9, 10 */
-#define SAVE_KIND_CAMP 2u        /* camp saves: tags 1, 2, 3, 7 (roster, named, campaign, core) */
+#define SAVE_KIND_CAMP 2u
+#define SAVE_KIND_SNAPSHOT 3u    /* pre-battle snapshot: tags 1, 2, 3, 7, 8 (deployment) */        /* camp saves: tags 1, 2, 3, 7 (roster, named, campaign, core) */
 /* platform: the 256 B campaign area (global flags; GB: WRAM1 DF00) */
 void campaign_read(uint8_t off, uint8_t *dst, uint8_t n) PLATFORM_API;
 void campaign_write(uint8_t off, const uint8_t *src, uint8_t n) PLATFORM_API;
 /* camp save (2.2): roster, named states, campaign area, gold and the next battle (ui->battle_id) */
 uint8_t save_camp(uint8_t slot, const SaveUi *ui) CORE_API;
+/* 11.6 pre-battle snapshot, written before BATTLE_START: roster, named states, campaign area, core
+ * (battle id, starting round, gold), deployment dep = n + n x {officer, x, y, 0} (n <= 16). Retrying a
+ * battle restores it, so nothing the lost battle changed (flags, gold, prizes) survives. */
+uint8_t save_snapshot(const Battle *b, const SaveUi *ui, const uint8_t *dep) CORE_API;
+uint8_t load_snapshot(Battle *b, SaveUi *ui, uint8_t *dep) CORE_API;
 uint8_t load_camp(uint8_t slot, SaveUi *ui) CORE_API;
 /* battle id stored in a slot's core (to set up the right map before load_battle), 0xFFFF if none */
 uint16_t save_peek_battle(uint8_t slot) CORE_API;

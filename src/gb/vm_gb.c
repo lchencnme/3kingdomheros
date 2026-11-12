@@ -6,6 +6,7 @@
 #include "../core/vm.h"
 #include "../core/save.h"
 #include "../core/item.h"
+#include "../core/undo.h"
 #include "../gen/tech01_data.h"
 #include "../gen/campaign_data.h"
 #include "../gen/tech01_events.h"
@@ -50,6 +51,8 @@ void vm_flag_set(uint8_t scope, uint16_t id, uint8_t v) PLATFORM_API
         b = v ? (uint8_t)(b | m) : (uint8_t)(b & ~m);
         sram_write(SRAM_RUNTIME_BANK, off, &b, 1);
     } else {
+        o = SVBK_REG; SVBK_REG = WB_UNITS; b = W1_CAMPAIGN[(id >> 3) & 0xFF]; SVBK_REG = o;
+        if (!undo_log(US_CAMPAIGN, 1, (id >> 3) & 0xFF, 1, &b)) return;                   /* 11.6 */
         o = SVBK_REG; SVBK_REG = WB_UNITS;
         if (v) W1_CAMPAIGN[(id >> 3) & 0xFF] |= m; else W1_CAMPAIGN[(id >> 3) & 0xFF] &= (uint8_t)~m;
         SVBK_REG = o;
@@ -70,7 +73,16 @@ uint8_t vm_template(uint8_t idx, VmTemplate *t) PLATFORM_API
 }
 
 uint16_t gold;                                  /* campaign gold (GIVE_GOLD, battle rewards, shop) */
-void vm_gold(uint16_t amount) PLATFORM_API { gold = (uint16_t)(gold + amount < gold ? 0xFFFFu : gold + amount); }
+void vm_gold(uint16_t amount) PLATFORM_API
+{
+    if (!undo_log(US_CORE, 0, 0, 2, (const uint8_t *)&gold)) return;   /* 11.6 */
+    gold = (uint16_t)(gold + amount < gold ? 0xFFFFu : gold + amount);
+}
+
+void undo_restore_core(uint16_t off, const uint8_t *data, uint8_t len)
+{
+    if (off == 0 && len == 2) memcpy(&gold, data, 2);
+}
 
 /* treasures of the current battle (design doc 7.4) */
 uint8_t treasure_def(uint8_t i, TreasureDef *t) PLATFORM_API

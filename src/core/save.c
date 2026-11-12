@@ -122,7 +122,8 @@ uint32_t crc32_update(uint32_t crc, const uint8_t *p, uint16_t n) CORE_API
 #endif
 
 /* ---------------------------------------------------------------- image addressing */
-static uint8_t slot_bank(uint8_t slot, uint8_t copy) { return (uint8_t)(slot * 4u + copy * 2u); }
+/* slots 0..2: 16 KiB copies in banks 0..11; slot 3 (pre-battle snapshot): 8 KiB copies in banks 13 / 14 */
+static uint8_t slot_bank(uint8_t slot, uint8_t copy) { return slot == SAVE_SLOT_SNAPSHOT ? (uint8_t)(13u + copy) : (uint8_t)(slot * 4u + copy * 2u); }
 
 static void img_write(uint8_t base, uint16_t off, const uint8_t *src, uint16_t n)
 {
@@ -184,18 +185,20 @@ static void c_u32(CoreW *c, uint16_t off, uint32_t v) { uint8_t b[4]; put32(b, v
 
 static const uint8_t battle_tags[9] = {1, 2, 3, 4, 5, 6, 7, 9, 10};
 static const uint8_t camp_tags[4] = {1, 2, 3, 7};
+static const uint8_t snap_tags[5] = {1, 2, 3, 7, 8};
+static const uint8_t *snap_dep;           /* tag 8 source while a snapshot is written: n + n x 4 B */
 
 static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *kind);
 
 /* probe cache (design doc 11.6 performance): SRAM is only written by this program, so the result of
  * the last full probe / successful save of a slot stays true; save_battle uses it to pick the target
  * copy without re-reading and re-CRCing both copies. Loads always run the full validation. */
-static uint8_t pc_state[3];       /* 0 unknown, 1 known: newest valid copy in pc_copy, 2 known: none */
-static uint8_t pc_copy[3];
-static uint8_t pc_kind[3];        /* SAVE_KIND_* of the newest valid copy */
-static uint32_t pc_seq[3];
+static uint8_t pc_state[4];       /* 0 unknown, 1 known: newest valid copy in pc_copy, 2 known: none */
+static uint8_t pc_copy[4];
+static uint8_t pc_kind[4];        /* SAVE_KIND_* of the newest valid copy */
+static uint32_t pc_seq[4];
 
-void save_cache_reset(void) CORE_API { pc_state[0] = pc_state[1] = pc_state[2] = 0; }
+void save_cache_reset(void) CORE_API { pc_state[0] = pc_state[1] = pc_state[2] = pc_state[3] = 0; }
 
 uint8_t save_probe(uint8_t slot, uint8_t *copy, uint32_t *seq) CORE_API
 {
@@ -287,6 +290,10 @@ static uint8_t save_write(uint8_t slot, const Battle *b, const SaveUi *ui, uint8
         w_tlv(&w, 6, 2); w_fill(&w, 0, 2);              /* terrain diffs: count 0 */
     }
     w_core(&w, b, ui, kind);
+    if (kind == SAVE_KIND_SNAPSHOT) {                   /* tag 8: deployment (2.3) */
+        w_tlv(&w, 8, (uint16_t)(1u + (uint16_t)snap_dep[0] * 4u));
+        w_bytes(&w, snap_dep, (uint16_t)(1u + (uint16_t)snap_dep[0] * 4u));
+    }
     if (kind == SAVE_KIND_BATTLE) {
         w_tlv(&w, 9, 1920); w_sram(&w, 15, 0, 1920);    /* unit items: SRAM15 runtime block (7.1) */
         w_tlv(&w, 10, 960); w_sram(&w, 12, 6912u, 960); /* AI groups + overrides (8.2) */
@@ -328,6 +335,36 @@ static uint8_t save_write(uint8_t slot, const Battle *b, const SaveUi *ui, uint8
 }
 
 uint8_t save_battle(uint8_t slot, const Battle *b, const SaveUi *ui) CORE_API { return save_write(slot, b, ui, SAVE_KIND_BATTLE); }
+static uint16_t tlv_find(uint8_t base, uint8_t tag);
+static void load_common(uint8_t base, Battle *b, SaveUi *ui);
+
+uint8_t save_snapshot(const Battle *b, const SaveUi *ui, const uint8_t *dep) CORE_API
+{
+    uint8_t r;
+    snap_dep = dep;
+    r = save_write(SAVE_SLOT_SNAPSHOT, b, ui, SAVE_KIND_SNAPSHOT);
+    snap_dep = 0;
+    return r;
+}
+
+uint8_t load_snapshot(Battle *b, SaveUi *ui, uint8_t *dep) CORE_API
+{
+    uint8_t copy, base, n;
+    uint32_t seq;
+    uint16_t at;
+    uint8_t r = save_probe(SAVE_SLOT_SNAPSHOT, &copy, &seq);
+    if (r != SAVE_OK) return r;
+    if (pc_kind[SAVE_SLOT_SNAPSHOT] != SAVE_KIND_SNAPSHOT) return SAVE_ERR_NONE;
+    base = slot_bank(SAVE_SLOT_SNAPSHOT, copy);
+    load_common(base, b, ui);
+    at = tlv_find(base, 8);
+    img_read(base, at, &n, 1);
+    if (n > 16u) n = 16u;
+    img_read(base, at, dep, (uint16_t)(1u + (uint16_t)n * 4u));
+    dep[0] = n;
+    return SAVE_OK;
+}
+
 uint8_t save_camp(uint8_t slot, const SaveUi *ui) CORE_API
 {
     Battle b;
@@ -367,10 +404,10 @@ static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *
         img_read(base, (uint16_t)(32u + off), th, 3);
         tl = get16(th + 1);
         switch (th[0]) {
-        case 1: case 4:
+        case 1: case 4: case 8:
             img_read(base, (uint16_t)(32u + off + 3u), &n, 1);
             if (n > (th[0] == 1 ? 128u : MAX_UNITS)) return SAVE_ERR_NONE;
-            want = (uint16_t)(1u + (uint16_t)n * (th[0] == 1 ? 48u : 40u));
+            want = (uint16_t)(1u + (uint16_t)n * (th[0] == 1 ? 48u : (th[0] == 4 ? 40u : 4u)));
             break;
         case 2: case 3: want = 256; break;
         case 5: case 7: want = 512; break;
@@ -385,6 +422,7 @@ static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *
     }
     if (t == sizeof battle_tags && memcmp(seen, battle_tags, sizeof battle_tags) == 0) *kind = SAVE_KIND_BATTLE;
     else if (t == sizeof camp_tags && memcmp(seen, camp_tags, sizeof camp_tags) == 0) *kind = SAVE_KIND_CAMP;
+    else if (t == sizeof snap_tags && memcmp(seen, snap_tags, sizeof snap_tags) == 0) *kind = SAVE_KIND_SNAPSHOT;
     else return SAVE_ERR_NONE;
     *seq = get32(hdr + 8);
     *blen = len;

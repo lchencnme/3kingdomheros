@@ -3,6 +3,9 @@
 #include <string.h>
 #include "../core/battle.h"
 #include "../core/roster.h"
+#include "../core/undo.h"
+#include "../core/save.h"
+void undo_restore_core(uint16_t off, const uint8_t *data, uint8_t len);
 #include "wram.h"
 #define SNAP_MAX 12u
 
@@ -18,9 +21,19 @@ void unit_load(uint8_t i, ActiveUnit *u) PLATFORM_API
 
 uint8_t unit_gen;          /* bumped on every unit write: lets the renderer skip unchanged frames */
 
+/* own frame: unit_store is at the bottom of the deepest chains */
+static uint8_t log_unit(uint8_t i)
+{
+    ActiveUnit old;
+    uint8_t o = SVBK_REG;
+    SVBK_REG = WB_UNITS; memcpy(&old, &W1_UNITS[i], sizeof old); SVBK_REG = o;
+    return undo_log(US_UNITS, 1, (uint16_t)((uint16_t)i * sizeof(ActiveUnit)), sizeof(ActiveUnit), (const uint8_t *)&old);
+}
+
 void unit_store(uint8_t i, const ActiveUnit *u) PLATFORM_API
 {
     unit_gen++;
+    if (undo_active() && !log_unit(i)) return;   /* 11.6: script transaction -> log the old record */
     uint8_t o = SVBK_REG;
     SVBK_REG = WB_UNITS;
     memcpy(&W1_UNITS[i], u, sizeof(ActiveUnit));
@@ -86,4 +99,29 @@ void units_snapshot(uint8_t n)
         snap_flags[i] = u->action_flags; snap_hp[i] = u->hp; snap_cls[i] = u->class_id;
     }
     SVBK_REG = o;
+}
+
+/* 11.6 rollback: raw restores (no logging) and the derived occupancy rebuilt from the units */
+void undo_restore(uint8_t space, uint8_t bank, uint16_t off, const uint8_t *data, uint8_t len) PLATFORM_API
+{
+    uint8_t o = SVBK_REG;
+    (void)bank;
+    if (space == US_UNITS) { SVBK_REG = WB_UNITS; memcpy((uint8_t *)W1_UNITS + off, data, len); SVBK_REG = o; unit_gen++; }
+    else if (space == US_CAMPAIGN) campaign_write((uint8_t)off, data, len);
+    else if (space == US_CORE) undo_restore_core(off, data, len);
+    else sram_write(bank, off, data, len);     /* undo_active() is 0 while rolling back */
+}
+
+void undo_rebuild(void) PLATFORM_API
+{
+    uint8_t i, o = SVBK_REG;
+    ActiveUnit u;
+    SVBK_REG = WB_SCRATCH;
+    memset((uint8_t *)0xD000u, 0, 0x400u);     /* both occupancy bitmaps (D000 / D200) */
+    SVBK_REG = o;
+    for (i = 0; i < MAX_UNITS; i++) {
+        unit_load(i, &u);
+        if (u.max_hp && unit_alive(&u)) occ_set(u.x, u.y, faction_side(u.faction));
+    }
+    unit_gen++;
 }

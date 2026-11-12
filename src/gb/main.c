@@ -1,91 +1,19 @@
 #pragma bank 5   /* game logic, HUD and map view: code bank 5 (design doc 11.3) */
-/* 《三国豪杰传》 TECH01 v2 (design doc 16.2 G1 slice).
- * Player phase: select -> move preview -> action menu (攻击/待命) -> target -> resolve.
- * Enemy phase: core AI (第8章) per unit with map-fast presentation. Victory/defeat + restart.
- * Temporary: units are OBJ placeholders (BG compositor pending); presentation is map-fast only. */
-#include <gb/gb.h>
-#include "debug.h"
-#include <gb/cgb.h>
-#include <string.h>
-#include "../core/battle.h"
-#include "../core/ai.h"
-#include "../core/path.h"
-#include "../core/save.h"
-#include "../core/rules.h"
-#include "wram.h"
-#include "input.h"
-#include "mapview.h"
-#include "hud.h"
-#include "rom.h"
-#include "audio.h"
-#include "fs.h"
-#include "dialog.h"
-#include "dialogq.h"
-#include "camp.h"
-#include "duel.h"
-#include "../core/vm.h"
-#include "../core/strategy.h"
-#include "../core/item.h"
-#include "../core/roster.h"
-#include "../gen/campaign_data.h"
-#include "../gen/tech01_data.h"
-#include "../gen/text_data.h"
+#include "game.h"
 
-#define W7_AI ((AiScratch *)0xDC00)
-typedef char ai_fits_bank7[(sizeof(AiScratch) <= 0x400u) ? 1 : -1];
-
-void units_clear(void);
-void units_snapshot(uint8_t n);
-#define MAX_SHOWN 12u               /* OBJ placeholders: up to 12 units (24 OBJ + cursor) */
-extern uint8_t snap_x[MAX_SHOWN], snap_y[MAX_SHOWN], snap_fac[MAX_SHOWN], snap_flags[MAX_SHOWN];
-extern uint16_t snap_hp[MAX_SHOWN];
-void vm_clear_battle_flags(void);
-#define SNAP_ALIVE(i) (snap_hp[i] && !(snap_flags[i] & (AF_RETREAT | AF_DEAD | AF_AWAY)))
-
-enum {
-    G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE, G_SLIST, G_SAIM,
-    G_ILIST, G_IAIM, G_XLIST, G_CAMP, G_SHOP, G_XRECV, G_DANGER
-};
-
-#define MI_ATTACK 0u
-#define MI_STRAT 1u
-#define MI_WAIT 2u
-#define MI_TALK 3u
-#define MI_ITEM 4u
-#define MI_EXCH 5u
-#define WIN_GOLD 500u
-#define talks ((uint8_t *)ER_TALKS)
-/* UI scratch in the event region (CD00..CD1F): known strategy ids for the strategy list */
-#include "eventram.h"
-#define SLIST ((uint8_t *)ER_SLIST)
-#define targets ((uint8_t *)ER_TARGETS)
-
-#define OPT_AUTOSAVE 0x01u        /* design doc 11.6: autosave at player phase start, default on */
-
-static Battle B;
-static uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
-static uint8_t xr_list[4], n_xr, xri, rslot;
-static uint8_t danger_on, dz_i;                /* enemy danger view (8.4): shown / next unit to add */
-#define W7_DANGER ((uint8_t *)0xDC00u)          /* overlays the AI scratch: invalidate when hiding */  /* battle exchange (7.3): adjacent allies, chosen one, its slot */
-static uint8_t mitems[6], isel, keep_inv, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
-static uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
-static uint8_t hud_dirty, last_hx, last_hy, hud_settle;
-extern uint16_t gold;                          /* vm_gb.c (GIVE_GOLD) */
-extern uint8_t cur_bt;                         /* vm_gb.c: current battle (battle_defs index) */
-#define BD (&battle_defs[cur_bt])
-void unit_base_cache_clear(void);
-static void publish_debug(void);
-static uint16_t carry_round;                   /* 2.4 round_mode CARRY */
+Battle B;
+uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
+uint8_t xr_list[4], n_xr, xri, rslot;
+uint8_t danger_on, dz_i;                /* enemy danger view (8.4): shown / next unit to add */
+uint8_t mitems[6], isel, keep_inv, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
+uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
+uint8_t hud_dirty, last_hx, last_hy, hud_settle;
+uint16_t carry_round;                   /* 2.4 round_mode CARRY */
 uint8_t camp_save_ok;
-static uint8_t audio_ready;                    /* music_play only after audio_init */                          /* a valid camp save exists (title option; camp.c sets it) */
-static CampDeploy deploy;                      /* officer order chosen in the camp (2.3); n = 0: default */
-static AiMode ai_mode;                         /* static: enemy_step sits above the deepest call chain */
-static const uint8_t blank16[16];
-/* HUD blank tile: VRAM bank1 id 120 (bank1 72..119 / 200..247 are map slots, 0..71 / 128..199 the HUD
- * pages). It used to be bank0 id 40, which the BG compositor reuses as map slot 40. */
-#define HUD_BLANK 120u
-
-/* debug/test hooks (read by tests/emu/test_rom.py through the .noi symbol file) */
+uint8_t audio_ready;                    /* music_play only after audio_init */                          /* a valid camp save exists (title option; camp.c sets it) */
+CampDeploy deploy;                      /* officer order chosen in the camp (2.3); n = 0: default */
+AiMode ai_mode;                         /* static: enemy_step sits above the deepest call chain */
+static void publish_debug(void);
 
 /* ---------------------------------------------------------------- helpers */
 static void load(uint8_t i, ActiveUnit *u) { unit_load(i, u); }
@@ -235,7 +163,7 @@ static void hud_slist(void)
     hud_end();
 }
 
-static void publish_inv(void)
+void publish_inv(void) BANKED
 {
     uint8_t s;
     for (s = 0; s < INV_SLOTS; s++) dbg_inv[s] = inv_get(0, s);
@@ -316,12 +244,12 @@ static void hud_item_aim(void)
     hud_end();
 }
 
-static void hud_item_result(const ItemResult *r)
+void hud_item_result(const ItemResult *r) BANKED
 {
     uint8_t k;
     hud_begin();
     if (r->item != ITEM_NONE) {
-        k = item_defs[r->item].kind;
+        { ItemDef d; item_def(r->item, &d); k = d.kind; }
         hud_tx(0, item_name_tx[r->item], 0); hud_space(0);
         if (k == IK_HP) { hud_tx(0, TX_HEAL, 0); hud_num(0, r->amount); }
         else if (k == IK_MORALE) { hud_tx(0, TX_MORALE, 0); hud_glyph(0, GLYPH_PLUS); hud_num(0, r->amount); }
@@ -358,7 +286,7 @@ static void hud_aim(void)
     hud_end();
 }
 
-static void hud_strat_result(uint8_t sid, const StrategyResult *sr)
+void hud_strat_result(uint8_t sid, const StrategyResult *sr) BANKED
 {
     uint8_t i, any_hit = 0, any_kill = 0;
     uint16_t total = 0;
@@ -391,7 +319,7 @@ static void hud_target(void)
     hud_end();
 }
 
-static void hud_result(const AttackResult *r)
+void hud_result(const AttackResult *r) BANKED
 {
     if (r->killed || r->c_killed) sfx_play(SFX_RETREAT);
     else if (r->hit || r->c_hit) sfx_play(SFX_HIT);
@@ -407,7 +335,7 @@ static void hud_result(const AttackResult *r)
     hud_end();
 }
 
-static void hud_banner(uint8_t phase)
+void hud_banner(uint8_t phase) BANKED
 {
     hud_begin();
     hud_tx(0, phase == FAC_ENEMY ? TX_PHASE_ENEMY : TX_PHASE_PLAYER, B.round);
@@ -415,7 +343,7 @@ static void hud_banner(uint8_t phase)
 }
 
 /* ---------------------------------------------------------------- presentation (design doc 12.4/12.5) */
-static void map_mode_restore(void)
+void map_mode_restore(void) BANKED
 {
     /* LCD is off (fs_present returns that way): reload map-mode VRAM, palettes, HUD */
     set_bkg_palette(0, 8, tech01_bg_pals);
@@ -437,7 +365,7 @@ static uint8_t count_alive(void)
 }
 
 /* play the VM output queue in order: runs of text pages, and the duel presentation */
-static void play_queue(void)
+void play_queue(void) BANKED
 {
     uint8_t i = 0;
     while (i < DQ->n) {
@@ -462,7 +390,7 @@ static void play_queue(void)
 }
 
 /* run the event VM for one fact; play queued dialogue (design doc 9) */
-static void fire(uint8_t trig, uint8_t phase, uint8_t actor, uint8_t target, uint8_t unit)
+void fire(uint8_t trig, uint8_t phase, uint8_t actor, uint8_t target, uint8_t unit) BANKED
 {
     VmFact f;
     uint8_t r;
@@ -485,7 +413,7 @@ static void side_of_unit(uint8_t i, FsSide *s)
 }
 
 /* resolve (sealed) then present the attack fullscreen, then restore the map */
-static void attack_and_present(uint8_t ai, uint8_t di, AttackResult *r)
+void attack_and_present(uint8_t ai, uint8_t di, AttackResult *r) BANKED
 {
     FsSide sa, sd;
     memset(r, 0, sizeof *r);
@@ -503,45 +431,11 @@ static void attack_and_present(uint8_t ai, uint8_t di, AttackResult *r)
     if (r->c_killed) fire(TR_UNIT_RETREAT, B.phase, di, ai, ai);
 }
 
-/* ---------------------------------------------------------------- save (design doc 11.6) */
-static uint8_t do_suspend_save(void)
-{
-    SaveUi ui;
-    uint8_t r;
-    ui.battle_id = cur_bt; ui.cam_x = cam_x; ui.cam_y = cam_y; ui.cur_x = cur_x; ui.cur_y = cur_y;
-    ui.presentation = 0; ui.text_speed = 0; ui.options = options; ui.gold = gold;
-    r = save_battle(SAVE_SLOT_SUSPEND, &B, &ui);
-    dbg_save_result = r; dbg_saves++;
-    return r;
-}
 
-static uint8_t do_suspend_load(void)
-{
-    SaveUi ui;
-    uint8_t r;
-    uint16_t id = save_peek_battle(SAVE_SLOT_SUSPEND);
-    if (id >= N_BATTLES) return SAVE_ERR_NONE;
-    cur_bt = (uint8_t)id;                       /* the map must exist before units and occupancy load */
-    unit_base_cache_clear();
-    units_clear();
-    wram_init_grid_rom(BD->w, BD->h, BD->tbank, BD->terrain);
-    r = load_battle(SAVE_SLOT_SUSPEND, &B, &ui);
-    if (r != SAVE_OK) return r;
-    pending_start = 0; end_fired = 0; DQ->n = 0;
-    B.turn_limit = BD->turn_limit;              /* from the battle definition, not the save */
-    options = ui.options;
-    gold = (uint16_t)ui.gold;
-    cam_x = ui.cam_x; cam_y = ui.cam_y; cur_x = ui.cur_x; cur_y = ui.cur_y;
-    {
-        uint8_t o = SVBK_REG;
-        SVBK_REG = WB_SCRATCH; ai_invalidate(W7_AI); SVBK_REG = o;
-    }
-    return SAVE_OK;
-}
 
 /* ---------------------------------------------------------------- flow */
-static void publish_treasures(void);
-static void danger_hide(void)
+
+void danger_hide(void) BANKED
 {
     uint8_t o;
     if (!danger_on) return;
@@ -551,143 +445,12 @@ static void danger_hide(void)
 }
 
 
-/* instance of roster officer o in the current battle: the o-th PLAYER entry of the unit list (2.3) */
-static uint8_t officer_slot(uint8_t o)
-{
-    uint8_t i, k = 0;
-    for (i = 0; i < BD->n_units; i++)
-        if (BD->units[i].faction == FAC_PLAYER) { if (k == o) return i; k++; }
-    return 0xFF;
-}
 
-static void start_battle(void)
-{
-    uint8_t i;
-    danger_hide();
-    memset(&B, 0, sizeof B);
-    rng_seed(&B.rng, BD->seed);
-    /* 2.4: round_mode CARRY continues the previous battle's round (turn_limit is absolute) */
-    B.round = (BD->round_mode == ROUND_CARRY && carry_round) ? carry_round : 1u;
-    B.turn_limit = BD->turn_limit; B.leader = 0;
-    units_clear();
-    wram_init_grid_rom(BD->w, BD->h, BD->tbank, BD->terrain);
-    vm_clear_battle_flags();                   /* once bits + battle-scope flags are per battle */
-    DQ->n = 0;
-    end_fired = 0;
-    {
-        uint8_t o = SVBK_REG;
-        SVBK_REG = WB_SCRATCH;
-        ai_invalidate(W7_AI);
-        SVBK_REG = o;
-    }
-    inv_clear_all();                           /* officers bring their items from the roster (5.6) */
-    ai_groups_init(BD->ai, BD->n_ai);          /* 8.2: from the battle definition */
-    {   /* 2.3: deployed officers fill the slots in order; slot k = cell of the k-th player entry */
-        uint8_t k, n = deploy.n;
-        if (!n) for (k = 0; k < roster_count() && n < BD->deploy_max; k++) deploy.order[n++] = k;   /* default */
-        for (k = 0; k < n; k++) {
-            uint8_t o = deploy.order[k], inst = officer_slot(o), sk = officer_slot(k), fl;
-            if (inst == 0xFF || sk == 0xFF) continue;
-            sram_read(ROSTER_SRAM_BANK, (uint16_t)((uint16_t)o * ROSTER_REC + 45u), &fl, 1);   /* reserved[0] */
-            if (BD->continuity == CONT_NO_REPLENISH && (fl & ROSTER_RETREATED)) continue;   /* 2.4 */
-            roster_deploy(&B, o, inst, BD->units[sk].x, BD->units[sk].y, BD->continuity == CONT_NORMAL);
-        }
-        deploy.n = 0;                          /* the next camp starts from everyone again */
-    }
-    for (i = 0; i < BD->n_units; i++) {
-        const Tech01Unit *t = &BD->units[i];
-        ActiveUnit u;
-        if (t->faction == FAC_PLAYER) continue;
-        battle_spawn(&B, i, ANON_CHARACTER, t->cls, t->faction, BD->levels[i], t->x, t->y);
-        load(i, &u); u.ai_id = t->ai; unit_store(i, &u);
-    }
-    for (i = 0; i < BD->n_items; i++) { inv_add(BD->items[i][0], BD->items[i][1]); item_rederive(BD->items[i][0]); }
-    if (B.n_units < BD->n_units) B.n_units = BD->n_units;   /* undeployed slots stay empty records */
-    publish_inv();
-    publish_treasures();
-    prize_clear();                             /* the queue is per battle; the camp empties it first */
-
-    {
-        uint8_t s0 = officer_slot(0);
-        cur_x = BD->units[s0].x; cur_y = BD->units[s0].y;
-    }
-    battle_phase_start(&B, FAC_PLAYER);
-    state = G_BANNER; timer = 45; next_state = G_IDLE;
-    hud_banner(FAC_PLAYER);
-    autosave_pending = (uint8_t)(options & OPT_AUTOSAVE);
-    pending_start = 1;                         /* BATTLE_START + PHASE_START fire once the LCD is on */
-}
 
 /* a new campaign (2.1): starting roster with its items, battle 1 */
 
-static void new_game(void)
-{
-    uint8_t k, s;
-    RosterRec r;
-    roster_clear();
-    unit_base_cache_clear();
-    for (k = 0; k < N_ROSTER_INIT; k++) {
-        const RosterInit *o = &roster_init[k];
-        uint8_t idx = roster_add(o->character, o->cls, o->level, o->str, o->intl, o->cmd);
-        roster_read(idx, &r);
-        for (s = 0; s < 8; s++) { r.items[2 * s] = o->items[s]; r.items[2 * s + 1] = o->items[s] == 0xFF ? 0xFF : 0; }
-        roster_write(idx, &r);
-    }
-    {   /* campaign area (global flags) starts clear */
-        uint8_t z[32], off;
-        memset(z, 0, sizeof z);
-        for (off = 0; off < 224u; off += 32u) campaign_write(off, z, 32);
-        campaign_write(224u, z, 32);
-    }
-    gold = 0; cur_bt = 0; carry_round = 0; deploy.n = 0;
-    if (audio_ready) music_play(&song_battle);
-    start_battle();
-}
 
-static uint8_t player_can_act(void)
-{
-    uint8_t i;
-    ActiveUnit u;
-    for (i = 0; i < B.n_units; i++) {
-        load(i, &u);
-        if (u.faction == FAC_PLAYER && battle_can_act(&u)) return 1;
-    }
-    return 0;
-}
 
-static void begin_enemy_phase(void)
-{
-    uint8_t o = SVBK_REG;
-    danger_hide();
-    battle_phase_end(&B);                      /* PLAYER end */
-    if (B.outcome) return;
-    battle_phase_start(&B, FAC_ALLY);          /* no allies in TECH01: start/end still run */
-    fire(TR_PHASE_START, FAC_ALLY, 0xFF, 0xFF, 0xFF);
-    if (B.outcome) return;
-    battle_phase_end(&B);
-    if (B.outcome) return;
-    battle_phase_start(&B, FAC_ENEMY);
-    fire(TR_PHASE_START, FAC_ENEMY, 0xFF, 0xFF, 0xFF);
-    if (B.outcome) return;
-    SVBK_REG = WB_SCRATCH;
-    {   /* 8.2 HOLD alert test once per phase, while the banner is up (exact SPFA per nearby opponent) */
-        uint8_t i;
-        for (i = 0; i < B.n_units; i++) ai_hold_update(&B, W7_MR, i);
-    }
-    ai_invalidate(W7_AI);
-    {   /* pre-warm the field of the first enemy that will act */
-        uint8_t i;
-        ActiveUnit u;
-        for (i = 0; i < B.n_units; i++) {
-            load(i, &u);
-            if (u.faction == FAC_ENEMY && battle_can_act(&u)) { ai_field_prepare(&B, W7_AI, i); break; }
-        }
-    }
-    SVBK_REG = o;
-    enemy_i = 0;
-    state = G_BANNER; timer = 45; next_state = G_ENEMY;
-    hud_banner(FAC_ENEMY);
-}
 
 static void after_action(void)
 {
@@ -770,7 +533,7 @@ static uint8_t choose_receiver(uint8_t item, uint8_t who)
     }
 }
 
-static void publish_treasures(void)
+void publish_treasures(void) BANKED
 {
     uint8_t i, m = 0;
     TreasureDef d;
@@ -1050,224 +813,26 @@ static void logic_player(void)
     }
 }
 
-static void mark_acted(uint8_t i)
-{
-    ActiveUnit u;
-    load(i, &u); u.action_flags |= AF_ACTED; unit_store(i, &u);
-}
 
-/* AI strategy / item command (design doc 8.3); separate frame for the 512 B stack */
-static void enemy_special(const AiCommand *c)
-{
-    static union { StrategyResult sr; ItemResult ir; } r;      /* static: keeps 28 B off the stack */
-    uint8_t k, ok;
-    if (c->action == ACT_STRATEGY) {
-        ok = strategy_cast(&B, enemy_i, c->param, c->tx, c->ty, &r.sr) == SR_OK;
-        if (ok) {
-            dbg_ai_strats++;
-            hud_strat_result(c->param, &r.sr);
-            for (k = 0; k < r.sr.n; k++) if (r.sr.killed[k]) fire(TR_UNIT_RETREAT, B.phase, enemy_i, r.sr.unit[k], r.sr.unit[k]);
-        }
-    } else {
-        ok = item_use(&B, enemy_i, c->param, c->tx, c->ty, &r.ir) == IR_OK;
-        if (ok) { dbg_ai_items++; hud_item_result(&r.ir); }
-    }
-    if (!ok) { mark_acted(enemy_i); hud_begin(); hud_end(); }   /* never expected: AI proposes legal commands */
-}
 
-/* small helpers keep enemy_step's frame tiny: it sits under ai_decide, the deepest call chain */
-static void enemy_skip_idle(void)
-{
-    ActiveUnit u;
-    while (enemy_i < B.n_units) {
-        load(enemy_i, &u);
-        if (u.faction == FAC_ENEMY && battle_can_act(&u)) break;
-        enemy_i++;
-    }
-}
 
-static uint8_t unit_pos(uint8_t i, uint8_t *x, uint8_t *y)
-{
-    ActiveUnit u;
-    load(i, &u);
-    *x = u.x; *y = u.y;
-    return unit_alive(&u);
-}
 
-static void enemy_attack(uint8_t target)
-{
-    AttackResult r;
-    attack_and_present(enemy_i, target, &r);
-    hud_result(&r);
-}
 
-/* design doc 8.4: one cached approach field. When the next enemy uses another move type, start its field
- * now as a cooperative job so it is built while this action's result is shown, not inside the decision */
-static void prewarm_next(void)
-{
-    ActiveUnit u;
-    uint8_t j, m, o;
-    for (j = (uint8_t)(enemy_i + 1u); j < B.n_units; j++) {
-        load(j, &u);
-        if (u.faction == FAC_ENEMY && battle_can_act(&u)) break;
-    }
-    if (j >= B.n_units) return;
-    (void)m;
-    o = SVBK_REG;
-    SVBK_REG = WB_SCRATCH;
-    ai_field_prepare(&B, W7_AI, j);            /* move type and target-specific source (8.4) */
-    SVBK_REG = o;
-}
 
-static void enemy_step(void)
-{
-    AiCommand c;
-    uint8_t o, ux, uy;
-    uint16_t t0;
-    enemy_skip_idle();
-    if (enemy_i >= B.n_units) {
-        fire(TR_ROUND_END, FAC_ENEMY, 0xFF, 0xFF, 0xFF);   /* round number of the round that ends */
-        if (B.outcome) return;
-        battle_phase_end(&B);                  /* ENEMY end: TTL, round-limit check, round++ */
-        if (B.outcome) return;
-        battle_phase_start(&B, FAC_PLAYER);
-        fire(TR_PHASE_START, FAC_PLAYER, 0xFF, 0xFF, 0xFF);
-        if (B.outcome) return;
-        state = G_BANNER; timer = 45; next_state = G_IDLE;
-        hud_banner(FAC_PLAYER);
-        autosave_pending = (uint8_t)(options & OPT_AUTOSAVE);
-        return;
-    }
-    unit_pos(enemy_i, &ux, &uy);
-    ai_resolve(enemy_i, &ai_mode);             /* 8.2: group / instance override (SRAM12) */
-    o = SVBK_REG;
-    t0 = sys_time;
-    SVBK_REG = WB_SCRATCH;
-    ai_decide_mode(&B, W7_AI, W7_MR, enemy_i, &ai_mode, &c);
-    SVBK_REG = o;
-    dbg_t_ai = sys_time - t0;
-    if (c.x != ux || c.y != uy) {
-        battle_move(enemy_i, c.x, c.y);
-        fire(TR_POST_MOVE, FAC_ENEMY, enemy_i, 0xFF, 0xFF);
-        if (B.outcome || !unit_pos(enemy_i, &ux, &uy)) c.action = ACT_WAIT;   /* 4.3: the move's event ended the action */
-    }
-    cur_x = c.x; cur_y = c.y;                  /* camera follows the actor */
-    if (c.action == ACT_ATTACK) {
-        enemy_attack(c.target);
-        timer = 50;
-    } else if (c.action == ACT_STRATEGY || c.action == ACT_ITEM) {
-        enemy_special(&c);
-        if (c.action == ACT_STRATEGY) { cur_x = c.tx; cur_y = c.ty; }
-        timer = 50;
-    } else {
-        mark_acted(enemy_i);
-        timer = 20;
-        hud_begin(); hud_end();
-    }
-    if (!B.outcome) prewarm_next();
-    enemy_i++;
-    state = G_SHOW; next_state = G_ENEMY;
-}
 
-/* ---------------------------------------------------------------- campaign flow (2.1, 2.4, 5.6) */
-static void sync_officers(void)
-{
-    uint8_t o, inst;
-    ActiveUnit u;
-    for (o = 0; o < roster_count(); o++) {
-        inst = officer_slot(o);
-        if (inst == 0xFF) continue;
-        load(inst, &u);
-        if (u.max_hp && u.roster_offset == (uint16_t)o * ROSTER_REC) roster_sync(o, inst);   /* deployed */
-    }
-}
 
-/* the camp works on the officers as instances 0..n-1 (stats + item blocks), synced back afterwards */
-static void camp_prepare(void)
-{
-    uint8_t o;
-    units_clear();
-    inv_clear_all();
-    for (o = 0; o < roster_count() && o < 8u; o++) roster_deploy(&B, o, o, 0, 0, 0);
-}
 
-static void camp_finish(void)
-{
-    uint8_t o;
-    for (o = 0; o < roster_count() && o < 8u; o++) roster_sync(o, o);
-}
 
-static void play_pages(const uint16_t (*pages)[2], uint8_t n)
-{
-    uint8_t i;
-    for (i = 0; i < n && i < DQ_MAX; i++) { DQ->speaker[i] = (uint8_t)pages[i][0]; DQ->text[i] = pages[i][1]; }
-    DQ->n = i;
-    play_queue();
-}
 
-static void show_title(void)
-{
-    state = G_TITLE;
-    autosave_pending = 0;
-    hud_begin();
-    hud_tx(0, TX_TITLE, 0);
-    hud_tx(1, TX_TITLE_NEW, 0);
-    if (camp_save_ok) { hud_space(1); hud_tx(1, TX_TITLE_LOAD, 0); }
-    hud_end();
-}
 
-static void go_next(uint8_t next)
-{
-    if (next == 0xFF) {                        /* 2.5: the end of this campaign */
-        music_play(&song_end);
-        play_pages(ending_pages, N_ENDING_PAGES);
-        new_game();
-        map_mode_restore();
-        show_title();
-        return;
-    }
-    cur_bt = next;
-    music_play(&song_battle);
-    start_battle();
-    map_mode_restore();
-}
 
-static void battle_won(void)
-{
-    uint8_t camp = BD->camp, next = BD->next;
-    sync_officers();                           /* 5.6 before anything else changes */
-    carry_round = B.round;
-    if (camp != 0xFF || prize_count()) {
-        music_play(&song_camp);                /* 14.4: camp theme */
-        camp_prepare();
-        camp_run(&gold, &deploy, camp == 0xFF ? CAMP_PRIZES_ONLY : CAMP_FULL, next);   /* LCD off on return */
-        camp_finish();
-    } else DISPLAY_OFF;
-    go_next(next);
-}
 
-static void load_camp_and_go(void)
-{
-    SaveUi ui;
-    if (load_camp(SAVE_SLOT_NORMAL0, &ui) != SAVE_OK || ui.battle_id >= N_BATTLES) {
-        hud_begin(); hud_tx(0, TX_LOAD_FAIL, 0); hud_end();
-        return;
-    }
-    gold = (uint16_t)ui.gold; options = ui.options;
-    unit_base_cache_clear();                   /* a different roster may have been loaded */
-    cur_bt = (uint8_t)ui.battle_id; carry_round = 0; deploy.n = 0;
-    DISPLAY_OFF;
-    music_play(&song_camp);
-    camp_prepare();
-    camp_run(&gold, &deploy, CAMP_FULL, BD->next);
-    camp_finish();
-    go_next(BD->next);
-}
 
 static void logic(void)
 {
     if (pending_start && state == G_BANNER) {
         pending_start = 0;
+        write_snapshot();                      /* 11.6: before BATTLE_START, from the top of the stack */
         fire(TR_BATTLE_START, FAC_PLAYER, 0xFF, 0xFF, 0xFF);
         fire(TR_PHASE_START, FAC_PLAYER, 0xFF, 0xFF, 0xFF);
     }
@@ -1316,11 +881,7 @@ static void logic(void)
     case G_OUTCOME:
         if (timer) { timer--; break; }
         if ((in_pressed & J_A) && B.outcome == OUT_WIN) battle_won();
-        else if (in_pressed & J_A) {             /* defeat: retry from the roster as it was (pre-battle) */
-            DISPLAY_OFF;
-            start_battle(); mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
-            DISPLAY_ON;
-        }
+        else if (in_pressed & J_A) retry_battle();   /* defeat: from the pre-battle snapshot (11.6) */
         break;
     case G_TITLE:
         if ((in_pressed & J_SELECT) && camp_save_ok) load_camp_and_go();

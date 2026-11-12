@@ -59,6 +59,7 @@
 #define VM_OK 0u
 #define VM_BAD_SCRIPT 1u
 #define VM_BUDGET 2u
+#define VM_UNDO_CAP 3u        /* the undo log is full (SCRIPT_UNDO_CAP): the event was rolled back */
 
 typedef struct {               /* compiled event header, 12 bytes */
     uint8_t trigger, param, priority, reserved;

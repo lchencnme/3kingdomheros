@@ -8,6 +8,7 @@ typedef struct { uint8_t bpm; const uint8_t *ch[4]; uint8_t duty1, vol1, env1, d
 extern const uint16_t mus_pulse_reg[96];
 extern const uint16_t mus_wave_reg[96];
 extern const uint8_t mus_wave_soft[16];
+#define MUSIC_BANK 17u   /* songs live in ROM bank 17; the audio ISR maps it while it reads */
 extern const Song song_battle;   /* 旌旗缓行 */
 extern const Song song_camp;   /* 营火 */
 extern const Song song_end;   /* 归营 */

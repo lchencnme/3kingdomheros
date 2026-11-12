@@ -80,6 +80,11 @@ void inv_clear_all(void) CORE_API
     for (k = 0; k < (uint16_t)MAX_UNITS * INV_REC; k += 32u) sram_write(INV_SRAM_BANK, k, ff, 32);
 }
 
+void item_def(uint8_t item, ItemDef *out) CORE_API
+{
+    if (item < NUM_ITEMS) *out = item_defs[item]; else memset(out, 0, sizeof *out);
+}
+
 /* ---------------------------------------------------------------- equipment (7.1) */
 uint8_t item_category(uint8_t item) CORE_API
 {

@@ -238,15 +238,18 @@ static void prepare_special(Battle *b, AiScratch *s, const ActiveUnit *ap, uint8
     /* fire pot (7.2): fixed 120, range 2, no counter; scored like a strategy minus 10 x price */
     for (i = 0; i < INV_SLOTS; i++) {
         uint8_t it = inv_get(actor, i), k;
-        if (it == ITEM_NONE || item_defs[it].kind != IK_FIRE) continue;
+        ItemDef d;
+        if (it == ITEM_NONE) continue;
+        item_def(it, &d);
+        if (d.kind != IK_FIRE) continue;
         for (k = 0; k < s->n_opp && s->n_strat < AI_MAX_STRAT; k++) {
             AiOpp *o = &s->opp[k];
-            uint16_t dmg = item_defs[it].power < o->hp ? item_defs[it].power : o->hp;
-            if (manhattan(a.x, a.y, o->x, o->y) > (uint8_t)(a.move + item_defs[it].range)) continue;
-            SB[s->n_strat].sid = (uint8_t)(0x80u | i); SB[s->n_strat].range = item_defs[it].range;
+            uint16_t dmg = d.power < o->hp ? d.power : o->hp;
+            if (manhattan(a.x, a.y, o->x, o->y) > (uint8_t)(a.move + d.range)) continue;
+            SB[s->n_strat].sid = (uint8_t)(0x80u | i); SB[s->n_strat].range = d.range;
             SB[s->n_strat].cx = o->x; SB[s->n_strat].cy = o->y;
-            SB[s->n_strat].val = W_DMG * (int32_t)dmg + (item_defs[it].power >= o->hp ? W_KILL : 0)
-                                 - W_PRICE * (int32_t)item_defs[it].price;
+            SB[s->n_strat].val = W_DMG * (int32_t)dmg + (d.power >= o->hp ? W_KILL : 0)
+                                 - W_PRICE * (int32_t)d.price;
             s->n_strat++;
         }
         break;                                           /* one pot is enough to value */
@@ -265,10 +268,13 @@ static void prepare_special(Battle *b, AiScratch *s, const ActiveUnit *ap, uint8
         uint8_t it = inv_get(actor, i);
         uint16_t v;
         int32_t sc;
-        if (it == ITEM_NONE || item_defs[it].kind != IK_HP) continue;
+        ItemDef d;
+        if (it == ITEM_NONE) continue;
+        item_def(it, &d);
+        if (d.kind != IK_HP) continue;
         v = item_value(b, it, &a);
         if (!v) continue;
-        sc = W_HEAL * (int32_t)v - W_PRICE * (int32_t)item_defs[it].price;
+        sc = W_HEAL * (int32_t)v - W_PRICE * (int32_t)d.price;
         if (s->item_slot == 0xFF || sc > s->item_sc) { s->item_slot = i; s->item_sc = sc; }
     }
 

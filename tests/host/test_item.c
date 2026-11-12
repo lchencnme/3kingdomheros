@@ -9,6 +9,7 @@
 #include "../../src/core/rules.h"
 #include "../../src/core/vm.h"
 #include "../../src/core/roster.h"
+#include "../../src/core/undo.h"
 
 extern uint8_t host_terrain[4096], host_occ[4096];
 extern ActiveUnit host_units[MAX_UNITS];
@@ -494,6 +495,47 @@ int main(void)
         roster_clear();
         CHECK(load_battle(SAVE_SLOT_SUSPEND, &B, &ui) == SAVE_OK && roster_count() == 2 && host_units[6].max_hp == mhp + 12,
               "battle load with roster (units after a 2-record roster)");
+    }
+
+    /* undo log (11.6): capacity is reserved before each write; a full log blocks the write */
+    reset();
+    {
+        uint16_t hp0 = host_units[1].hp;
+        undo_begin();
+        { ActiveUnit u = host_units[1]; u.hp = 7; unit_store(1, &u); }   /* via the hook: logged */
+        inv_set(1, 2, 8);
+        CHECK(undo_used() > 40u, "unit + item writes logged (%u B)", undo_used());
+        undo_rollback();
+        CHECK(host_units[1].hp == hp0 && inv_get(1, 2) == ITEM_NONE, "rollback restores unit and item block (hp %u vs %u, item %u)", host_units[1].hp, hp0, inv_get(1, 2));
+        undo_begin();
+        {
+            ActiveUnit u = host_units[2];
+            uint16_t k, ok = 1;
+            for (k = 0; k < 200u && ok; k++) { u.hp = (uint16_t)k; unit_store(2, &u); ok = !undo_overflowed(); }
+            CHECK(undo_overflowed() && undo_used() <= UNDO_CAP, "log fills up and stops (%u B)", undo_used());
+            CHECK(host_units[2].hp != u.hp, "the write that did not fit was not performed");
+        }
+        undo_rollback();
+        CHECK(host_units[2].hp == host_units[2].max_hp, "rollback after overflow restores the original");
+    }
+    /* pre-battle snapshot (11.6): roster + gold + deployment, 8 KiB copies in banks 13/14 */
+    reset();
+    {
+        SaveUi ui;
+        uint8_t dep[9] = {2, 1, 0, 0, 0, 3, 0, 0, 0}, out[65];
+        Battle sb;
+        roster_clear();
+        roster_add(1, 0, 1, 70, 60, 70);
+        memset(&ui, 0, sizeof ui); ui.battle_id = 1; ui.gold = 77;
+        B.round = 9;
+        save_cache_reset();
+        CHECK(save_snapshot(&B, &ui, dep) == SAVE_OK, "snapshot written");
+        roster_clear();
+        memset(&ui, 0, sizeof ui);
+        CHECK(load_snapshot(&sb, &ui, out) == SAVE_OK && ui.battle_id == 1 && ui.gold == 77 && sb.round == 9,
+              "snapshot: battle id, gold, starting round");
+        CHECK(out[0] == 2 && out[1] == 1 && out[5] == 3 && roster_count() == 1, "snapshot: deployment and roster");
+        CHECK(host_sram[13][0] == 'Y' || host_sram[14][0] == 'Y', "lives in SRAM bank 13/14");
     }
 
     /* battle save carries the inventory block (tag 9) */

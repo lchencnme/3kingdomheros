@@ -149,6 +149,24 @@ int main(void)
     c0 = at; E(0x7E, OP_END);
     ev(TR_ROUND_END, VM_ANY, 0, VM_NO_ONCE, 0xFFFF, c0, 2);
     CHECK(vm_fire(&B, &f) == VM_BAD_SCRIPT, "unknown opcode -> BAD_SCRIPT");
+    /* 11.6 undo log: a script that fails half-way leaves no trace (units, occupancy, gold, weather) */
+    reset();
+    c0 = at; E(OP_HP_SET, 1, 5, 0, OP_RETREAT, 0, OP_GIVE_GOLD, 100, 0, OP_WEATHER, 1, 0x7E, OP_END);
+    ev(TR_ROUND_END, VM_ANY, 0, VM_NO_ONCE, 0xFFFF, c0, 12);
+    {
+        ActiveUnit u0 = host_units[0], u1 = host_units[1];
+        extern uint8_t host_occ[4096];
+        uint8_t occ0 = host_occ[1 * 10 + 1];
+        CHECK(vm_fire(&B, &f) == VM_BAD_SCRIPT, "failing script reports BAD_SCRIPT");
+        CHECK(memcmp(&host_units[0], &u0, sizeof u0) == 0 && memcmp(&host_units[1], &u1, sizeof u1) == 0,
+              "rolled back: HP_SET and RETREAT undone");
+        CHECK(host_occ[1 * 10 + 1] == occ0 && occ0 != 0, "occupancy rebuilt after the rollback");
+        CHECK(B.weather == 0 && B.outcome == OUT_NONE, "battle state restored (weather, no outcome)");
+    }
+    reset();
+    c0 = at; E(OP_HP_SET, 1, 5, 0, OP_END);
+    ev(TR_ROUND_END, VM_ANY, 0, VM_NO_ONCE, 0xFFFF, c0, 5);
+    CHECK(vm_fire(&B, &f) == VM_OK && host_units[1].hp == 5, "a good script commits");
     /* TALK availability (would_fire) + FACTION_SET recruit; DUEL replaces the action with 0 draws */
     reset();
     battle_spawn(&B, 2, 0xFFFF, 3, FAC_ENEMY, 1, 2, 1);           /* enemy archer next to unit 0 */

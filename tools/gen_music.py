@@ -83,7 +83,8 @@ def main():
          "#include <stdint.h>", "#define MUS_REST 0xFEu", "#define MUS_END 0xFFu",
          "typedef struct { uint8_t bpm; const uint8_t *ch[4]; uint8_t duty1, vol1, env1, duty2, vol2, env2, vol3, noise4, env4; } Song;",
          "extern const uint16_t mus_pulse_reg[96];", "extern const uint16_t mus_wave_reg[96];",
-         "extern const uint8_t mus_wave_soft[16];"]
+         "extern const uint8_t mus_wave_soft[16];",
+         "#define MUSIC_BANK 17u   /* songs live in ROM bank 17; the audio ISR maps it while it reads */"]
     c = ['#include "music_data.h"']
     c.append("const uint16_t mus_pulse_reg[96] = {" + ", ".join(map(str, pulse)) + "};")
     c.append("const uint16_t mus_wave_reg[96] = {" + ", ".join(map(str, wave)) + "};")
@@ -91,6 +92,7 @@ def main():
     import math
     smp = [round(7.5 + 7.5 * math.sin(2 * math.pi * i / 32)) for i in range(32)]
     c.append("const uint8_t mus_wave_soft[16] = {" + ", ".join(str((smp[2 * i] << 4) | smp[2 * i + 1]) for i in range(16)) + "};")
+    cs = ["#pragma bank 17   /* song data: read by the audio ISR with bank 17 mapped (audio.c) */", '#include "music_data.h"']
     for k, sp in enumerate(songs):
         s = json.loads(sp.read_text(encoding="utf-8"))
         tpb = s["ticks_per_bar"]
@@ -99,20 +101,21 @@ def main():
         for ch in ("ch1", "ch2", "ch3", "ch4"):
             cd = s["channels"][ch]
             streams[ch] = compile_channel(ch, cd["notes"], ins[cd["inst"]], tpb)
-            c.append(f"static const uint8_t {s['id'].lower()}_{ch}[] = {{" + ", ".join(map(str, streams[ch])) + "};")
+            cs.append(f"static const uint8_t {s['id'].lower()}_{ch}[] = {{" + ", ".join(map(str, streams[ch])) + "};")
         bars = [len(s["channels"][ch]["notes"].split("|")) for ch in streams]
         if len(set(bars)) != 1:
             die(f"{sp.name}: channels have different bar counts {bars}")
         if not 1 <= s["bpm"] <= 240:
             die("bpm must be 1..240 (at most 2 ticks per 64 Hz step at 24 ticks/quarter)")
         L, P, B, D = ins[s["channels"]["ch1"]["inst"]], ins[s["channels"]["ch2"]["inst"]], ins[s["channels"]["ch3"]["inst"]], ins[s["channels"]["ch4"]["inst"]]
-        c.append(f"const Song {s['id'].lower()} = {{{s['bpm']}, {{{', '.join(s['id'].lower() + '_' + ch for ch in streams)}}}, "
+        cs.append(f"const Song {s['id'].lower()} = {{{s['bpm']}, {{{', '.join(s['id'].lower() + '_' + ch for ch in streams)}}}, "
                  f"{L['duty']}, {L['volume']}, {L['env_down']}, {P['duty']}, {P['volume']}, {P['env_down']}, {B['volume']}, {D['noise']}, {D['env_down']}}};")
         h.append(f"extern const Song {s['id'].lower()};   /* {s['name']} */")
         print(f"gen_music: {s['id']} {s['name']}: {bars[0]} bars, {sum(len(v) for v in streams.values())} bytes")
     h.append("#endif")
     (ROOT / "src/gen/music_data.h").write_text("\n".join(h) + "\n", encoding="utf-8")
     (ROOT / "src/gen/music_data.c").write_text("\n".join(c) + "\n", encoding="utf-8")
+    (ROOT / "src/gen/music_songs.c").write_text("\n".join(cs) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

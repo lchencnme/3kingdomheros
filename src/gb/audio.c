@@ -1,5 +1,5 @@
 /* YJ4-lite sequencer. Lives in fixed bank 0 (the ISR must never depend on the mapped ROM bank:
- * design doc 11.3) and reads only unbanked song data. Driven by a 64 Hz timer interrupt so that it
+ * design doc 11.3); song data is in ROM bank 17, mapped by the ISR for the duration of a tick. Driven by a 64 Hz timer interrupt so that it
  * keeps time while the LCD is off (design doc 14.1). */
 #include <gb/gb.h>
 #include "debug.h"
@@ -101,12 +101,17 @@ static void step(void)
 
 static void audio_isr(void) NONBANKED
 {
-    uint8_t c;
+    uint8_t c, saved;
     for (c = 0; c < 4; c++)
         if (sfx_left[c] && --sfx_left[c] == 0) { sfx_prio[c] = 0; ch_off(c); }   /* return channel silent */
     if (!song) return;
+    /* song data is in ROM bank 17: map it, read, restore the interrupted code's bank (_current_bank is
+     * always written before the MBC register by the banked-call trampoline, so this is consistent) */
+    saved = _current_bank;
+    SWITCH_ROM(MUSIC_BANK);
     acc += (uint16_t)song->bpm * 24u;        /* 24 ticks per quarter; 64 Hz * 60 s = 3840 */
     while (acc >= 3840u) { acc -= 3840u; step(); dbg_audio_ticks++; }
+    SWITCH_ROM(saved);
 }
 
 void audio_init(void)
@@ -128,7 +133,10 @@ void music_play(const Song *s)
 {
     uint8_t c;
     CRITICAL {
+        uint8_t saved = _current_bank;
+        SWITCH_ROM(MUSIC_BANK);               /* the Song record is in bank 17 */
         for (c = 0; c < 4; c++) { v[c].start = v[c].p = s->ch[c]; v[c].left = 0; v[c].gate = 0; }
+        SWITCH_ROM(saved);
         acc = 3840u;                          /* first step on the next tick */
         song = s;
     }

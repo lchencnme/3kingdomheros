@@ -6,8 +6,26 @@ uint8_t host_sram[16][8192];
 long host_cut_after = -1;      /* -1 = never */
 long host_writes = 0;
 
+#include "../../src/core/undo.h"
+/* weak no-op undo hooks for tests that do not link undo.c */
+__attribute__((weak)) uint8_t undo_active(void) { return 0; }
+__attribute__((weak)) uint8_t undo_log(uint8_t s, uint8_t b, uint16_t o, uint8_t l, const uint8_t *d) { (void)s; (void)b; (void)o; (void)l; (void)d; return 1; }
+__attribute__((weak)) void undo_begin(void) {}
+__attribute__((weak)) void undo_end(void) {}
+__attribute__((weak)) void undo_rollback(void) {}
+__attribute__((weak)) uint8_t undo_overflowed(void) { return 0; }
+
 void sram_write(uint8_t bank, uint16_t off, const uint8_t *src, uint16_t n) PLATFORM_API
 {
+    if ((bank == 12u || (bank == 15u && off < 1920u)) && undo_active()) {
+        uint8_t old[32];
+        uint16_t k;
+        for (k = 0; k < n; k += 32u) {
+            uint8_t m = (uint8_t)((n - k) < 32u ? (n - k) : 32u);
+            memcpy(old, &host_sram[bank][off + k], m);
+            if (!undo_log(bank == 12u ? US_SRAM12 : US_SRAM15, bank, (uint16_t)(off + k), m, old)) return;
+        }
+    }
     uint16_t i;
     for (i = 0; i < n; i++) {
         if (host_cut_after >= 0 && host_writes >= host_cut_after) return;
