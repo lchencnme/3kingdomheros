@@ -175,11 +175,11 @@ void hud_commit(void)
     uint8_t ly = LY_REG;
     /* design doc 12.1 LY gate: a 576B GDMA takes ~2.5 lines, the 128B flip < 1 line (VBlank = LY 144..153) */
     if (ly < 144u || ly > 152u) return;
-    if ((job == 2 || job == 4) && ly > 150u) return;
+    if ((job == 2 || job == 4) && ly > 149u) return;   /* 576 B ~2.7 lines: must end before line 153 */
     if (job != 2 && job != 4 && job != 6) return;
     CRITICAL {                                 /* LY check + GDMA atomic; the GDMA halts the CPU */
         ly = LY_REG;
-        if (ly < 144u || ly > 152u || ((job == 2 || job == 4) && ly > 150u)) ly = 0;
+        if (ly < 144u || ly > 152u || ((job == 2 || job == 4) && ly > 149u)) ly = 0;
         else if (job == 2) { gdma_line(0); job = 3; }
         else if (job == 4) { gdma_line(1); job = 5; }
         else {

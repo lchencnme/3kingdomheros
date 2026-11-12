@@ -1,4 +1,5 @@
 #pragma bank 14   /* game flow: battle setup, enemy phase, campaign transitions (split from main.c) */
+#include <string.h>
 #include "game.h"
 
 static void load(uint8_t i, ActiveUnit *u) { unit_load(i, u); }
@@ -64,6 +65,28 @@ static uint8_t officer_slot(uint8_t o)
     return 0xFF;
 }
 
+/* the battle tables live in this bank: the AI module (bank 12) gets a stack copy */
+static void load_ai_groups(void)
+{
+    uint8_t buf[8 * 5], n = BD->n_ai < 8u ? BD->n_ai : 8u;
+    memcpy(buf, BD->ai, (uint16_t)n * 5u);
+    ai_groups_init(buf, n);
+}
+
+/* accessors for code outside bank 14 (vm_gb treasure hook, camp deploy rules) */
+uint8_t bd_treasure(uint8_t i, uint8_t *xyi) BANKED
+{
+    if (i >= BD->n_tre) return 0;
+    xyi[0] = BD->tre[i][0]; xyi[1] = BD->tre[i][1]; xyi[2] = BD->tre[i][2];
+    return 1;
+}
+
+void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced) BANKED
+{
+    if (bt >= N_BATTLES) return;
+    *max = battle_defs[bt].deploy_max; *forced = battle_defs[bt].forced;
+}
+
 void start_battle(void) BANKED
 {
     uint8_t i;
@@ -87,7 +110,7 @@ void start_battle(void) BANKED
         SVBK_REG = o;
     }
     inv_clear_all();                           /* officers bring their items from the roster (5.6) */
-    ai_groups_init(BD->ai, BD->n_ai);          /* 8.2: from the battle definition */
+    load_ai_groups();                          /* 8.2: from the battle definition */
     {   /* 2.3: deployed officers fill the slots in order; slot k = cell of the k-th player entry */
         uint8_t k, n = deploy.n;
         if (!n) for (k = 0; k < roster_count() && n < BD->deploy_max; k++) deploy.order[n++] = k;   /* default */

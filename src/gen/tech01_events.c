@@ -56,6 +56,64 @@ const VmEvent bt5_events[] = {
 const VmTemplate bt5_templates[] = {
     {0x000F, 8, 15, 2, 12},
 };
+const VmEvent bt6_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 17},
+    {1, 0, 0, 0, 0x0001, 0x0011, 0x0015, 25},
+    {4, 6, 0, 0, 0x0002, 0xFFFF, 0x002E, 5},
+    {7, 255, 0, 0, 0x0003, 0x0033, 0x0035, 14},
+};
+const VmTemplate bt6_templates[] = {
+    {0x0011, 15, 8, 1, 16},
+};
+const VmEvent bt7_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 17},
+    {3, 1, 0, 0, 0x0001, 0x0011, 0x0013, 14},
+    {7, 255, 0, 0, 0x0002, 0x0021, 0x0023, 14},
+};
+const VmTemplate bt7_templates[] = {
+    {0}
+};
+const VmEvent bt8_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 13},
+    {1, 2, 0, 0, 0x0001, 0x000D, 0x0011, 7},
+    {7, 255, 0, 0, 0x0002, 0x0018, 0x001A, 14},
+};
+const VmTemplate bt8_templates[] = {
+    {0}
+};
+const VmEvent bt9_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 13},
+    {3, 1, 0, 0, 0x0001, 0x000D, 0x000F, 14},
+    {7, 255, 0, 0, 0x0002, 0x001D, 0x001F, 8},
+};
+const VmTemplate bt9_templates[] = {
+    {0}
+};
+const VmEvent bt10_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 17},
+    {1, 2, 0, 0, 0x0001, 0x0011, 0x0015, 16},
+    {7, 255, 0, 0, 0x0002, 0x0025, 0x0027, 9},
+};
+const VmTemplate bt10_templates[] = {
+    {0x000F, 8, 16, 2, 13},
+};
+const VmEvent bt11_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 13},
+    {1, 2, 0, 0, 0x0001, 0x000D, 0x0011, 15},
+    {7, 255, 0, 0, 0x0002, 0x0020, 0x0022, 12},
+};
+const VmTemplate bt11_templates[] = {
+    {0}
+};
+const VmEvent bt12_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 17},
+    {1, 0, 0, 0, 0x0001, 0x0011, 0x0015, 11},
+    {4, 6, 0, 0, 0x0002, 0xFFFF, 0x0020, 5},
+    {7, 255, 0, 0, 0x0003, 0x0025, 0x0027, 14},
+};
+const VmTemplate bt12_templates[] = {
+    {0}
+};
 const BattleEv battle_ev[] = {
     {7, 2, tech01_events, tech01_templates, tech01_script},
     {3, 0, bt1_events, bt1_templates, bt1_script},
@@ -63,4 +121,11 @@ const BattleEv battle_ev[] = {
     {4, 0, bt3_events, bt3_templates, bt3_script},
     {3, 0, bt4_events, bt4_templates, bt4_script},
     {4, 1, bt5_events, bt5_templates, bt5_script},
+    {4, 1, bt6_events, bt6_templates, bt6_script},
+    {3, 0, bt7_events, bt7_templates, bt7_script},
+    {3, 0, bt8_events, bt8_templates, bt8_script},
+    {3, 0, bt9_events, bt9_templates, bt9_script},
+    {3, 1, bt10_events, bt10_templates, bt10_script},
+    {3, 0, bt11_events, bt11_templates, bt11_script},
+    {4, 0, bt12_events, bt12_templates, bt12_script},
 };

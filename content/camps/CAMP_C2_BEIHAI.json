@@ -1,0 +1,1 @@
+{"_comment": "北海道上（磐河之战后）。", "id": "CAMP_C2_BEIHAI", "commands": ["COUNCIL", "EQUIP", "EXCHANGE", "SHOP", "DEPLOY"], "council": [["NARRATOR", "TXD_C2B_1"], ["NARRATOR", "TXD_C2B_2"], ["LIUBEI", "TXD_C2B_3"], ["ZHANGFEI", "TXD_C2B_4"]], "shop": [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 19, 25, 49, 52, 54, 71, 82, 83, 99], "deploy": {"max_count": 4, "forced": ["CH_LIUBEI"]}}

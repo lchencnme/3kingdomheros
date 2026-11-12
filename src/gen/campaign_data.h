@@ -3,10 +3,10 @@
 #define CAMPAIGN_DATA_H
 #include <stdint.h>
 #include "tech01_data.h"
-#define N_BATTLES 6u
-#define N_CAMPS 4u
+#define N_BATTLES 13u
+#define N_CAMPS 10u
 #define N_ROSTER_INIT 4u
-#define N_CHARS 10u
+#define N_CHARS 27u
 #define N_ENDING_PAGES 3u
 #define CONT_NORMAL 0u
 #define CONT_NO_REPLENISH 1u
@@ -27,10 +27,16 @@ typedef struct {
 } BattleDef;
 typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; } CampDef;
 typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd; uint16_t name_tx; uint8_t items[8]; } RosterInit;
-extern const BattleDef battle_defs[N_BATTLES];
+extern const BattleDef battle_defs[N_BATTLES];   /* ROM bank 14 (flow.c only) */
 extern const CampDef camp_defs[N_CAMPS];
 extern const RosterInit roster_init[N_ROSTER_INIT];
 extern const uint16_t ending_pages[][2];
 extern const uint16_t char_name[N_CHARS][2];   /* character id -> TX name */
 extern const uint8_t tech01_levels[];
+#ifdef __SDCC
+#include <gb/gb.h>
+/* flow.c (bank 14) accessors for code in other banks */
+uint8_t bd_treasure(uint8_t i, uint8_t *xyi) BANKED;            /* current battle: x, y, item */
+void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced) BANKED;
+#endif
 #endif

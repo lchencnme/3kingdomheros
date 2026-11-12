@@ -1,15 +1,167 @@
 {
-  "_comment": "具名人物登记（设计文档 15.3，节选第一章）。id 是 character_id（只追加）；portrait = 画像序号（P0001 起为 0），null = 旁白式台词。",
-  "characters": [
-    {"id": 1,  "tag": "CH_LIUBEI",      "name": "TX_NAME_LIUBEI",      "portrait": 0},
-    {"id": 2,  "tag": "CH_GUANYU",      "name": "TX_NAME_GUANYU",      "portrait": 1},
-    {"id": 3,  "tag": "CH_ZHANGFEI",    "name": "TX_NAME_ZHANGFEI",    "portrait": 2},
-    {"id": 8,  "tag": "CH_JIANYONG",    "name": "TX_NAME_JIANYONG",    "portrait": null},
-    {"id": 10, "tag": "CH_CHENGYUANZHI", "name": "TX_NAME_CHENGYUANZHI", "portrait": null},
-    {"id": 11, "tag": "CH_DENGMAO",     "name": "TX_NAME_DENGMAO",     "portrait": null},
-    {"id": 12, "tag": "CH_GONGJING",    "name": "TX_NAME_GONGJING",    "portrait": null},
-    {"id": 13, "tag": "CH_ZHANGBAO",    "name": "TX_NAME_ZHANGBAO",    "portrait": null},
-    {"id": 14, "tag": "CH_HUAXIONG",    "name": "TX_NAME_HUAXIONG",    "portrait": null},
-    {"id": 15, "tag": "CH_LVBU",        "name": "TX_NAME_LVBU",        "portrait": null}
-  ]
+ "_comment": "具名人物登记（设计文档 15.3，节选第一、二章）。id 是 character_id（只追加）；portrait = 画像序号（P0001 起为 0），null = 旁白式台词。",
+ "characters": [
+  {
+   "id": 1,
+   "tag": "CH_LIUBEI",
+   "name": "TX_NAME_LIUBEI",
+   "portrait": 0
+  },
+  {
+   "id": 2,
+   "tag": "CH_GUANYU",
+   "name": "TX_NAME_GUANYU",
+   "portrait": 1
+  },
+  {
+   "id": 3,
+   "tag": "CH_ZHANGFEI",
+   "name": "TX_NAME_ZHANGFEI",
+   "portrait": 2
+  },
+  {
+   "id": 8,
+   "tag": "CH_JIANYONG",
+   "name": "TX_NAME_JIANYONG",
+   "portrait": null
+  },
+  {
+   "id": 10,
+   "tag": "CH_CHENGYUANZHI",
+   "name": "TX_NAME_CHENGYUANZHI",
+   "portrait": null
+  },
+  {
+   "id": 11,
+   "tag": "CH_DENGMAO",
+   "name": "TX_NAME_DENGMAO",
+   "portrait": null
+  },
+  {
+   "id": 12,
+   "tag": "CH_GONGJING",
+   "name": "TX_NAME_GONGJING",
+   "portrait": null
+  },
+  {
+   "id": 13,
+   "tag": "CH_ZHANGBAO",
+   "name": "TX_NAME_ZHANGBAO",
+   "portrait": null
+  },
+  {
+   "id": 14,
+   "tag": "CH_HUAXIONG",
+   "name": "TX_NAME_HUAXIONG",
+   "portrait": null
+  },
+  {
+   "id": 15,
+   "tag": "CH_LVBU",
+   "name": "TX_NAME_LVBU",
+   "portrait": null
+  },
+  {
+   "id": 16,
+   "tag": "CH_GONGSUNZAN",
+   "name": "TX_NAME_GONGSUNZAN",
+   "portrait": null
+  },
+  {
+   "id": 17,
+   "tag": "CH_ZHAOYUN",
+   "name": "TX_NAME_ZHAOYUN",
+   "portrait": 4
+  },
+  {
+   "id": 18,
+   "tag": "CH_KONGRONG",
+   "name": "TX_NAME_KONGRONG",
+   "portrait": null
+  },
+  {
+   "id": 19,
+   "tag": "CH_GUANHAI",
+   "name": "TX_NAME_GUANHAI",
+   "portrait": null
+  },
+  {
+   "id": 20,
+   "tag": "CH_TAISHICI",
+   "name": "TX_NAME_TAISHICI",
+   "portrait": null
+  },
+  {
+   "id": 21,
+   "tag": "CH_TAOQIAN",
+   "name": "TX_NAME_TAOQIAN",
+   "portrait": null
+  },
+  {
+   "id": 22,
+   "tag": "CH_JILING",
+   "name": "TX_NAME_JILING",
+   "portrait": null
+  },
+  {
+   "id": 23,
+   "tag": "CH_XUNZHENG",
+   "name": "TX_NAME_XUNZHENG",
+   "portrait": null
+  },
+  {
+   "id": 24,
+   "tag": "CH_CHENGONG",
+   "name": "TX_NAME_CHENGONG",
+   "portrait": null
+  },
+  {
+   "id": 25,
+   "tag": "CH_GAOSHUN",
+   "name": "TX_NAME_GAOSHUN",
+   "portrait": null
+  },
+  {
+   "id": 26,
+   "tag": "CH_ZHANGLIAO",
+   "name": "TX_NAME_ZHANGLIAO",
+   "portrait": null
+  },
+  {
+   "id": 27,
+   "tag": "CH_CAOCAO",
+   "name": "TX_NAME_CAOCAO",
+   "portrait": 5
+  },
+  {
+   "id": 28,
+   "tag": "CH_GANFUREN",
+   "name": "TX_NAME_GANFUREN",
+   "portrait": null
+  },
+  {
+   "id": 29,
+   "tag": "CH_MIFUREN",
+   "name": "TX_NAME_MIFUREN",
+   "portrait": null
+  },
+  {
+   "id": 30,
+   "tag": "CH_WENCHOU",
+   "name": "TX_NAME_WENCHOU",
+   "portrait": null
+  },
+  {
+   "id": 31,
+   "tag": "CH_CAOBAO",
+   "name": "TX_NAME_CAOBAO",
+   "portrait": null
+  },
+  {
+   "id": 32,
+   "tag": "CH_YUJIN",
+   "name": "TX_NAME_YUJIN",
+   "portrait": null
+  }
+ ]
 }

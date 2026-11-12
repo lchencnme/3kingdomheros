@@ -1,0 +1,1 @@
+{"_comment": "徐州府（陶谦三让徐州）。", "id": "CAMP_C2_TAOQIAN", "commands": ["COUNCIL", "EQUIP", "EXCHANGE", "SHOP", "DEPLOY"], "council": [["NARRATOR", "TXD_C2D_1"], ["NARRATOR", "TXD_C2D_2"], ["LIUBEI", "TXD_C2D_3"], ["ZHANGFEI", "TXD_C2D_4"]], "shop": [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 19, 25, 48, 49, 50, 52, 54, 71, 82, 83, 99], "deploy": {"max_count": 4, "forced": ["CH_LIUBEI"]}}

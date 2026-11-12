@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Campaign data (design doc 2.1, 2.4, 6.6, 9.4, 15.2): the battle chain, camps, roster, characters, and
-the Chapter 1 battles BT_01..BT_05 (original maps and dialogue after the public-domain novel).
+the Chapter 1-2 battles BT_01..BT_12 (original maps and dialogue after the public-domain novel).
 
 Battle 0 (BT_TECH01, the prologue drill) and the shared tileset come from tools/gen_tech01.py. This script
 writes content/battles/BT_*.json for the other battles (compiled by gen_events.py) and emits
@@ -222,7 +222,283 @@ BT05 = {
          "code": [["TEXT", "P0001", "TXD_B05_WIN"], ["GIVE_GOLD", 500]]},
     ],
 }
-EXTRA = [BT01, BT02, BT03, BT04, BT05]
+# ================================================================ Chapter 2 群雄（徐州） BT_06..BT_12
+# ---------------------------------------------------------------- BT_06 磐河之战 (回目 7, escort 公孙瓒 / 赵云)
+BT06 = {
+    "id": "BT_06", "map": [
+        "55500000000000676000000555",
+        "55000022000000676000000055",
+        "50000222200000676000220005",
+        "00000022000000676002222000",
+        "00000000000000676000220000",
+        "00000000000000676000000000",
+        "11111111111111999111111111",
+        "00000000000000676000000000",
+        "00000000000000676000222000",
+        "00300000000000666002222200",
+        "00000002220000676000222000",
+        "50000022222000676000000005",
+        "55000002220000676000000055",
+        "55500000000000676000000555"],
+    "slots": [(3, 5), (3, 7), (4, 6), (2, 6)],
+    "others": [U(6, 18, 6, ai=2, lv=6, ch=16, fac="ALLY"),          # 4 公孙瓒 flees west over the bridge
+               U(6, 19, 5, ai=2, lv=4, fac="ALLY"),
+               U(7, 23, 6, ai=4, lv=7, ch=30),                      # 6 文丑 hunts 公孙瓒
+               U(6, 22, 4, ai=4, lv=5), U(6, 22, 8, ai=4, lv=5),
+               U(0, 24, 5, lv=5), U(0, 24, 7, lv=5), U(3, 20, 3, lv=5), U(3, 21, 9, lv=5),
+               U(1, 7, 6, ai=1, lv=5), U(6, 9, 3, ai=4, lv=5), U(6, 9, 9, ai=4, lv=5)],   # 袁绍's ambush on the west bank
+    "templates": [{"template": 0, "character": 17, "class": 15, "level": 8, "faction": "ALLY"}],   # 赵云 (instance 16)
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(2, "ESCAPE", [0, 6], 0), G(3, "ESCORT", 4, 3), G(4, "AGGRESSIVE", 4)],
+    "items": [(6, 1)], "treasures": [(2, 9, 0x06)],
+    "victory": ("REACH", 4, 0), "area": (0, 4, 1, 8), "protect": 4,
+    "turn_limit": 20, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 4, "forced": [0], "seed": 19,
+    "events": [
+        {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
+         "code": [["TEXT", "NARRATOR", "TXD_B06_OPEN_0"], ["TEXT", "NARRATOR", "TXD_B06_AMBUSH"], ["TEXT", "P0001", "TXD_B06_OPEN_1"],
+                  ["TEXT", "NARRATOR", "TXD_B06_GOAL"]]},
+        {"id": 2, "trigger": "PHASE_START", "param": "PLAYER", "priority": 0, "once": True,
+         "condition": {"leaf": "turn_cmp", "op": "ge", "n": 2},
+         "code": [["TEXT", "NARRATOR", "TXD_B06_ZHAOYUN_1"], ["SPAWN", 0, 17, 9], ["SET_AI", 16, "ESCORT", 4, 3],
+                  ["TEXT", "P0005", "TXD_B06_ZHAOYUN_2"], ["SET_FLAG", "GLOBAL", 16, 1]]},
+        {"id": 3, "trigger": "UNIT_RETREAT", "param": 6, "priority": 0, "once": True, "condition": None,
+         "code": [["TEXT", "NARRATOR", "TXD_B06_WENCHOU"]]},
+        {"id": 4, "trigger": "BATTLE_END", "param": None, "priority": 0, "once": True, "condition": {"leaf": "unit_alive", "unit": 0},
+         "code": [["TEXT", "NARRATOR", "TXD_B06_WIN_1"], ["TEXT", "P0001", "TXD_B06_WIN_2"], ["GIVE_GOLD", 400], ["GIVE_ITEM", 0x47]]},
+    ],
+}
+# ---------------------------------------------------------------- BT_07 北海救孔融 (回目 11, 太史慈 ally)
+BT07 = {
+    "id": "BT_07", "map": [
+        "00000000000000000000000000",
+        "00222000000000000000000000",
+        "02222200000088888888800000",
+        "00222000000084444444800000",
+        "00000000000084400044800000",
+        "00000000000084000004800000",
+        "11111111111111000004800000",
+        "00000000000084000004800000",
+        "00000000000084400044800000",
+        "00555000000084444444800000",
+        "05555500000088888888800000",
+        "00555000000000000000000000",
+        "00000000222000000000005550",
+        "00000002222200000000055555",
+        "00000000222000003000005550",
+        "00000000000000000000000000"],
+    "slots": [(1, 6), (2, 5), (2, 7), (0, 7)],
+    "others": [U(1, 10, 6, ai=3, lv=7, ch=19),                      # 4 管亥 besieges the west gate
+               U(9, 16, 6, ai=1, lv=4, ch=18, fac="ALLY"),          # 5 孔融 (must survive) in the keep
+               U(6, 14, 5, ai=0, lv=7, ch=20, fac="ALLY"),          # 6 太史慈 breaks out to meet us
+               U(0, 17, 4, ai=1, lv=3, fac="ALLY"),
+               U(0, 9, 4, lv=5), U(0, 9, 8, lv=5), U(3, 6, 3, lv=4), U(3, 6, 9, lv=4),
+               U(0, 22, 6, lv=5), U(1, 23, 4, lv=5), U(1, 23, 8, lv=5)],
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(3, "GUARD_POINT", [10, 6], 3)],
+    "items": [(4, 0)], "treasures": [(16, 14, 0x04)],
+    "victory": ("DEFEAT", 4, 0), "protect": 5,
+    "turn_limit": 25, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 4, "forced": [0], "seed": 23,
+    "events": [
+        {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
+         "code": [["TEXT", "NARRATOR", "TXD_B07_OPEN_0"], ["TEXT", "NARRATOR", "TXD_B07_OPEN_1"], ["TEXT", "P0001", "TXD_B07_OPEN_2"],
+                  ["TEXT", "NARRATOR", "TXD_B07_GOAL"]]},
+        {"id": 2, "trigger": "PRE_ACTION", "param": 1, "priority": 0, "once": True, "condition": {"leaf": "target_eq", "unit": 4},
+         "code": [["TEXT", "P0002", "TXD_B07_DUEL_1"], ["DUEL", 1, 4, 0], ["TEXT", "NARRATOR", "TXD_B07_DUEL_2"]]},
+        {"id": 3, "trigger": "BATTLE_END", "param": None, "priority": 0, "once": True, "condition": {"leaf": "unit_alive", "unit": 0},
+         "code": [["TEXT", "NARRATOR", "TXD_B07_WIN_1"], ["TEXT", "P0001", "TXD_B07_WIN_2"], ["GIVE_GOLD", 400], ["GIVE_ITEM", 0x53]]},
+    ],
+}
+# ---------------------------------------------------------------- BT_08 徐州解围 (回目 11, all enemies, 陶谦 protected)
+BT08 = {
+    "id": "BT_08", "map": [
+        "55500000000000000000002220",
+        "55000000000000000000022222",
+        "50888888880000000000002220",
+        "00844444480000000000000000",
+        "00844000480000000000000000",
+        "00840000080000022200000000",
+        "00840000011111122211111111",
+        "00840000080000022200000000",
+        "00844000480000000000000000",
+        "00844444480000000000005550",
+        "00888888880000000000055555",
+        "00000000000000000000005550",
+        "00222000000000000000000000",
+        "02222200000300000000000000",
+        "00222000000000000000000000",
+        "00000000000000000000000000"],
+    "slots": [(5, 12), (6, 13), (7, 12), (5, 14)],
+    "others": [U(9, 5, 6, ai=1, lv=5, ch=21, fac="ALLY"),           # 4 陶谦 (must survive)
+               U(0, 7, 6, ai=2, lv=4, fac="ALLY"), U(0, 7, 4, ai=2, lv=4, fac="ALLY"),
+               U(7, 20, 6, lv=8, ch=32),                            # 7 于禁 leads 曹操's vanguard
+               U(1, 14, 4, lv=6), U(1, 14, 8, lv=6), U(3, 17, 3, lv=6), U(3, 17, 9, lv=6),
+               U(6, 22, 5, lv=6), U(6, 22, 7, lv=6), U(0, 12, 6, lv=6)],
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(2, "GUARD_POINT", [5, 6], 2)],
+    "items": [(7, 1)], "treasures": [(3, 4, 0x52)],
+    "victory": ("ALL", None, 0), "protect": 4,
+    "turn_limit": 25, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 4, "forced": [0], "seed": 29,
+    "events": [
+        {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
+         "code": [["TEXT", "NARRATOR", "TXD_B08_OPEN_0"], ["TEXT", "P0003", "TXD_B08_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B08_GOAL"]]},
+        {"id": 2, "trigger": "PHASE_START", "param": "ENEMY", "priority": 0, "once": True,
+         "condition": {"leaf": "turn_cmp", "op": "ge", "n": 10},
+         "code": [["TEXT", "NARRATOR", "TXD_B08_YANZHOU"], ["OUTCOME", "WIN"]]},
+        {"id": 3, "trigger": "BATTLE_END", "param": None, "priority": 0, "once": True, "condition": {"leaf": "unit_alive", "unit": 0},
+         "code": [["TEXT", "NARRATOR", "TXD_B08_WIN_1"], ["TEXT", "P0001", "TXD_B08_WIN_2"], ["GIVE_GOLD", 500], ["GIVE_ITEM", 2]]},
+    ],
+}
+# ---------------------------------------------------------------- BT_09 盱眙拒袁术 (回目 14, drive off 纪灵)
+BT09 = {
+    "id": "BT_09", "map": [
+        "00000000000000000005555555",
+        "00002220000000000005500005",
+        "00022222000000000000004440",
+        "00002220000000000000004440",
+        "00000000006660000000004440",
+        "00000000066666000000000000",
+        "11111111119999111111111111",
+        "00000000066666000000000000",
+        "00000000006660000000000000",
+        "00222000000000000000222000",
+        "02222200000000000002222200",
+        "00222000000000000000222000",
+        "00000000000000000000000000",
+        "00000000000000000000000000"],
+    "slots": [(1, 6), (2, 5), (2, 7), (0, 5)],
+    "others": [U(2, 23, 3, ai=2, lv=10, ch=22),                     # 4 纪灵 holds the camp
+               U(6, 18, 6, ai=0, lv=8, ch=23),                      # 5 荀正 rides ahead
+               U(0, 15, 5, lv=7), U(0, 15, 7, lv=7), U(3, 20, 2, lv=7), U(3, 20, 10, lv=7),
+               U(6, 22, 8, lv=7), U(6, 22, 5, lv=7), U(1, 24, 4, ai=1, lv=7)],
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(2, "GUARD_POINT", [23, 3], 3)],
+    "items": [(4, 2), (5, 0)], "treasures": [(3, 10, 0x1C)],
+    "victory": ("DEFEAT", 4, 0), "protect": None,
+    "turn_limit": 25, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 4, "forced": [0], "seed": 31,
+    "events": [
+        {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
+         "code": [["TEXT", "NARRATOR", "TXD_B09_OPEN_0"], ["TEXT", "P0002", "TXD_B09_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B09_GOAL"]]},
+        {"id": 2, "trigger": "PRE_ACTION", "param": 1, "priority": 0, "once": True, "condition": {"leaf": "target_eq", "unit": 5},
+         "code": [["TEXT", "P0002", "TXD_B09_DUEL_1"], ["DUEL", 1, 5, 0], ["TEXT", "NARRATOR", "TXD_B09_DUEL_2"]]},
+        {"id": 3, "trigger": "BATTLE_END", "param": None, "priority": 0, "once": True, "condition": {"leaf": "unit_alive", "unit": 0},
+         "code": [["TEXT", "P0001", "TXD_B09_WIN"], ["GIVE_GOLD", 500]]},
+    ],
+}
+# ---------------------------------------------------------------- BT_10 徐州夜袭 (回目 14, escape with the two ladies)
+BT10 = {
+    "id": "BT_10", "map": [
+        "00000000000000000088888888",
+        "00222000000000000084444448",
+        "02222200000000000084000048",
+        "00222000000000000084000048",
+        "00000000000000000084000048",
+        "00000000000000000080000008",
+        "11111111111111111111000008",
+        "00000000000000000080000008",
+        "00000000005550000084000048",
+        "00000000055555000084000048",
+        "00222000005550000084000048",
+        "02222200000000000084444448",
+        "00222000000000000088888888",
+        "00000000000000000000000000"],
+    "slots": [(21, 5), (21, 7), (22, 6), (20, 6)],
+    "others": [U(17, 23, 5, ai=2, lv=3, ch=28, fac="ALLY"),         # 4 甘夫人: reaching the west exit wins
+               U(17, 23, 7, ai=2, lv=3, ch=29, fac="ALLY"),         # 5 糜夫人 (must survive)
+               U(0, 24, 3, ai=0, lv=8, ch=31),                      # 6 曹豹 turns traitor inside the city
+               U(2, 8, 6, ai=1, lv=10, ch=25),                      # 7 高顺 blocks the west road
+               U(6, 10, 5, lv=8), U(6, 10, 7, lv=8), U(0, 14, 4, lv=7), U(0, 14, 8, lv=7), U(3, 6, 3, ai=1, lv=7)],
+    "templates": [{"template": 0, "character": 15, "class": 8, "level": 16, "faction": "ENEMY"}],   # 吕布 (instance 13)
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(2, "ESCAPE", [0, 6], 0)],
+    "items": [], "treasures": [(19, 2, 0x07)],
+    "victory": ("REACH", 4, 0), "area": (0, 5, 1, 7), "protect": 5,
+    "turn_limit": 20, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 4, "forced": [0, 2], "seed": 37,
+    "events": [
+        {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
+         "code": [["TEXT", "NARRATOR", "TXD_B10_OPEN_0"], ["TEXT", "P0003", "TXD_B10_OPEN_1"], ["TEXT", "P0001", "TXD_B10_OPEN_2"],
+                  ["TEXT", "NARRATOR", "TXD_B10_GOAL"]]},
+        {"id": 2, "trigger": "PHASE_START", "param": "ENEMY", "priority": 0, "once": True,
+         "condition": {"leaf": "turn_cmp", "op": "ge", "n": 3},
+         "code": [["TEXT", "NARRATOR", "TXD_B10_LVBU"], ["SPAWN", 0, 25, 13], ["SET_AI", 13, "AGGRESSIVE", 4, 3]]},
+        {"id": 3, "trigger": "BATTLE_END", "param": None, "priority": 0, "once": True, "condition": {"leaf": "unit_alive", "unit": 0},
+         "code": [["TEXT", "NARRATOR", "TXD_B10_WIN_1"], ["TEXT", "P0003", "TXD_B10_WIN_2"]]},
+    ],
+}
+# ---------------------------------------------------------------- BT_11 辕门射戟 (回目 16, hold 小沛 until 吕布 steps in)
+BT11 = {
+    "id": "BT_11", "map": [
+        "55550000000000000000000000",
+        "55000000000000000002220000",
+        "50888880000000000022222000",
+        "00844480000000000002220000",
+        "00840000000000000000000000",
+        "00840000000000000000000000",
+        "00800001111111111111111111",
+        "00840000000000000000000000",
+        "00840000000000000000000000",
+        "00844480000000000005550000",
+        "50888880000000000055555000",
+        "55000000000000000005550000",
+        "55550000000000000000000000"],
+    "slots": [(4, 5), (4, 7), (5, 6), (3, 6)],
+    "others": [U(2, 22, 6, ai=1, lv=11, ch=22),                     # 4 纪灵 waits for the vanguard
+               U(1, 16, 4, lv=8), U(1, 16, 8, lv=8), U(6, 18, 5, lv=8), U(6, 18, 7, lv=8),
+               U(3, 20, 2, lv=8), U(3, 20, 10, lv=8), U(0, 24, 4, lv=8), U(0, 24, 8, lv=8), U(7, 14, 6, lv=9)],
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD")],
+    "items": [(4, 1)], "treasures": [(3, 3, 0x02)],
+    "victory": ("SURVIVE", None, 8), "protect": None,
+    "turn_limit": 20, "continuity": "NO_REPLENISH", "round_mode": "RESET", "deploy_max": 4, "forced": [0], "seed": 41,
+    "events": [
+        {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
+         "code": [["TEXT", "NARRATOR", "TXD_B11_OPEN_0"], ["TEXT", "P0002", "TXD_B11_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B11_GOAL"]]},
+        {"id": 2, "trigger": "PHASE_START", "param": "ENEMY", "priority": 0, "once": True,
+         "condition": {"leaf": "turn_cmp", "op": "ge", "n": 8},
+         "code": [["TEXT", "NARRATOR", "TXD_B11_JI_1"], ["TEXT", "NARRATOR", "TXD_B11_JI_2"], ["TEXT", "NARRATOR", "TXD_B11_JI_3"],
+                  ["OUTCOME", "WIN"]]},
+        {"id": 3, "trigger": "BATTLE_END", "param": None, "priority": 0, "once": True, "condition": {"leaf": "unit_alive", "unit": 0},
+         "code": [["TEXT", "P0003", "TXD_B11_WIN_1"], ["TEXT", "P0001", "TXD_B11_WIN_2"], ["GIVE_GOLD", 600]]},
+    ],
+}
+# ---------------------------------------------------------------- BT_12 下邳擒吕布 (回目 19, 曹军 allies, flood)
+BT12 = {
+    "id": "BT_12", "map": [
+        "0000000000000000000000000000",
+        "0022200000000000000000000000",
+        "0222220000000000888888888800",
+        "0022200000000000844444444800",
+        "0000000000000000844000044800",
+        "0000000006660000840000004800",
+        "1111111119991111110000004800",
+        "0000000006660000840000004800",
+        "0000000000000000844000044800",
+        "0055500000000000844444444800",
+        "0555550000000000888888888800",
+        "0055500000000000000000000000",
+        "0000000000002220000000000000",
+        "0000000000022222000000000000",
+        "0000000000002220000000000000",
+        "0000000000000000000000000000"],
+    "slots": [(2, 6), (3, 5), (3, 7), (1, 5)],
+    "others": [U(8, 21, 6, ai=3, lv=15, ch=15),                     # 4 吕布 in 下邳
+               U(2, 18, 6, ai=1, lv=12, ch=25),                     # 5 高顺 holds the gate
+               U(7, 20, 4, ai=0, lv=11, ch=26),                     # 6 张辽
+               U(10, 23, 7, ai=1, lv=11, ch=24),                    # 7 陈宫
+               U(3, 20, 8, ai=1, lv=9), U(0, 14, 4, lv=9), U(0, 14, 8, lv=9), U(6, 11, 3, lv=9),
+               U(7, 4, 3, ai=0, lv=12, ch=27, fac="ALLY"),          # 12 曹操
+               U(3, 5, 10, ai=0, lv=9, fac="ALLY"), U(1, 6, 12, ai=0, lv=9, fac="ALLY")],
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(3, "GUARD_POINT", [21, 6], 4)],
+    "items": [(7, 6)], "treasures": [(13, 13, 0x05)],
+    "victory": ("DEFEAT", 4, 0), "protect": None,
+    "turn_limit": 30, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 4, "forced": [0], "seed": 43,
+    "events": [
+        {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
+         "code": [["TEXT", "NARRATOR", "TXD_B12_OPEN_0"], ["TEXT", "P0006", "TXD_B12_OPEN_1"], ["TEXT", "P0001", "TXD_B12_OPEN_2"],
+                  ["TEXT", "NARRATOR", "TXD_B12_GOAL"]]},
+        {"id": 2, "trigger": "PHASE_START", "param": "PLAYER", "priority": 0, "once": True,
+         "condition": {"leaf": "turn_cmp", "op": "ge", "n": 5},
+         "code": [["TEXT", "P0006", "TXD_B12_FLOOD_1"], ["WEATHER", "RAIN"], ["TEXT", "NARRATOR", "TXD_B12_FLOOD_2"]]},
+        {"id": 3, "trigger": "UNIT_RETREAT", "param": 6, "priority": 0, "once": True, "condition": None,
+         "code": [["TEXT", "P0002", "TXD_B12_ZHANGLIAO"]]},
+        {"id": 4, "trigger": "BATTLE_END", "param": None, "priority": 0, "once": True, "condition": {"leaf": "unit_alive", "unit": 0},
+         "code": [["TEXT", "NARRATOR", "TXD_B12_WIN_1"], ["TEXT", "P0001", "TXD_B12_WIN_2"], ["GIVE_GOLD", 800], ["GIVE_ITEM", 0x61]]},
+    ],
+}
+EXTRA = [BT01, BT02, BT03, BT04, BT05, BT06, BT07, BT08, BT09, BT10, BT11, BT12]
 
 
 def battle_json(bt):
@@ -279,6 +555,8 @@ def main():
             camp_ids.append(b["camp"])
     char_ids = {c["id"] for c in chars}
     c = ["/* GENERATED by tools/gen_campaign.py - do not edit */", '#include "campaign_data.h"', '#include "text_data.h"']
+    bt_c = ["#pragma bank 14   /* battle tables: read only by flow.c (same bank); others use its BANKED accessors */",
+            "/* GENERATED by tools/gen_campaign.py - do not edit */", '#include "campaign_data.h"', '#include "text_data.h"']
     asset = ["#pragma bank 15   /* asset bank: terrain of battles 2+ (read through the gateway) */", '#include "campaign_data.h"']
     rows = {}
     for n, bid in enumerate(ids):
@@ -299,9 +577,9 @@ def main():
         for t in bt.get("templates", []):
             if t["character"] not in char_ids:
                 die(f"{bid}: template character {t['character']} not registered")
-        c.append(f"extern const uint8_t {p}_terrain[];")
-        c.append(f"static const Tech01Unit {p}_units[] = {{" + ", ".join("{%d, %d, %d, %d, %d, %d}" % u for u in units) + "};")
-        c.append(f"static const uint8_t {p}_levels[] = {{" + ", ".join(["1"] * len(bt["slots"]) + [str(o["lv"]) for o in bt["others"]]) + "};")
+        bt_c.append(f"extern const uint8_t {p}_terrain[];")
+        bt_c.append(f"static const Tech01Unit {p}_units[] = {{" + ", ".join("{%d, %d, %d, %d, %d, %d}" % u for u in units) + "};")
+        bt_c.append(f"static const uint8_t {p}_levels[] = {{" + ", ".join(["1"] * len(bt["slots"]) + [str(o["lv"]) for o in bt["others"]]) + "};")
         ei = [(len(bt["slots"]) + k, it) for k, it in bt["items"]]
         for _, it in ei:
             if it not in items:
@@ -309,9 +587,9 @@ def main():
         for t in bt["treasures"]:
             if t[2] not in items:
                 die(f"{bid}: unknown treasure item {t[2]}")
-        c.append(f"static const uint8_t {p}_items[][2] = {{" + (", ".join(f"{{{u}, {i}}}" for u, i in ei) or "{0xFF, 0xFF}") + "};")
-        c.append(f"static const uint8_t {p}_ai[] = {{" + ", ".join(map(str, ai_recs(bt["ai_groups"], w))) + "};")
-        c.append(f"static const uint8_t {p}_tre[][3] = {{" + (", ".join(f"{{{x}, {y}, {i}}}" for x, y, i in bt["treasures"]) or "{0, 0, 0}") + "};")
+        bt_c.append(f"static const uint8_t {p}_items[][2] = {{" + (", ".join(f"{{{u}, {i}}}" for u, i in ei) or "{0xFF, 0xFF}") + "};")
+        bt_c.append(f"static const uint8_t {p}_ai[] = {{" + ", ".join(map(str, ai_recs(bt["ai_groups"], w))) + "};")
+        bt_c.append(f"static const uint8_t {p}_tre[][3] = {{" + (", ".join(f"{{{x}, {y}, {i}}}" for x, y, i in bt["treasures"]) or "{0, 0, 0}") + "};")
         vk, vu, vr = bt["victory"]
         rect = bt.get("area", (0, 0, 0, 0))
         if vk == "REACH" and not (0 <= rect[0] <= rect[2] < w and 0 <= rect[1] <= rect[3] < h):
@@ -337,7 +615,7 @@ def main():
                     f"{r[0]}_ai, {r[7]}, {r[0]}_tre, {r[8]}, {r[9]}, {r[10]}, {r[11]}, {r[12]}, {r[13]}, {cp}, {nx}, {ti}, "
                     f"{r[14]}, {r[15]}, {r[16]}, {r[17]}, {r[18]}, {r[19]}, {r[20]}, {r[21]}}},")
     defs.append("};")
-    c += defs
+    bt_c += defs
     # camps (2.2, C.4)
     cd = []
     for k, cid in enumerate(camp_ids):
@@ -377,12 +655,19 @@ def main():
           "} BattleDef;",
           "typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; } CampDef;",
           "typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd; uint16_t name_tx; uint8_t items[8]; } RosterInit;",
-          "extern const BattleDef battle_defs[N_BATTLES];", "extern const CampDef camp_defs[N_CAMPS];",
+          "extern const BattleDef battle_defs[N_BATTLES];   /* ROM bank 14 (flow.c only) */", "extern const CampDef camp_defs[N_CAMPS];",
           "extern const RosterInit roster_init[N_ROSTER_INIT];", "extern const uint16_t ending_pages[][2];",
           "extern const uint16_t char_name[N_CHARS][2];   /* character id -> TX name */",
-          "extern const uint8_t tech01_levels[];", "#endif"]
+          "extern const uint8_t tech01_levels[];",
+          "#ifdef __SDCC",
+          "#include <gb/gb.h>",
+          "/* flow.c (bank 14) accessors for code in other banks */",
+          "uint8_t bd_treasure(uint8_t i, uint8_t *xyi) BANKED;            /* current battle: x, y, item */",
+          "void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced) BANKED;",
+          "#endif", "#endif"]
     (ROOT / "src/gen/campaign_data.h").write_text("\n".join(h_) + "\n", encoding="utf-8")
     (ROOT / "src/gen/campaign_data.c").write_text("\n".join(c) + "\n", encoding="utf-8")
+    (ROOT / "src/gen/campaign_battles.c").write_text("\n".join(bt_c) + "\n", encoding="utf-8")
     (ROOT / "src/gen/campaign_assets.c").write_text("\n".join(asset) + "\n", encoding="utf-8")
     print(f"gen_campaign: {len(ids)} battles, {len(camp_ids)} camps, {len(roster)} officers, {len(chars)} characters")
 

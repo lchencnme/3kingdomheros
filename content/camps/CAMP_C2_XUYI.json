@@ -1,0 +1,1 @@
+{"_comment": "盱眙营（徐州夜袭之前）。", "id": "CAMP_C2_XUYI", "commands": ["COUNCIL", "EQUIP", "EXCHANGE", "SHOP", "DEPLOY"], "council": [["NARRATOR", "TXD_C2E_1"], ["NARRATOR", "TXD_C2E_2"], ["GUANYU", "TXD_C2E_3"], ["LIUBEI", "TXD_C2E_4"]], "shop": [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 19, 25, 48, 49, 50, 52, 54, 71, 82, 83, 99], "deploy": {"max_count": 4, "forced": ["CH_LIUBEI"]}}

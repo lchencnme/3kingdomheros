@@ -975,11 +975,96 @@ check(f"BT_05: 三英战吕布 duel drives 吕布 off and wins with a defender l
       it.r8("_dbg_outcome") == 1 and it.hp(12) == 0 and it.hp(4) > 0)
 it.frames(45)
 it.press("a", after=16)
+
+# ------------------------------------------------------------------ Chapter 2 群雄 (BT_06..BT_12)
+def put(em, i, x, y):
+    a = 0xD000 + 40 * i
+    em.m[1, a + 7] = x; em.m[1, a + 8] = y
+
+def end_turn_outcome(em):
+    em.press("start")
+    em.wait_state([G_OUTCOME], 3000)
+    em.frames(45)
+
+through_camp(it)                                          # 平原 camp
+check(f"BT_06 磐河之战 follows the 平原 camp ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 6 and it.state() == G_IDLE)
+check(f"BT_06: 公孙瓒 (unit 4, character 16) is an ally ({it.m[1, 0xD000 + 40 * 4 + 3]})",
+      it.m[1, 0xD000 + 40 * 4 + 3] == 1 and it.m[1, 0xD000 + 40 * 4] == 16)
+it.frames(60)
+check("BT_06 map consistent", view_mismatches(it) == 0)
+r0 = it.r16("_dbg_round")                                 # the ambush holds 公孙瓒 east of the area for a round
+it.press("start"); it.wait_state([G_IDLE, G_OUTCOME], 4000)
+check(f"BT_06: outside the area the battle goes on; 赵云 joins on round 2 (round {it.r16('_dbg_round')}, units {it.r8('_dbg_n_units')})",
+      it.state() == G_IDLE and it.r16("_dbg_round") == r0 + 1 and it.r8("_dbg_n_units") == 17
+      and it.m[1, 0xD000 + 40 * 16] == 17 and it.m[1, 0xD000 + 40 * 16 + 3] == 1)
+gx, gy = it.unit(4)
+free = [(x, y) for x in (0, 1) for y in range(4, 9) if all(it.unit(i) != (x, y) for i in range(17))]
+put(it, 4, *free[0])
+end_turn_outcome(it)
+check(f"BT_06: 公孙瓒 reaching the west area wins (VIC_REACH, outcome {it.r8('_dbg_outcome')})",
+      it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it)                                          # 北海 camp
+check(f"BT_07 北海救孔融 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 7 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_07 map consistent", view_mismatches(it) == 0)
+win_now(it, [4])                                          # 管亥
+check("BT_07 won by driving off 管亥", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it)
+check(f"BT_08 徐州解围 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 8 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_08 map consistent", view_mismatches(it) == 0)
+win_now(it, range(7, 15))
+check("BT_08 won (all of 曹操's vanguard)", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it)
+check(f"BT_09 盱眙拒袁术 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 9 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_09 map consistent", view_mismatches(it) == 0)
+win_now(it, [4])                                          # 纪灵
+it.press("a", after=16)
+through_camp(it)
+check(f"BT_10 徐州夜袭 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 10 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_10 map consistent", view_mismatches(it) == 0)
+it.m[1, 0xD000 + 40 * 0 + 10] = 120; it.m[1, 0xD000 + 40 * 0 + 11] = 0   # 刘备 wounded in the night raid
+put(it, 4, 1, 6)                                          # 甘夫人 at the west exit
+end_turn_outcome(it)
+check(f"BT_10: 甘夫人 reaching the exit wins (outcome {it.r8('_dbg_outcome')})", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it, deploy=False)                            # continuous: spoils only
+check(f"BT_11 辕门射戟 follows directly ({it.r8('_dbg_battle')})", it.state() == G_IDLE and it.r8("_dbg_battle") == 11)
+check(f"NO_REPLENISH into BT_11: 刘备 keeps hp 120 ({it.hp(0)})", it.hp(0) == 120)
+it.frames(60)
+check("BT_11 map consistent", view_mismatches(it) == 0)
+for i in range(5, 14):                                    # thin out 纪灵's army, then jump to round 8
+    a = 0xD000 + 40 * i
+    it.m[1, a + 10] = 0; it.m[1, a + 11] = 0; it.m[1, a + 34] = it.m[1, a + 34] | 0x08
+it.m[SYMS["_B"] + 8] = 8; it.m[SYMS["_B"] + 9] = 0
+end_turn_outcome(it)
+check(f"BT_11: 吕布's arrow ends the siege on round 8 with 纪灵 still standing (outcome {it.r8('_dbg_outcome')}, 纪灵 hp {it.hp(4)})",
+      it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1 and it.hp(4) > 0)
+it.press("a", after=16)
+through_camp(it)                                          # 小沛 camp
+check(f"BT_12 下邳擒吕布 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 12 and it.state() == G_IDLE)
+check(f"BT_12: 曹操 (unit 12, character 27) fights as an ally ({it.m[1, 0xD000 + 40 * 12 + 3]})",
+      it.m[1, 0xD000 + 40 * 12] == 27 and it.m[1, 0xD000 + 40 * 12 + 3] == 1)
+it.frames(60)
+check("BT_12 map consistent", view_mismatches(it) == 0)
+win_now(it, [4])                                          # 吕布
+check("BT_12 won by taking 吕布", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+check("BT_12 (continuous into the ending): the spoils screen first (赤兔)", camp_wait(it, 25, 300))
+for _ in range(16):
+    if it.state() != 25:
+        break
+    it.press("a", after=16)
 for _ in range(1500):                                     # the ending pages run in dialogue mode
     if it.state() == G_TITLE and it.r8("_dbg_dialog_active") == 0:
         break
     it.frames(1)
-check(f"chapter 1 won -> ending -> title (state {it.state()})", it.state() == G_TITLE)
+check(f"chapter 2 won -> ending -> title (state {it.state()})", it.state() == G_TITLE)
 it.frames(10); it.png(ROM.parent / "shot_title.png")
 ram_end = it.power_off()
 # cold boot: the camp save is offered at the title (SELECT)

@@ -1,13 +1,98 @@
 {
-  "_comment": "战役顺序（设计文档 2.1、2.4、15.2 第一章）。camp = 战后进入的营地（null = 连续战：只先分配战利品，直接进入下一关）；next = null 表示本章结局。",
+  "_comment": "战役顺序（设计文档 2.1、2.4、15.2 第一、二章）。camp = 战后进入的营地（null = 连续战：只先分配战利品，直接进入下一关）；next = null 表示本章结局。",
   "start": "BT_TECH01",
   "battles": [
-    {"id": "BT_TECH01", "title": "TX_BT_TITLE_0", "camp": "CAMP_TECH01", "next": "BT_01"},
-    {"id": "BT_01", "title": "TX_BT_TITLE_3", "camp": "CAMP_C1_ZHUO", "next": "BT_02"},
-    {"id": "BT_02", "title": "TX_BT_TITLE_4", "camp": null, "next": "BT_03"},
-    {"id": "BT_03", "title": "TX_BT_TITLE_5", "camp": "CAMP_C1_GUANGZONG", "next": "BT_04"},
-    {"id": "BT_04", "title": "TX_BT_TITLE_6", "camp": "CAMP_C1_SISHUI", "next": "BT_05"},
-    {"id": "BT_05", "title": "TX_BT_TITLE_7", "camp": null, "next": null}
+    {
+      "id": "BT_TECH01",
+      "title": "TX_BT_TITLE_0",
+      "camp": "CAMP_TECH01",
+      "next": "BT_01"
+    },
+    {
+      "id": "BT_01",
+      "title": "TX_BT_TITLE_3",
+      "camp": "CAMP_C1_ZHUO",
+      "next": "BT_02"
+    },
+    {
+      "id": "BT_02",
+      "title": "TX_BT_TITLE_4",
+      "camp": null,
+      "next": "BT_03"
+    },
+    {
+      "id": "BT_03",
+      "title": "TX_BT_TITLE_5",
+      "camp": "CAMP_C1_GUANGZONG",
+      "next": "BT_04"
+    },
+    {
+      "id": "BT_04",
+      "title": "TX_BT_TITLE_6",
+      "camp": "CAMP_C1_SISHUI",
+      "next": "BT_05"
+    },
+    {
+      "id": "BT_05",
+      "title": "TX_BT_TITLE_7",
+      "camp": "CAMP_C2_PINGYUAN",
+      "next": "BT_06"
+    },
+    {
+      "id": "BT_06",
+      "title": "TX_BT_TITLE_8",
+      "camp": "CAMP_C2_BEIHAI",
+      "next": "BT_07"
+    },
+    {
+      "id": "BT_07",
+      "title": "TX_BT_TITLE_9",
+      "camp": "CAMP_C2_XUZHOU",
+      "next": "BT_08"
+    },
+    {
+      "id": "BT_08",
+      "title": "TX_BT_TITLE_10",
+      "camp": "CAMP_C2_TAOQIAN",
+      "next": "BT_09"
+    },
+    {
+      "id": "BT_09",
+      "title": "TX_BT_TITLE_11",
+      "camp": "CAMP_C2_XUYI",
+      "next": "BT_10"
+    },
+    {
+      "id": "BT_10",
+      "title": "TX_BT_TITLE_12",
+      "camp": null,
+      "next": "BT_11"
+    },
+    {
+      "id": "BT_11",
+      "title": "TX_BT_TITLE_13",
+      "camp": "CAMP_C2_XIAOPEI",
+      "next": "BT_12"
+    },
+    {
+      "id": "BT_12",
+      "title": "TX_BT_TITLE_14",
+      "camp": null,
+      "next": null
+    }
   ],
-  "ending": [["LIUBEI", "TXD_END_1"], ["NARRATOR", "TXD_END_2"], ["NARRATOR", "TXD_END_3"]]
+  "ending": [
+    [
+      "LIUBEI",
+      "TXD_END_1"
+    ],
+    [
+      "NARRATOR",
+      "TXD_END_2"
+    ],
+    [
+      "NARRATOR",
+      "TXD_END_3"
+    ]
+  ]
 }

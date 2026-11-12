@@ -509,12 +509,12 @@ static void commit_loop(void) __naked
     ld   a, b
     cp   a, c
     jp   nc, 9$
+    di                                   ; before the LY read: no ISR between the check and the writes
     ldh  a, (_LY_REG + 0)
     cp   a, #144
-    jp   c, 9$
+    jp   c, 8$
     cp   a, #151                         ; start a tile only on LY 144..150 (>= 3 lines of margin)
-    jp   nc, 9$
-    di
+    jp   nc, 8$
     ld   hl, #(_mv_tmeta + 16)
     ld   a, l
     add  a, b
@@ -598,6 +598,8 @@ static void commit_loop(void) __naked
     ei
     inc  b
     jp   1$
+8$:
+    ei
 9$:
     ld   a, b
     ld   (_n_done), a

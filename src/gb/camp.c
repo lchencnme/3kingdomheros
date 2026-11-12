@@ -425,8 +425,8 @@ void camp_run(uint16_t *gold, CampDeploy *dep, uint8_t mode, uint8_t next_bt, ui
     camp.gold = gold; camp.dep = dep; camp.pick = 0xFF; camp.mode = mode; camp.next = next_bt;
     camp.camp = camp_idx < N_CAMPS ? camp_idx : 0u;
     camp.n_off = roster_count() < 7u ? roster_count() : 7u;   /* deployment list: lines 1..7 */
-    if (next_bt < N_BATTLES) { camp.deploy_max = battle_defs[next_bt].deploy_max; camp.forced = battle_defs[next_bt].forced; }
-    else { camp.deploy_max = 4; camp.forced = 1; }
+    camp.deploy_max = 4; camp.forced = 1;                   /* no next battle (ending) */
+    bd_deploy_rule(next_bt, &camp.deploy_max, &camp.forced);   /* battle tables: bank 14 */
     if (mode == CAMP_PRIZES_ONLY && !prize_count()) return;
     C = &camp;
     if (!dep->n) {                                      /* first visit: everyone, in roster order */

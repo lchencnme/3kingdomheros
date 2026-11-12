@@ -1,0 +1,1 @@
+{"_comment": "徐州城外（北海解围后）。", "id": "CAMP_C2_XUZHOU", "commands": ["COUNCIL", "EQUIP", "EXCHANGE", "SHOP", "DEPLOY"], "council": [["NARRATOR", "TXD_C2C_1"], ["GUANYU", "TXD_C2C_2"], ["LIUBEI", "TXD_C2C_3"], ["ZHANGFEI", "TXD_C2C_4"]], "shop": [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 19, 25, 48, 49, 52, 54, 71, 82, 83, 99], "deploy": {"max_count": 4, "forced": ["CH_LIUBEI"]}}

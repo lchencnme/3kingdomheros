@@ -87,9 +87,9 @@ void undo_restore_core(uint16_t off, const uint8_t *data, uint8_t len)
 /* treasures of the current battle (design doc 7.4) */
 uint8_t treasure_def(uint8_t i, TreasureDef *t) PLATFORM_API
 {
-    const BattleDef *d = &battle_defs[cur_bt];
-    if (i >= d->n_tre) return 0;
-    t->x = d->tre[i][0]; t->y = d->tre[i][1]; t->item = d->tre[i][2];
+    uint8_t xyi[3];
+    if (!bd_treasure(i, xyi)) return 0;                  /* battle tables are in bank 14 (flow.c) */
+    t->x = xyi[0]; t->y = xyi[1]; t->item = xyi[2];
     t->flag = (uint16_t)(TECH01_TREASURE_FLAG0 + i);
     return 1;
 }
