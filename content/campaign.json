@@ -1,5 +1,5 @@
 {
-  "_comment": "战役顺序（设计文档 2.1、2.4、15.2 第一、二章）。camp = 战后进入的营地（null = 连续战：只先分配战利品，直接进入下一关）；next = null 表示本章结局。",
+  "_comment": "战役顺序（设计文档 2.1、2.4、15.2 第一至三章）。camp = 战后进入的营地（null = 连续战：只先分配战利品，直接进入下一关）；next = null 表示本章结局。",
   "start": "BT_TECH01",
   "battles": [
     {
@@ -77,7 +77,55 @@
     {
       "id": "BT_12",
       "title": "TX_BT_TITLE_14",
+      "camp": "CAMP_C3_XUDU",
+      "next": "BT_13"
+    },
+    {
+      "id": "BT_13",
+      "title": "TX_BT_TITLE_15",
+      "camp": "CAMP_C3_XUZHOU",
+      "next": "BT_14"
+    },
+    {
+      "id": "BT_14",
+      "title": "TX_BT_TITLE_16",
       "camp": null,
+      "next": "BT_15"
+    },
+    {
+      "id": "BT_15",
+      "title": "TX_BT_TITLE_17",
+      "camp": "CAMP_C3_HEBEI",
+      "next": "BT_16"
+    },
+    {
+      "id": "BT_16",
+      "title": "TX_BT_TITLE_18",
+      "camp": "CAMP_C3_GUCHENG",
+      "next": "BT_17"
+    },
+    {
+      "id": "BT_17",
+      "title": "TX_BT_TITLE_19",
+      "camp": "CAMP_C3_JINGZHOU",
+      "next": "BT_18"
+    },
+    {
+      "id": "BT_18",
+      "title": "TX_BT_TITLE_20",
+      "camp": null,
+      "next": "BT_19"
+    },
+    {
+      "id": "BT_19",
+      "title": "TX_BT_TITLE_21",
+      "camp": "CAMP_C3_XINYE",
+      "next": "BT_20"
+    },
+    {
+      "id": "BT_20",
+      "title": "TX_BT_TITLE_22",
+      "camp": "CAMP_C3_LONGZHONG",
       "next": null
     }
   ],

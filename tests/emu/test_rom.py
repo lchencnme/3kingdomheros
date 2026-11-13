@@ -206,9 +206,12 @@ def view_mismatches(em, highlight=False, danger=False):
     """independent re-implementation of the 352-slot compositor (design doc 12.2): every visible
     hardware position must point at its own slot and hold exactly terrain + units in draw order"""
     cx, cy = em.r16("_dbg_cam_x"), em.r16("_dbg_cam_y")
+    if em.r8("_dbg_battle") >= len(_MAPS):
+        print("view_mismatches: bad battle", em.r8("_dbg_battle"), "state", em.state())
+        return -1
     _W, _H, _TERR, tre = _MAPS[em.r8("_dbg_battle")]
     units = []
-    for i in range(12):
+    for i in range(24):
         a = 0xD000 + 40 * i
         hp = em.m[1, a + 10] | (em.m[1, a + 11] << 8)
         fl = em.m[1, a + 34]
@@ -878,7 +881,15 @@ def win_now(em, enemies):
         em.m[1, a + 34] = em.m[1, a + 34] | 0x08
     em.press("start")
     em.wait_state([G_OUTCOME], 1500)
-    em.frames(45)                                       # the outcome screen ignores presses for 40 frames
+    outcome_ready(em)
+
+def outcome_ready(em):
+    """the outcome screen ignores presses for 40 frames, counted after the BATTLE_END dialogue closes"""
+    for _ in range(1200):
+        if em.r8("_dbg_dialog_active") == 0 and em.r8("_timer") == 0:
+            break
+        em.frames(1)
+    em.frames(4)
 
 def through_camp(em, deploy=True):
     """spoils first (hand every prize to 刘备), then 军议, then 出阵 / START"""
@@ -886,10 +897,10 @@ def through_camp(em, deploy=True):
         if em.state() in (20, 25, G_IDLE) and em.r8("_dbg_dialog_active") == 0:
             break
         em.frames(1)
-    for _ in range(16):
+    for k in range(48):                                 # a full bag refuses: -> picks the next officer
         if em.state() != 25:
             break
-        em.press("a", after=16)
+        em.press("a" if k % 2 == 0 else "right", after=16)
     if em.state() == 20 and deploy:
         p0 = em.r8("_dbg_dialog_pages")
         while camp_cur(em) != 0:
@@ -984,7 +995,7 @@ def put(em, i, x, y):
 def end_turn_outcome(em):
     em.press("start")
     em.wait_state([G_OUTCOME], 3000)
-    em.frames(45)
+    outcome_ready(em)
 
 through_camp(it)                                          # 平原 camp
 check(f"BT_06 磐河之战 follows the 平原 camp ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 6 and it.state() == G_IDLE)
@@ -1055,16 +1066,101 @@ check("BT_12 map consistent", view_mismatches(it) == 0)
 win_now(it, [4])                                          # 吕布
 check("BT_12 won by taking 吕布", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
 it.press("a", after=16)
-check("BT_12 (continuous into the ending): the spoils screen first (赤兔)", camp_wait(it, 25, 300))
-for _ in range(16):
-    if it.state() != 25:
+
+# ------------------------------------------------------------------ Chapter 3 流离 (BT_13..BT_20)
+def sram(em, bank, off):
+    return em.m[bank, 0xA000 + off]
+
+def kill(em, units):
+    for i in units:
+        a = 0xD000 + 40 * i
+        em.m[1, a + 10] = 0; em.m[1, a + 11] = 0; em.m[1, a + 34] = em.m[1, a + 34] | 0x08
+
+through_camp(it)                                          # 许都 camp (衣带诏)
+check(f"BT_13 徐州斩车胄 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 13 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_13 map consistent", view_mismatches(it) == 0)
+win_now(it, [4])                                          # 车胄
+it.press("a", after=16)
+through_camp(it)
+check(f"BT_14 拒刘岱王忠 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 14 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_14 map consistent", view_mismatches(it) == 0)
+it.m[1, 0xD000 + 10] = 150; it.m[1, 0xD000 + 11] = 0      # 刘备 wounded before the night of 小沛
+win_now(it, range(4, 13))
+check("BT_14 won (all enemies)", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it, deploy=False)
+check(f"BT_15 小沛之败 follows directly ({it.r8('_dbg_battle')}, 刘备 hp {it.hp(0)})",
+      it.r8("_dbg_battle") == 15 and it.state() == G_IDLE and it.hp(0) == 150)
+it.frames(60)
+check("BT_15 map consistent", view_mismatches(it) == 0)
+put(it, 0, 1, 1)                                          # 刘备 breaks out to the north-west corner
+end_turn_outcome(it)
+check(f"BT_15: the leader reaching the corner wins (outcome {it.r8('_dbg_outcome')})", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+check(f"PARTY_LEAVE: 关羽 (roster 1) has left (fate {sram(it, 12, 48 + 2)})", sram(it, 12, 48 + 2) == 2)
+through_camp(it)                                          # 河北: 关羽 cannot be deployed
+check(f"BT_16 古城会 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 16 and it.state() == G_IDLE)
+check(f"BT_16: 关羽 is not deployed from the roster, he rides in as an ally (unit 4: character {it.m[1, 0xD000 + 160]}, side {it.m[1, 0xD000 + 163]})",
+      it.hp(1) == 0 and it.m[1, 0xD000 + 160] == 2 and it.m[1, 0xD000 + 163] == 1)
+it.frames(60)
+check("BT_16 map consistent", view_mismatches(it) == 0)
+win_now(it, [5])                                          # 蔡阳
+it.press("a", after=16)
+check(f"古城会: 关羽 returns and 赵云 joins (met_zhaoyun at 磐河; roster {sram(it, 12, 7890)}, 关羽 fate {sram(it, 12, 50)})",
+      sram(it, 12, 7890) == 5 and sram(it, 12, 50) == 1 and sram(it, 12, 4 * 48) == 17)
+through_camp(it)
+check(f"BT_17 汝南之战 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 17 and it.state() == G_IDLE)
+check(f"BT_17: 关羽 and 赵云 deployed (unit 1 hp {it.hp(1)}, unit 4 character {it.m[1, 0xD000 + 160]})",
+      it.hp(1) > 0 and it.m[1, 0xD000 + 160] == 17 and it.hp(4) > 0)
+it.frames(60)
+check("BT_17 map consistent", view_mismatches(it) == 0)
+kill(it, range(8, 19))
+it.m[SYMS["_B"] + 8] = 6; it.m[SYMS["_B"] + 9] = 0
+kill(it, range(9, 19))
+it.m[1, 0xD000 + 40 * 8 + 10] = 200                      # 夏侯惇 stays: the win must come from holding out
+end_turn_outcome(it)
+check(f"BT_17: holding to round 6 wins with 夏侯惇 on the field (outcome {it.r8('_dbg_outcome')})",
+      it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it)
+check(f"BT_18 江夏讨张武 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 18 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_18 map consistent", view_mismatches(it) == 0)
+win_now(it, [6])                                          # 张武
+it.press("a", after=16)
+through_camp(it, deploy=False)                            # 的卢 among the spoils
+check(f"BT_19 跃马檀溪: 刘备 alone ({it.r8('_dbg_battle')}, hp {[it.hp(i) for i in range(6)]})",
+      it.r8("_dbg_battle") == 19 and it.state() == G_IDLE and it.hp(0) > 0 and all(it.hp(i) == 0 for i in range(1, 6)))
+it.frames(60)
+check("BT_19 map consistent", view_mismatches(it) == 0)
+put(it, 0, 1, 6)
+end_turn_outcome(it)
+check(f"BT_19: over the 檀溪 to the west bank wins (outcome {it.r8('_dbg_outcome')})", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+check(f"徐庶 joins after 檀溪 (roster {sram(it, 12, 7890)})", sram(it, 12, 7890) == 6 and sram(it, 12, 5 * 48) == 44)
+through_camp(it)
+check(f"BT_20 新野破曹仁 ({it.r8('_dbg_battle')}, 徐庶 unit 5 character {it.m[1, 0xD000 + 200]})",
+      it.r8("_dbg_battle") == 20 and it.state() == G_IDLE and it.m[1, 0xD000 + 200] == 44)
+it.frames(60)
+check("BT_20 map consistent", view_mismatches(it) == 0)
+win_now(it, [6])                                          # the formation's eye
+check("BT_20: the formation eye alone decides the battle", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1 and it.hp(15) > 0)
+it.press("a", after=16)
+check(f"徐庶 leaves after 新野 (fate {sram(it, 12, 5 * 48 + 2)})", sram(it, 12, 5 * 48 + 2) == 2)
+for _ in range(300):                                      # 隆中 camp: 三顾茅庐, 诸葛亮 joins on entry
+    if it.state() in (20, 25) and it.r8("_dbg_dialog_active") == 0:
         break
-    it.press("a", after=16)
+    it.frames(1)
+check(f"三顾茅庐: 诸葛亮 joins at the 隆中 camp (roster {sram(it, 12, 7890)}, character {sram(it, 12, 6 * 48)})",
+      sram(it, 12, 7890) == 7 and sram(it, 12, 6 * 48) == 47)
+through_camp(it)                                          # depart: the chapter ending follows
 for _ in range(1500):                                     # the ending pages run in dialogue mode
     if it.state() == G_TITLE and it.r8("_dbg_dialog_active") == 0:
         break
     it.frames(1)
-check(f"chapter 2 won -> ending -> title (state {it.state()})", it.state() == G_TITLE)
+check(f"chapter 3 won -> ending -> title (state {it.state()})", it.state() == G_TITLE)
 it.frames(10); it.png(ROM.parent / "shot_title.png")
 ram_end = it.power_off()
 # cold boot: the camp save is offered at the title (SELECT)

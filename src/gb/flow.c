@@ -113,10 +113,10 @@ void start_battle(void) BANKED
     load_ai_groups();                          /* 8.2: from the battle definition */
     {   /* 2.3: deployed officers fill the slots in order; slot k = cell of the k-th player entry */
         uint8_t k, n = deploy.n;
-        if (!n) for (k = 0; k < roster_count() && n < BD->deploy_max; k++) deploy.order[n++] = k;   /* default */
+        if (!n) for (k = 0; k < roster_count() && n < BD->deploy_max; k++) if (roster_available(k)) deploy.order[n++] = k;   /* default */
         for (k = 0; k < n; k++) {
             uint8_t o = deploy.order[k], inst = officer_slot(o), sk = officer_slot(k), fl;
-            if (inst == 0xFF || sk == 0xFF) continue;
+            if (inst == 0xFF || sk == 0xFF || !roster_available(o)) continue;   /* left the party (2.4) */
             sram_read(ROSTER_SRAM_BANK, (uint16_t)((uint16_t)o * ROSTER_REC + 45u), &fl, 1);   /* reserved[0] */
             if (BD->continuity == CONT_NO_REPLENISH && (fl & ROSTER_RETREATED)) continue;   /* 2.4 */
             roster_deploy(&B, o, inst, BD->units[sk].x, BD->units[sk].y, BD->continuity == CONT_NORMAL);
@@ -477,6 +477,7 @@ void retry_battle(void) BANKED
 
 /* 11.6 pre-battle snapshot (SRAM13/14). Called from logic() just before BATTLE_START fires, at the top
  * of the call stack: from inside start_battle the save writer's frames overflowed the 512 B stack. */
+typedef char dep_fits[(CAMP_MAX_DEPLOY == SAVE_MAX_DEPLOY) ? 1 : -1];
 void write_snapshot(void) BANKED
 {
     SaveUi ui;

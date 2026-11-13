@@ -1,9 +1,116 @@
 {
-  "_comment": "开局名册（设计文档 5.6、15.3）。base = STR/INT/CMD（平衡参数，原创数值）；items = 开局携带物 ID。",
+  "_comment": "开局名册（设计文档 5.6、15.3）。base = STR/INT/CMD（平衡参数，原创数值）；items = 开局携带物 ID。 joiners = 剧情加入者（OP_JOIN / 营地 join，按列表序号）。",
   "officers": [
-    {"character": 1, "tag": "CH_LIUBEI",   "name": "TX_NAME_LIUBEI",   "class": 0, "level": 1, "base": [70, 68, 72], "items": [1, 7]},
-    {"character": 2, "tag": "CH_GUANYU",   "name": "TX_NAME_GUANYU",   "class": 6, "level": 1, "base": [78, 56, 74], "items": [3]},
-    {"character": 3, "tag": "CH_ZHANGFEI", "name": "TX_NAME_ZHANGFEI", "class": 6, "level": 1, "base": [80, 40, 66], "items": [0]},
-    {"character": 8, "tag": "CH_JIANYONG", "name": "TX_NAME_JIANYONG", "class": 9, "level": 1, "base": [40, 76, 58], "items": [8, 9]}
+    {
+      "character": 1,
+      "tag": "CH_LIUBEI",
+      "name": "TX_NAME_LIUBEI",
+      "class": 0,
+      "level": 1,
+      "base": [
+        70,
+        68,
+        72
+      ],
+      "items": [
+        1,
+        7
+      ]
+    },
+    {
+      "character": 2,
+      "tag": "CH_GUANYU",
+      "name": "TX_NAME_GUANYU",
+      "class": 6,
+      "level": 1,
+      "base": [
+        78,
+        56,
+        74
+      ],
+      "items": [
+        3
+      ]
+    },
+    {
+      "character": 3,
+      "tag": "CH_ZHANGFEI",
+      "name": "TX_NAME_ZHANGFEI",
+      "class": 6,
+      "level": 1,
+      "base": [
+        80,
+        40,
+        66
+      ],
+      "items": [
+        0
+      ]
+    },
+    {
+      "character": 8,
+      "tag": "CH_JIANYONG",
+      "name": "TX_NAME_JIANYONG",
+      "class": 9,
+      "level": 1,
+      "base": [
+        40,
+        76,
+        58
+      ],
+      "items": [
+        8,
+        9
+      ]
+    }
+  ],
+  "joiners": [
+    {
+      "character": 17,
+      "tag": "CH_ZHAOYUN",
+      "name": "TX_NAME_ZHAOYUN",
+      "class": 6,
+      "level": 10,
+      "base": [
+        82,
+        62,
+        78
+      ],
+      "items": [
+        1
+      ]
+    },
+    {
+      "character": 44,
+      "tag": "CH_XUSHU",
+      "name": "TX_NAME_XUSHU",
+      "class": 10,
+      "level": 10,
+      "base": [
+        52,
+        86,
+        72
+      ],
+      "items": [
+        6,
+        16
+      ]
+    },
+    {
+      "character": 47,
+      "tag": "CH_ZHUGELIANG",
+      "name": "TX_NAME_ZHUGELIANG",
+      "class": 11,
+      "level": 12,
+      "base": [
+        40,
+        98,
+        92
+      ],
+      "items": [
+        6,
+        17
+      ]
+    }
   ]
 }

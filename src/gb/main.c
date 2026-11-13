@@ -39,7 +39,7 @@ static uint16_t unit_name_tx(const ActiveUnit *u)
 static void place_sprites(void)
 {
     uint8_t i;
-    for (i = 0; i < 2 * MAX_SHOWN; i++) move_sprite(i, 0, 0);
+    for (i = 0; i < OBJ_CURSOR; i++) move_sprite(i, 0, 0);
     if ((state == G_MENU || state == G_TARGET || state == G_SLIST || state == G_SAIM || state == G_ILIST
          || state == G_IAIM || state == G_XLIST || state == G_XRECV) && sel < MAX_SHOWN) {
         int16_t sx = (int16_t)tent_x * 16 - (int16_t)cam_x + 8;
@@ -53,7 +53,7 @@ static void place_sprites(void)
         }
     }
     {
-        uint8_t s = 2 * MAX_SHOWN;
+        uint8_t s = OBJ_CURSOR;
         int16_t sx = (int16_t)cur_x * 16 - (int16_t)cam_x + 8;
         int16_t sy = (int16_t)cur_y * 16 - (int16_t)cam_y + 16;
         uint8_t hide = state == G_ENEMY || state == G_BANNER || state == G_OUTCOME || state == G_CAMP || state == G_SHOP;

@@ -7,7 +7,7 @@
 #include "../core/save.h"
 void undo_restore_core(uint16_t off, const uint8_t *data, uint8_t len);
 #include "wram.h"
-#define SNAP_MAX 12u
+#define SNAP_MAX 24u   /* = MAXU (mapview) = MAX_SHOWN: every unit of a battle is drawn */
 
 #define W1_UNITS ((ActiveUnit *)0xD000)
 
@@ -107,8 +107,13 @@ void units_clear(void)
 
 /* Per-frame render/UI snapshot of the first n units (temporary OBJ placeholders need it every frame).
  * One SVBK switch, direct field reads: ~20x cheaper than n unit_load() copies. */
-uint8_t snap_x[SNAP_MAX], snap_y[SNAP_MAX], snap_fac[SNAP_MAX], snap_flags[SNAP_MAX], snap_cls[SNAP_MAX];
-uint16_t snap_hp[SNAP_MAX];
+/* fixed WRAM0 C280..C327 (audio region tail, design doc 11.4): not in the C globals */
+__at(0xC280) uint8_t snap_x[SNAP_MAX];
+__at(0xC298) uint8_t snap_y[SNAP_MAX];
+__at(0xC2B0) uint8_t snap_fac[SNAP_MAX];
+__at(0xC2C8) uint8_t snap_flags[SNAP_MAX];
+__at(0xC2E0) uint8_t snap_cls[SNAP_MAX];
+__at(0xC2F8) uint16_t snap_hp[SNAP_MAX];
 
 void units_snapshot(uint8_t n)
 {

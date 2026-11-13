@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../../src/core/vm.h"
+#include "../../src/core/roster.h"
 #include "../../src/core/grid.h"
 
 extern uint8_t host_terrain[4096], host_occ[4096];
@@ -32,6 +33,8 @@ uint8_t vm_template(uint8_t i, VmTemplate *t) PLATFORM_API { if (i >= 4) return 
 void vm_gold(uint16_t a) PLATFORM_API { gold += a; }
 static uint8_t duels;
 void vm_duel(uint8_t w, uint8_t l, uint8_t r) PLATFORM_API { (void)w; (void)l; (void)r; duels++; }
+static int joins;
+uint8_t vm_join(uint8_t j) PLATFORM_API { if (j >= 2) return 0; joins++; roster_add((uint16_t)(40u + j), 0, 1, 50, 50, 50); return 1; }
 
 static Battle B;
 static uint16_t at;
@@ -202,6 +205,32 @@ int main(void)
         CHECK(host_units[0].action_flags & AF_ACTED, "duel consumes the winner's action");
         CHECK(B.rng.draws == d0, "duel draws no RNG");
         CHECK(B.outcome == OUT_WIN, "last enemy removed by duel -> win");
+    }
+    reset();
+    {   /* 2.4 JOIN / PARTY_LEAVE / return */
+        uint8_t gy;
+        roster_clear();
+        roster_add(1, 0, 1, 70, 60, 70); roster_add(2, 6, 1, 78, 56, 74);
+        c0 = at; E(OP_JOIN, 0, OP_FATE, 2, 0, FATE_LEFT, OP_END);
+        ev(TR_BATTLE_START, VM_ANY, 0, VM_NO_ONCE, 0xFFFF, c0, 7);
+        f.trigger = TR_BATTLE_START;
+        joins = 0;
+        CHECK(vm_fire(&B, &f) == VM_OK && joins == 1 && roster_count() == 3 && roster_find(40) == 2, "JOIN adds the joiner");
+        gy = roster_find(2);
+        CHECK(!roster_available(gy) && named_get(2) == FATE_LEFT && roster_available(0), "LEAVE: 关羽 cannot deploy");
+        n_ev = 0; at = 0;
+        c0 = at; E(OP_FATE, 2, 0, FATE_OWNED, OP_END);
+        ev(TR_BATTLE_START, VM_ANY, 0, VM_NO_ONCE, 0xFFFF, c0, 5);
+        CHECK(vm_fire(&B, &f) == VM_OK && roster_available(gy) && named_get(2) == FATE_OWNED, "RETURN: back in the party");
+        n_ev = 0; at = 0;
+        c0 = at; E(OP_JOIN, 1, OP_JOIN, 9, OP_END);
+        ev(TR_BATTLE_START, VM_ANY, 0, VM_NO_ONCE, 0xFFFF, c0, 5);
+        CHECK(vm_fire(&B, &f) == VM_BAD_SCRIPT && roster_count() == 3 && roster_find(41) == 0xFF,
+              "bad joiner: BAD_SCRIPT, the earlier JOIN is rolled back");
+        n_ev = 0; at = 0;
+        c0 = at; E(OP_FATE, 2, 0, 3, OP_END);
+        ev(TR_BATTLE_START, VM_ANY, 0, VM_NO_ONCE, 0xFFFF, c0, 5);
+        CHECK(vm_fire(&B, &f) == VM_BAD_SCRIPT, "FATE only LEFT / OWNED");
     }
     printf("vm: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;

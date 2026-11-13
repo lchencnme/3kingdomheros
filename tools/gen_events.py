@@ -141,6 +141,13 @@ class Compiler:
                 else:
                     tgt = self.unit(tgt)
                 out += [0x0D] + u16(s16) + [modes[args[1]]] + u16(tgt) + [min(max(args[3], 0), 255)]
+            elif name == "JOIN":       # [character id]: must be listed in content/roster.json joiners
+                js = [j["character"] for j in json.loads((ROOT / "content/roster.json").read_text(encoding="utf-8")).get("joiners", [])]
+                if args[0] not in js:
+                    die(f"JOIN {args[0]}: not a joiner in content/roster.json")
+                out += [0x0F, js.index(args[0])]
+            elif name in ("LEAVE", "RETURN"):   # [character id]: party leave / return (FATE_LEFT / FATE_OWNED)
+                out += [0x10] + u16(args[0]) + [2 if name == "LEAVE" else 1]
             elif name in ("FACTION_SET", "RECRUIT"):
                 fac = FACTION[args[1]] if name == "FACTION_SET" else FACTION["PLAYER"]
                 out += [0x0C, self.unit(args[0]), fac]

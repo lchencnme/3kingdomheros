@@ -5,6 +5,7 @@
  *
  * Screen: 9 text lines of 16 px (rows 2k, 2k+1; columns 1..18), 36 tiles each: lines 0-2 bank1 ids 0..107,
  * lines 3-5 bank1 ids 128..235, lines 6-8 bank0 ids 1..108. Palette 7 = paper/ink. Window and sprites off. */
+#include "../core/vm.h"
 #include <gb/gb.h>
 #include <gb/cgb.h>
 #include <string.h>
@@ -397,6 +398,7 @@ static uint8_t step(uint8_t pressed)
                 for (k = d; k + 1u < C->dep->n; k++) C->dep->order[k] = C->dep->order[k + 1u];
                 C->dep->n--;
             } else {
+                if (!roster_available(C->cur)) { sfx_play(SFX_ERROR); say(TX_LEFT_MSG); break; }   /* 2.4 */
                 if (C->dep->n >= C->deploy_max) { sfx_play(SFX_ERROR); break; }
                 C->dep->order[C->dep->n++] = C->cur;
             }
@@ -424,15 +426,17 @@ void camp_run(uint16_t *gold, CampDeploy *dep, uint8_t mode, uint8_t next_bt, ui
     memset(&camp, 0, sizeof camp);
     camp.gold = gold; camp.dep = dep; camp.pick = 0xFF; camp.mode = mode; camp.next = next_bt;
     camp.camp = camp_idx < N_CAMPS ? camp_idx : 0u;
+    if (mode == CAMP_FULL && camp_defs[camp.camp].join != 0xFFu) vm_join(camp_defs[camp.camp].join);   /* e.g. 三顾茅庐 (2.4 JOIN) */
     camp.n_off = roster_count() < 7u ? roster_count() : 7u;   /* deployment list: lines 1..7 */
     camp.deploy_max = 4; camp.forced = 1;                   /* no next battle (ending) */
     bd_deploy_rule(next_bt, &camp.deploy_max, &camp.forced);   /* battle tables: bank 14 */
+    if (camp.deploy_max > CAMP_MAX_DEPLOY) camp.deploy_max = CAMP_MAX_DEPLOY;
     if (mode == CAMP_PRIZES_ONLY && !prize_count()) return;
     C = &camp;
     if (!dep->n) {                                      /* first visit: everyone, in roster order */
-        uint8_t k;
-        for (k = 0; k < N_OFF && k < C->deploy_max; k++) dep->order[k] = k;
-        dep->n = k;
+        uint8_t k, n = 0;
+        for (k = 0; k < N_OFF && n < C->deploy_max; k++) if (roster_available(k)) dep->order[n++] = k;
+        dep->n = n;
     }
     if (prize_count()) { camp.screen = SC_PRIZE; }        /* 7.4: the spoils come first */
     screen_init();

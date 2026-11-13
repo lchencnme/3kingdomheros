@@ -36,19 +36,20 @@ static int16_t hb_x0, hb_x1, hb_y0, hb_y1;   /* hw-position box the sweep must r
 #define PAL_ENEMY 5u
 #define PAL_HL 6u
 #define PAL_ACTED 7u
-#define MAXU 12u
+#define MAXU 24u                       /* units drawn: all of a battle (units_gb SNAP_MAX) */
 #define BODY_ACTED 0x80u     /* cur_body bit: unit has acted (solid foot mark) */
 
-/* render state + dirty queue in WRAM bank7 D400..D5FF (the former full-map inqueue area, now unused) */
+/* render state in WRAM bank7 D400..D47F (TileMeta follows at D480); the dirty queue in WRAM0 C3A0..C3DF */
 typedef struct { uint8_t x, y, vis, pal, body; } RU;
 #define RS_QMAX 32u                    /* overflow -> full-cache recomposition sweep */
 typedef struct {
     RU ru[MAXU];                       /* what is currently drawn */
     uint8_t nq;
-    uint8_t qx[RS_QMAX], qy[RS_QMAX];  /* dirty world hardware positions */
 } RenderState;
 #define RS ((RenderState *)0xD400u)
-typedef char rs_fits[(sizeof(RenderState) <= 0x200u) ? 1 : -1];
+typedef char rs_fits[(sizeof(RenderState) <= 0x80u) ? 1 : -1];
+__at(0xC3A0) uint8_t rs_qx[RS_QMAX];   /* dirty world hardware positions */
+__at(0xC3C0) uint8_t rs_qy[RS_QMAX];
 
 extern uint8_t snap_x[MAXU], snap_y[MAXU], snap_fac[MAXU], snap_flags[MAXU], snap_cls[MAXU];
 extern uint16_t snap_hp[MAXU];
@@ -56,9 +57,9 @@ void units_snapshot(uint8_t n);
 static uint8_t n_units_seen;
 extern uint8_t unit_gen;
 static uint8_t seen_gen, have_gen, diff_gen;
-/* UI arena tail 0xCBE0..0xCBF7 (non-banked, free after the grid row buffers; design doc 11.4) */
-__at(0xCBE0) uint8_t order[MAXU];       /* visible units sorted by (foot y, id) */
-__at(0xCBEC) uint8_t cand[MAXU];        /* subset of order that can touch the current edge / position */
+/* WRAM0 C370..C39F (audio region tail, after the unit snapshot; design doc 11.4) */
+__at(0xC370) uint8_t order[MAXU];       /* visible units sorted by (foot y, id) */
+__at(0xC388) uint8_t cand[MAXU];        /* subset of order that can touch the current edge / position */
 static uint8_t n_order, n_cand;
 
 /* restrict compose() to units whose 16x24 box can overlap hardware columns [wx0, wx1] x rows [wy0, wy1] */
@@ -73,7 +74,9 @@ static void filter_units(int16_t wx0, int16_t wx1, int16_t wy0, int16_t wy1)
         cand[n_cand++] = u;
     }
 }
-static uint8_t cur_vis[MAXU], cur_pal[MAXU], cur_body[MAXU];
+__at(0xC328) uint8_t cur_vis[MAXU];
+__at(0xC340) uint8_t cur_pal[MAXU];
+__at(0xC358) uint8_t cur_body[MAXU];
 #define MAX_TRE 4u
 static uint8_t tre_x[MAX_TRE], tre_y[MAX_TRE], n_tre;   /* untaken treasure cells (drawn as chests) */
 
@@ -270,7 +273,7 @@ void mapview_init(const uint8_t *meta4, const uint8_t *terrain_pal) BANKED
     uint8_t buf[16], i;
     meta = meta4; tpal = terrain_pal;
     hl_on = 0; dz_on = 0; hl_row = CACHE_H; hl_half = 0; n_done = 0; q_overflow = 0; edge_kind = 0; n_tiles = 0;
-    n_units_seen = 12;
+    n_units_seen = MAXU;                       /* every record; empty ones (hp 0) are invisible */
     have_gen = 0;
     if (cam_x > max_cam_x()) cam_x = max_cam_x();
     if (cam_y > max_cam_y()) cam_y = max_cam_y();
@@ -419,7 +422,7 @@ static void queue_cell(uint8_t x, uint8_t y)
     for (wy = wy0; wy < wy0 + 3; wy++)
         for (wx = wx0; wx < wx0 + 2; wx++) {
             if (wx < tox || wx >= tox + CACHE_W || wy < toy || wy >= toy + CACHE_H) continue;
-            if (RS->nq < RS_QMAX) { RS->qx[RS->nq] = (uint8_t)wx; RS->qy[RS->nq] = (uint8_t)(wy & 0xFF); RS->nq++; }
+            if (RS->nq < RS_QMAX) { rs_qx[RS->nq] = (uint8_t)wx; rs_qy[RS->nq] = (uint8_t)(wy & 0xFF); RS->nq++; }
             else q_overflow = 1;               /* too many at once: recompose the whole cache instead */
         }
 }
@@ -461,7 +464,7 @@ void mapview_prepare(void) BANKED
     /* stage up to 12 dirty positions (2 B queue entries are wx, wy & 0xFF; wy fits since maps <= 64 rows) */
     {
         uint8_t qx[12], qy[12], n = 0;
-        while (RS->nq && n < 12u) { RS->nq--; qx[n] = RS->qx[RS->nq]; qy[n] = RS->qy[RS->nq]; n++; }
+        while (RS->nq && n < 12u) { RS->nq--; qx[n] = rs_qx[RS->nq]; qy[n] = rs_qy[RS->nq]; n++; }
         SVBK_REG = o;
         for (i = 0; i < n; i++) {
             int16_t wy = (int16_t)(int8_t)qy[i];

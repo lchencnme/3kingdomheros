@@ -7,6 +7,7 @@
 #include "../core/save.h"
 #include "../core/item.h"
 #include "../core/undo.h"
+#include "../core/roster.h"
 #include "../gen/tech01_data.h"
 #include "../gen/campaign_data.h"
 #include "../gen/tech01_events.h"
@@ -91,6 +92,24 @@ uint8_t treasure_def(uint8_t i, TreasureDef *t) PLATFORM_API
     if (!bd_treasure(i, xyi)) return 0;                  /* battle tables are in bank 14 (flow.c) */
     t->x = xyi[0]; t->y = xyi[1]; t->item = xyi[2];
     t->flag = (uint16_t)(TECH01_TREASURE_FLAG0 + i);
+    return 1;
+}
+
+/* OP_JOIN (2.4 JOIN): the joiner's record, then its carried items written straight into SRAM (the VM runs
+ * deep in the event chain: no second 48 B record on the stack) */
+uint8_t vm_join(uint8_t j) PLATFORM_API
+{
+    const RosterInit *o;
+    uint8_t idx, s, v[2];
+    if (j >= N_JOINERS) return 0;
+    o = &join_defs[j];
+    if (roster_find(o->character) != 0xFF) return 1;            /* already in: nothing to do */
+    idx = roster_add(o->character, o->cls, o->level, o->str, o->intl, o->cmd);
+    if (idx == 0xFF) return 1;                                  /* roster full: the story goes on */
+    for (s = 0; s < 8u; s++) {
+        v[0] = o->items[s]; v[1] = o->items[s] == 0xFF ? 0xFF : 0;
+        sram_write(ROSTER_SRAM_BANK, (uint16_t)((uint16_t)idx * ROSTER_REC + 14u + 2u * s), v, 2);
+    }
     return 1;
 }
 

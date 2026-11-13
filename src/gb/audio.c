@@ -11,7 +11,7 @@ typedef struct {
     uint8_t left, gate;
 } Voice;
 
-/* all driver state lives in the audio region C200..C3FF (design doc 11.4), not in C globals */
+/* all driver state lives in the audio region C200..C27F (design doc 11.4; C280..C39F: unit snapshot), not in C globals */
 typedef struct {
     const Song *song;
     Voice v[4];

@@ -38,7 +38,8 @@ typedef char ai_fits_bank7[(sizeof(AiScratch) <= 0x400u) ? 1 : -1];
 
 void units_clear(void);
 void units_snapshot(uint8_t n);
-#define MAX_SHOWN 12u               /* OBJ placeholders: up to 12 units (24 OBJ + cursor) */
+#define MAX_SHOWN 24u               /* units in the snapshot (all of a battle: drawn into BG by mapview) */
+#define OBJ_CURSOR 24u              /* OBJ 0/1: ghost of the selected unit; 24/25: cursor */
 extern uint8_t snap_x[MAX_SHOWN], snap_y[MAX_SHOWN], snap_fac[MAX_SHOWN], snap_flags[MAX_SHOWN];
 extern uint16_t snap_hp[MAX_SHOWN];
 void vm_clear_battle_flags(void);

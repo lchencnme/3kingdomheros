@@ -5,6 +5,7 @@
 #include "ai.h"
 #include "item.h"
 #include "undo.h"
+#include "roster.h"
 #include "grid.h"
 #include "path.h"
 
@@ -231,6 +232,17 @@ static uint8_t run_code(Battle *b, const VmFact *f, uint16_t off, uint16_t len)
             (void)retreated;
             break;
         }
+        case OP_JOIN:
+            vm_read((uint16_t)(off + 1u), a, 1);
+            off += 2;
+            if (!vm_join(a[0])) return VM_BAD_SCRIPT;
+            break;
+        case OP_FATE:
+            vm_read((uint16_t)(off + 1u), a, 3);
+            off += 4;
+            if (a[2] != FATE_OWNED && a[2] != FATE_LEFT) return VM_BAD_SCRIPT;
+            roster_set_fate(rd16(a), a[2]);              /* not in the roster: only the named state changes */
+            break;
         case OP_FACTION_SET:
             vm_read((uint16_t)(off + 1u), a, 2);
             off += 3;

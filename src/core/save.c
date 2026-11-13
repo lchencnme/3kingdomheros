@@ -360,7 +360,7 @@ uint8_t load_snapshot(Battle *b, SaveUi *ui, uint8_t *dep) CORE_API
     load_common(base, b, ui);
     at = tlv_find(base, 8);
     img_read(base, at, &n, 1);
-    if (n > 16u) n = 16u;
+    if (n > SAVE_MAX_DEPLOY) n = SAVE_MAX_DEPLOY;      /* the caller buffer holds 1 + 4 x SAVE_MAX_DEPLOY */
     img_read(base, at, dep, (uint16_t)(1u + (uint16_t)n * 4u));
     dep[0] = n;
     return SAVE_OK;

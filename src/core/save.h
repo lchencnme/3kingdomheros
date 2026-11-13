@@ -2,6 +2,7 @@
  * The body is streamed straight to SRAM (no 16 KiB RAM buffer exists). */
 #ifndef CORE_SAVE_H
 #define CORE_SAVE_H
+#define SAVE_MAX_DEPLOY 8u   /* deploy entries in a snapshot (tag 8): dep buffers are 1 + 4 x this */
 #include <stdint.h>
 #include "platform.h"
 #include "battle.h"

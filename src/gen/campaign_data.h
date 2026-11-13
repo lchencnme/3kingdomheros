@@ -3,10 +3,11 @@
 #define CAMPAIGN_DATA_H
 #include <stdint.h>
 #include "tech01_data.h"
-#define N_BATTLES 13u
-#define N_CAMPS 10u
+#define N_BATTLES 21u
+#define N_CAMPS 17u
 #define N_ROSTER_INIT 4u
-#define N_CHARS 27u
+#define N_CHARS 41u
+#define N_JOINERS 3u
 #define N_ENDING_PAGES 3u
 #define CONT_NORMAL 0u
 #define CONT_NO_REPLENISH 1u
@@ -25,11 +26,12 @@ typedef struct {
     uint8_t vic_kind, vic_unit, vic_round, protect;                  /* 6.6 objectives (VIC_*) */
     uint8_t vic_x0, vic_y0, vic_x1, vic_y1;                          /* VIC_REACH area */
 } BattleDef;
-typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; } CampDef;
+typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; uint8_t join; } CampDef;   /* join: joiner index or FF */
 typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd; uint16_t name_tx; uint8_t items[8]; } RosterInit;
 extern const BattleDef battle_defs[N_BATTLES];   /* ROM bank 14 (flow.c only) */
-extern const CampDef camp_defs[N_CAMPS];
+extern const CampDef camp_defs[N_CAMPS];          /* ROM bank 10 (camp.c only) */
 extern const RosterInit roster_init[N_ROSTER_INIT];
+extern const RosterInit join_defs[];             /* OP_JOIN table (content/roster.json joiners) */
 extern const uint16_t ending_pages[][2];
 extern const uint16_t char_name[N_CHARS][2];   /* character id -> TX name */
 extern const uint8_t tech01_levels[];

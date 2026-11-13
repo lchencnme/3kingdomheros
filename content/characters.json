@@ -1,5 +1,5 @@
 {
- "_comment": "具名人物登记（设计文档 15.3，节选第一、二章）。id 是 character_id（只追加）；portrait = 画像序号（P0001 起为 0），null = 旁白式台词。",
+ "_comment": "具名人物登记（设计文档 15.3，节选第一至三章）。id 是 character_id（只追加）；portrait = 画像序号（P0001 起为 0），null = 旁白式台词。",
  "characters": [
   {
    "id": 1,
@@ -161,6 +161,90 @@
    "id": 32,
    "tag": "CH_YUJIN",
    "name": "TX_NAME_YUJIN",
+   "portrait": null
+  },
+  {
+   "id": 33,
+   "tag": "CH_CHEZHOU",
+   "name": "TX_NAME_CHEZHOU",
+   "portrait": null
+  },
+  {
+   "id": 34,
+   "tag": "CH_LIUDAI",
+   "name": "TX_NAME_LIUDAI",
+   "portrait": null
+  },
+  {
+   "id": 35,
+   "tag": "CH_WANGZHONG",
+   "name": "TX_NAME_WANGZHONG",
+   "portrait": null
+  },
+  {
+   "id": 36,
+   "tag": "CH_CAIYANG",
+   "name": "TX_NAME_CAIYANG",
+   "portrait": null
+  },
+  {
+   "id": 39,
+   "tag": "CH_LIUPI",
+   "name": "TX_NAME_LIUPI",
+   "portrait": null
+  },
+  {
+   "id": 40,
+   "tag": "CH_GONGDU",
+   "name": "TX_NAME_GONGDU",
+   "portrait": null
+  },
+  {
+   "id": 41,
+   "tag": "CH_ZHANGWU",
+   "name": "TX_NAME_ZHANGWU",
+   "portrait": null
+  },
+  {
+   "id": 42,
+   "tag": "CH_CHENSUN",
+   "name": "TX_NAME_CHENSUN",
+   "portrait": null
+  },
+  {
+   "id": 43,
+   "tag": "CH_CAIMAO",
+   "name": "TX_NAME_CAIMAO",
+   "portrait": null
+  },
+  {
+   "id": 44,
+   "tag": "CH_XUSHU",
+   "name": "TX_NAME_XUSHU",
+   "portrait": null
+  },
+  {
+   "id": 45,
+   "tag": "CH_CAOREN",
+   "name": "TX_NAME_CAOREN",
+   "portrait": null
+  },
+  {
+   "id": 46,
+   "tag": "CH_LIDIAN",
+   "name": "TX_NAME_LIDIAN",
+   "portrait": null
+  },
+  {
+   "id": 47,
+   "tag": "CH_ZHUGELIANG",
+   "name": "TX_NAME_ZHUGELIANG",
+   "portrait": 3
+  },
+  {
+   "id": 48,
+   "tag": "CH_XIAHOUDUN",
+   "name": "TX_NAME_XIAHOUDUN",
    "portrait": null
   }
  ]

@@ -38,6 +38,9 @@ void roster_write(uint8_t idx, const RosterRec *r) CORE_API;
 uint8_t roster_add(uint16_t character, uint8_t cls, uint8_t level, uint8_t str, uint8_t intl, uint8_t cmd) CORE_API;
 uint8_t roster_find(uint16_t character) CORE_API;     /* index or FF */
 uint8_t named_get(uint16_t character) CORE_API;
+/* party leave / return (2.4 PARTY_LEAVE): record fate + named state; only FATE_OWNED officers deploy */
+void roster_set_fate(uint16_t character, uint8_t fate) CORE_API;
+uint8_t roster_available(uint8_t idx) CORE_API;       /* 1 = FATE_OWNED */
 void named_set(uint16_t character, uint8_t fate) CORE_API;
 
 /* put officer idx on the field as instance inst at (x, y): its items/equipment go to the instance's item

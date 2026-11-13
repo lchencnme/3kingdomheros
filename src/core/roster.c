@@ -60,6 +60,21 @@ uint8_t roster_find(uint16_t character) CORE_API
     return 0xFF;
 }
 
+void roster_set_fate(uint16_t character, uint8_t fate) CORE_API
+{
+    uint8_t i = roster_find(character);
+    if (i != 0xFF) sram_write(ROSTER_SRAM_BANK, (uint16_t)(rec_off(i) + 2u), &fate, 1);   /* RosterRec.fate */
+    named_set(character, fate);
+}
+
+uint8_t roster_available(uint8_t idx) CORE_API
+{
+    uint8_t f;
+    if (idx >= roster_count()) return 0;
+    sram_read(ROSTER_SRAM_BANK, (uint16_t)(rec_off(idx) + 2u), &f, 1);
+    return f == FATE_OWNED;
+}
+
 uint8_t roster_add(uint16_t character, uint8_t cls, uint8_t level, uint8_t str, uint8_t intl, uint8_t cmd) CORE_API
 {
     RosterRec r;
