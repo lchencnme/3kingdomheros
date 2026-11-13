@@ -11,9 +11,8 @@
 #define OBJT_PLAYER 0u
 #define OBJT_ENEMY 4u
 #define OBJT_CURSOR 8u
-#define UNIT_BODY_FOOT 0u
-#define UNIT_BODY_BOW 1u
-#define UNIT_BODY_HORSE 2u
+#define UNIT_BODIES 11u   /* sword spear heavy bow horse armour robe mystic flag ranger civilian */
+extern const uint8_t tech01_class_body[];   /* class id -> body (gen_tech01 CLASS_BODY) */
 #define UNIT_TILE_BYTES 24u   /* 16 B 2bpp + 8 B mask; 6 tiles per body (2 x 3) */
 extern const uint8_t tech01_unit_tiles[];
 typedef struct { uint8_t cls, faction, x, y, ai, ch; } Tech01Unit;   /* ch: character id, 0 = anonymous */

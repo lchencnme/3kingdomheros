@@ -26,4 +26,4 @@ extern const uint16_t portrait_7_pal[20];
 const uint8_t *const portrait_tiles[PORTRAIT_COUNT] = {portrait_0_tiles, portrait_1_tiles, portrait_2_tiles, portrait_3_tiles, portrait_4_tiles, portrait_5_tiles, portrait_6_tiles, portrait_7_tiles};
 const uint8_t *const portrait_attr[PORTRAIT_COUNT] = {portrait_0_attr, portrait_1_attr, portrait_2_attr, portrait_3_attr, portrait_4_attr, portrait_5_attr, portrait_6_attr, portrait_7_attr};
 const uint16_t *const portrait_pal[PORTRAIT_COUNT] = {portrait_0_pal, portrait_1_pal, portrait_2_pal, portrait_3_pal, portrait_4_pal, portrait_5_pal, portrait_6_pal, portrait_7_pal};
-const uint8_t portrait_npal[PORTRAIT_COUNT] = {4, 4, 4, 4, 4, 4, 5, 4};
+const uint8_t portrait_npal[PORTRAIT_COUNT] = {1, 1, 1, 1, 1, 1, 1, 1};

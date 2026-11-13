@@ -184,6 +184,7 @@ def _arr(name, src):
 
 _BGT = _arr("tech01_bg_tiles", _DATA_C)
 _UNT = _arr("tech01_unit_tiles", _DATA_C)
+_CBODY = _arr("tech01_class_body", _DATA_C)
 _RULES = _json.load(open(ROM.resolve().parents[2] / "content/default_rules.json"))
 _FAM = {c["id"]: c["family"] for c in _RULES["classes"]}
 
@@ -219,9 +220,9 @@ def view_mismatches(em, highlight=False, danger=False):
             continue
         fac, cls = em.m[1, a + 3], em.m[1, a + 4]
         pal = 5 if fac == 2 else (7 if fl & 2 else 4)
-        fam = _FAM[cls]
-        body = 1 if fam == "bow" else (2 if fam == "cavalry" else 0)
-        units.append((em.m[1, a + 8], i, em.m[1, a + 7], pal, body, fac, fl & 2))
+        body = _CBODY[cls]
+        named = (em.m[1, a] | (em.m[1, a + 1] << 8)) != 0xFFFF
+        units.append((em.m[1, a + 8], i, em.m[1, a + 7], pal, body, fac, fl & 2, named))
     units.sort()
     def s8(v):
         return v - 256 if v > 127 else v
@@ -279,7 +280,7 @@ def view_mismatches(em, highlight=False, danger=False):
                     data[2 * y] = (m1 if ls & 1 else 0) | (m2 if ls & 2 else 0) | (m3 if ls & 4 else 0)
                     data[2 * y + 1] = (m1 if hs & 1 else 0) | (m2 if hs & 2 else 0) | (m3 if hs & 4 else 0)
             under = True
-            for (uy, ui, ux, upal, body, ufac, uacted) in units:
+            for (uy, ui, ux, upal, body, ufac, uacted, unamed) in units:
                 lx, ly = wx - ux * 2, wy - (uy * 2 - 1)
                 if not (0 <= lx <= 1 and 0 <= ly <= 2):
                     continue
@@ -300,6 +301,9 @@ def view_mismatches(em, highlight=False, danger=False):
                 elif ly == 0 and lx == 0:                     # side mark: square / circle / triangle
                     rows = {2: (0x80, 0xC0, 0xE0), 1: (0x40, 0xE0, 0x40)}.get(ufac, (0xE0, 0xE0, 0xE0))
                     for r_, b_ in enumerate(rows):
+                        put_ink(data, r_, b_)
+                elif ly == 0 and unamed:                      # 将旗 of a named character
+                    for r_, b_ in enumerate((0x0F, 0x0D, 0x0F, 0x01, 0x01, 0x01)):
                         put_ink(data, r_, b_)
                 pal = upal
             bank, tid, addr = _slot_vram(_slot(wx, wy))

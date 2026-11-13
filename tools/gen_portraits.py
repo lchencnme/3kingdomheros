@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Portraits (design doc 13.2): v0.3 concept sheet -> 64x64 CGB portraits (tiles + attrs + palettes).
+"""Portraits (design doc 13.2): 绣像 sheet (v04, painted by tools/paint_portraits.py) -> 64x64 CGB portraits.
 
 Source: art_src/v03/portraits_8_v03.png (320x200, extracted 1:1 from the original design PDF figure 2-1;
 the art was authored inside CGB limits: <=4 colours per 8x8 tile). Portrait IDs P0001..P0008 follow
@@ -11,7 +11,7 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "art_src" / "v03" / "portraits_8_v03.png"
+SRC = ROOT / "art_src" / "v04" / "portraits_8_xiuxiang.png"   # 绣像 line art (tools/paint_portraits.py)
 NAMES = ["刘备", "关羽", "张飞", "诸葛亮", "赵云", "曹操", "周瑜", "司马懿"]
 ORIGINS = [(8, 21), (88, 21), (168, 21), (248, 21), (8, 109), (88, 109), (168, 109), (248, 109)]
 MAX_PALS = 5

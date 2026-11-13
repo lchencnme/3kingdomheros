@@ -114,6 +114,7 @@ __at(0xC2B0) uint8_t snap_fac[SNAP_MAX];
 __at(0xC2C8) uint8_t snap_flags[SNAP_MAX];
 __at(0xC2E0) uint8_t snap_cls[SNAP_MAX];
 __at(0xC2F8) uint16_t snap_hp[SNAP_MAX];
+__at(0xC3E0) uint8_t snap_named[SNAP_MAX];   /* 1 = named character (map 将旗 mark) */
 
 void units_snapshot(uint8_t n)
 {
@@ -124,6 +125,7 @@ void units_snapshot(uint8_t n)
     for (i = 0; i < n; i++, u++) {
         snap_x[i] = u->x; snap_y[i] = u->y; snap_fac[i] = u->faction;
         snap_flags[i] = u->action_flags; snap_hp[i] = u->hp; snap_cls[i] = u->class_id;
+        snap_named[i] = u->character_id != ANON_CHARACTER;
     }
     SVBK_REG = o;
 }

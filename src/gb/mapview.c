@@ -38,6 +38,8 @@ static int16_t hb_x0, hb_x1, hb_y0, hb_y1;   /* hw-position box the sweep must r
 #define PAL_ACTED 7u
 #define MAXU 24u                       /* units drawn: all of a battle (units_gb SNAP_MAX) */
 #define BODY_ACTED 0x80u     /* cur_body bit: unit has acted (solid foot mark) */
+#define BODY_NAMED 0x40u     /* cur_body bit: named character (将旗 on the head tile) */
+#define BODY_MASK 0x0Fu
 
 /* render state in WRAM bank7 D400..D47F (TileMeta follows at D480); the dirty queue in WRAM0 C3A0..C3DF */
 typedef struct { uint8_t x, y, vis, pal, body; } RU;
@@ -53,6 +55,7 @@ __at(0xC3C0) uint8_t rs_qy[RS_QMAX];
 
 extern uint8_t snap_x[MAXU], snap_y[MAXU], snap_fac[MAXU], snap_flags[MAXU], snap_cls[MAXU];
 extern uint16_t snap_hp[MAXU];
+extern uint8_t snap_named[MAXU];
 void units_snapshot(uint8_t n);
 static uint8_t n_units_seen;
 extern uint8_t unit_gen;
@@ -112,9 +115,7 @@ static uint16_t id_addr(uint8_t id) { return id < 128u ? (uint16_t)(0x9000u + (u
 
 static uint8_t body_of(uint8_t cls)
 {
-    /* the fixed-bank class table is unbanked: direct read is fine */
-    uint8_t f = class_defs[cls].family;
-    return f == FAM_BOW ? UNIT_BODY_BOW : (f == FAM_CAVALRY ? UNIT_BODY_HORSE : UNIT_BODY_FOOT);
+    return cls < 18u ? tech01_class_body[cls] : 0u;     /* same bank as this code (bank 11) */
 }
 
 /* current unit visuals from the snapshot (alive, palette, body) and the draw order */
@@ -129,7 +130,8 @@ static void refresh_units(void)
         uint8_t vis = snap_hp[i] && !(snap_flags[i] & (AF_RETREAT | AF_DEAD | AF_AWAY));
         cur_vis[i] = vis;
         cur_pal[i] = snap_fac[i] == FAC_ENEMY ? PAL_ENEMY : ((snap_flags[i] & AF_ACTED) ? PAL_ACTED : PAL_PLAYER);
-        cur_body[i] = (uint8_t)(body_of(snap_cls[i]) | ((snap_flags[i] & AF_ACTED) ? BODY_ACTED : 0u));
+        cur_body[i] = (uint8_t)(body_of(snap_cls[i]) | ((snap_flags[i] & AF_ACTED) ? BODY_ACTED : 0u)
+                                | (snap_named[i] ? BODY_NAMED : 0u));
         if (!vis) continue;
         for (k = n_order; k > 0 && (snap_y[order[k - 1]] > snap_y[i]); k--) order[k] = order[k - 1];
         order[k] = i;
@@ -140,8 +142,9 @@ static void refresh_units(void)
 /* 12.2 markers, ink only: foot mark on the feet row (hollow = can act, solid = acted) and a side mark on
  * the head tile (player square, ally circle, enemy triangle) - identification never relies on colour */
 static void ink(uint8_t *d, uint8_t row, uint8_t bits) { d[2 * row] |= bits; d[2 * row + 1] |= bits; }
-static void mark(uint8_t *d, uint8_t lx, uint8_t ly, uint8_t fac, uint8_t acted)
+static void mark(uint8_t *d, uint8_t lx, uint8_t ly, uint8_t fac, uint8_t body)
 {
+    uint8_t acted = body & BODY_ACTED;
     if (ly == 2) {
         uint8_t line = lx ? 0xF8u : 0x1Fu, end = lx ? 0x08u : 0x10u;
         ink(d, 5, line); ink(d, 7, line);
@@ -150,6 +153,8 @@ static void mark(uint8_t *d, uint8_t lx, uint8_t ly, uint8_t fac, uint8_t acted)
         if (fac == FAC_ENEMY) { ink(d, 0, 0x80); ink(d, 1, 0xC0); ink(d, 2, 0xE0); }
         else if (fac == FAC_ALLY) { ink(d, 0, 0x40); ink(d, 1, 0xE0); ink(d, 2, 0x40); }
         else { ink(d, 0, 0xE0); ink(d, 1, 0xE0); ink(d, 2, 0xE0); }
+    } else if (ly == 0 && (body & BODY_NAMED)) {        /* 将旗: pennant on a pole, top right */
+        ink(d, 0, 0x0F); ink(d, 1, 0x0D); ink(d, 2, 0x0F); ink(d, 3, 0x01); ink(d, 4, 0x01); ink(d, 5, 0x01);
     }
 }
 
@@ -205,13 +210,13 @@ static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl, uint8_t
         int16_t lx = wx - (int16_t)snap_x[u] * 2, ly = wy - ((int16_t)snap_y[u] * 2 - 1);
         const uint8_t *ut;
         if (lx < 0 || lx > 1 || ly < 0 || ly > 2) continue;
-        ut = &tech01_unit_tiles[((uint16_t)(cur_body[u] & 3u) * 6u + (uint16_t)ly * 2u + (uint16_t)lx) * UNIT_TILE_BYTES];
+        ut = &tech01_unit_tiles[((uint16_t)(cur_body[u] & BODY_MASK) * 6u + (uint16_t)ly * 2u + (uint16_t)lx) * UNIT_TILE_BYTES];
         for (y = 0; y < 8; y++) {
             uint8_t m = ut[16 + y], nm = (uint8_t)~m;
             dst[2 * y] = (uint8_t)((dst[2 * y] & nm) | ut[2 * y]);
             dst[2 * y + 1] = (uint8_t)((dst[2 * y + 1] & nm) | ut[2 * y + 1]);
         }
-        mark(dst, (uint8_t)lx, (uint8_t)ly, snap_fac[u], (uint8_t)(cur_body[u] & BODY_ACTED));
+        mark(dst, (uint8_t)lx, (uint8_t)ly, snap_fac[u], cur_body[u]);
         pal = cur_pal[u];
     }
     return pal;
