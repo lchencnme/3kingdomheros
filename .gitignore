@@ -5,3 +5,7 @@ __pycache__/
 *.pyc
 .DS_Store
 *.sav
+
+# delivered 1024 px originals (190 MB): the build reads the 4-tone masters in art_src/v05 (tools/import_art.py)
+art_src/grok/*.png
+.DS_Store

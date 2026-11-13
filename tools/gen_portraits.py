@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Portraits (design doc 13.2): 绣像 sheet (v04, painted by tools/paint_portraits.py) -> 64x64 CGB portraits.
+"""Portraits (design doc 13.2): 64x64 4-tone 绣像 busts (art_src/v05, from tools/import_art.py) -> CGB tiles.
 
 Source: art_src/v03/portraits_8_v03.png (320x200, extracted 1:1 from the original design PDF figure 2-1;
 the art was authored inside CGB limits: <=4 colours per 8x8 tile). Portrait IDs P0001..P0008 follow
@@ -11,7 +11,7 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "art_src" / "v04" / "portraits_8_xiuxiang.png"   # 绣像 line art (tools/paint_portraits.py)
+
 NAMES = ["刘备", "关羽", "张飞", "诸葛亮", "赵云", "曹操", "周瑜", "司马懿"]
 ORIGINS = [(8, 21), (88, 21), (168, 21), (248, 21), (8, 109), (88, 109), (168, 109), (248, 109)]
 MAX_PALS = 5
@@ -105,36 +105,78 @@ def portrait(rows, x0, y0, name):
     return tiles, attrs, pal_words, len(pals)
 
 
+FIRST_BANK = 19          # portrait banks 19.. (15 portraits of 1 KiB per bank); the ref table is in bank 19
+PER_BANK = 15
+PAPER, LIGHT, MID, INK = (232, 220, 184), (176, 164, 136), (104, 92, 76), (32, 26, 20)
+TONE = {PAPER: 0, LIGHT: 1, MID: 2, INK: 3}
+
+
+def tiles_of(rows, name):
+    """64x64 4-tone master -> 64 tiles x 16 B (2bpp), row-major 8 x 8 tiles"""
+    out = []
+    for ty in range(8):
+        for tx in range(8):
+            for y in range(8):
+                lo = hi = 0
+                r = rows[ty * 8 + y]
+                for x in range(8):
+                    px = tuple(r[(tx * 8 + x) * 3:(tx * 8 + x) * 3 + 3])
+                    if px not in TONE:
+                        die(f"{name}: colour {px} is not one of the 4 tones (re-run tools/import_art.py)")
+                    v = TONE[px]
+                    lo |= (v & 1) << (7 - x)
+                    hi |= ((v >> 1) & 1) << (7 - x)
+                out += [lo, hi]
+    return out
+
+
 def main():
-    w, h, rows = read_png(SRC)
-    if (w, h) != (320, 200):
-        die(f"unexpected sheet size {w}x{h}")
-    c = [f"#pragma bank {BANK}   /* asset bank: read only through the rom.c gateway */", '#include "portrait_data.h"']
-    ci = ['#include "portrait_data.h"']
-    npal = []
-    for i, (name, (x0, y0)) in enumerate(zip(NAMES, ORIGINS)):
-        tiles, attrs, pals, n = portrait(rows, x0, y0, name)
-        npal.append(n)
-        c.append(f"/* P{i + 1:04d} {name}: {n} palettes */")
-        c.append(f"const uint8_t portrait_{i}_tiles[1024] = {{" + ", ".join(map(str, tiles)) + "};")
-        c.append(f"const uint8_t portrait_{i}_attr[64] = {{" + ", ".join(map(str, attrs)) + "};")
-        c.append(f"const uint16_t portrait_{i}_pal[{MAX_PALS * 4}] = {{" + ", ".join(map(str, pals)) + "};")
-        ci += [f"extern const uint8_t portrait_{i}_tiles[1024];", f"extern const uint8_t portrait_{i}_attr[64];",
-               f"extern const uint16_t portrait_{i}_pal[{MAX_PALS * 4}];"]
-    ci.append("const uint8_t *const portrait_tiles[PORTRAIT_COUNT] = {" + ", ".join(f"portrait_{i}_tiles" for i in range(8)) + "};")
-    ci.append("const uint8_t *const portrait_attr[PORTRAIT_COUNT] = {" + ", ".join(f"portrait_{i}_attr" for i in range(8)) + "};")
-    ci.append("const uint16_t *const portrait_pal[PORTRAIT_COUNT] = {" + ", ".join(f"portrait_{i}_pal" for i in range(8)) + "};")
-    ci.append("const uint8_t portrait_npal[PORTRAIT_COUNT] = {" + ", ".join(map(str, npal)) + "};")
+    import json
+    import re
+    reg = json.loads((ROOT / "content/portraits.json").read_text(encoding="utf-8"))["portraits"]
+    tx = {m.group(1): int(m.group(2)) for m in re.finditer(r"#define (TX_\w+) (\d+)u", (ROOT / "src/gen/text_data.h").read_text(encoding="utf-8"))}
+    if len(reg) > 254:
+        die("more than 254 portraits (speaker byte, 0xFF = narrator)")
+    files = {}
+    refs = []
+    for i, e in enumerate(reg):
+        src = ROOT / "art_src/v05" / f"{e['pinyin']}_bust.png"
+        if not src.exists():
+            die(f"missing {src.relative_to(ROOT)} (tools/import_art.py)")
+        w, h, rows = read_png(src)
+        if (w, h) != (64, 64):
+            die(f"{src.name}: {w}x{h}, expected 64x64")
+        bank = FIRST_BANK + i // PER_BANK
+        name_tx = tx.get("TX_NAME_" + e["pinyin"].upper())
+        if name_tx is None:
+            die(f"no TX_NAME_{e['pinyin'].upper()} in content/text/ui_zh.json")
+        files.setdefault(bank, []).append(f"/* P{i + 1:04d} {e['name']} */\nconst uint8_t portrait_{i}_tiles[1024] = {{"
+                                          + ", ".join(map(str, tiles_of(rows, src.name))) + "};")
+        refs.append((bank, i, name_tx))
+    for old in (ROOT / "src/gen").glob("portrait_b*.c"):
+        old.unlink()
+    for bank, items in files.items():
+        lines = [f"#pragma bank {bank}   /* portrait tiles: read only through the rom.c gateway */", '#include "portrait_data.h"'] + items
+        if bank == FIRST_BANK:
+            lines += [f"extern const uint8_t portrait_{i}_tiles[1024];" for b, i, _ in refs]
+            lines.append("const PortraitRef portrait_refs[PORTRAIT_COUNT] = {"
+                         + ", ".join(f"{{{b}, portrait_{i}_tiles, {n}}}" for b, i, n in refs) + "};")
+            pal = [rgb555(c) for c in (PAPER, LIGHT, MID, INK)]
+            lines.append("const uint16_t portrait_pal[4] = {" + ", ".join(map(str, pal)) + "};")
+        (ROOT / f"src/gen/portrait_b{bank}.c").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    for old in ("portrait_data.c", "portrait_index.c"):
+        if (ROOT / "src/gen" / old).exists():
+            (ROOT / "src/gen" / old).unlink()
     h_ = ["/* GENERATED by tools/gen_portraits.py - do not edit */", "#ifndef PORTRAIT_DATA_H", "#define PORTRAIT_DATA_H",
-          "#include <stdint.h>", f"#define PORTRAIT_BANK {BANK}u", "#define PORTRAIT_COUNT 8u", f"#define PORTRAIT_MAX_PALS {MAX_PALS}u",
+          "#include <stdint.h>", f"#define PORTRAIT_REF_BANK {FIRST_BANK}u", f"#define PORTRAIT_COUNT {len(reg)}u",
           "#define PORTRAIT_NARRATOR 0xFFu",
-          "/* 0 P0001 刘备, 1 P0002 关羽, 2 P0003 张飞, 3 P0004 诸葛亮, 4 P0005 赵云, 5 P0006 曹操, 6 P0007 周瑜, 7 P0008 司马懿 */",
-          "extern const uint8_t *const portrait_tiles[PORTRAIT_COUNT];", "extern const uint8_t *const portrait_attr[PORTRAIT_COUNT];",
-          "extern const uint16_t *const portrait_pal[PORTRAIT_COUNT];", "extern const uint8_t portrait_npal[PORTRAIT_COUNT];", "#endif"]
+          "/* order: content/portraits.json (P0001 刘备 .. P0008 司马懿 first, then by pinyin) */",
+          "typedef struct { uint8_t bank; const uint8_t *tiles; uint16_t name_tx; } PortraitRef;",
+          "extern const PortraitRef portrait_refs[PORTRAIT_COUNT];   /* in PORTRAIT_REF_BANK */",
+          "extern const uint16_t portrait_pal[4];                    /* in PORTRAIT_REF_BANK: paper light mid ink */",
+          "#endif"]
     (ROOT / "src/gen/portrait_data.h").write_text("\n".join(h_) + "\n", encoding="utf-8")
-    (ROOT / "src/gen/portrait_data.c").write_text("\n".join(c) + "\n", encoding="utf-8")
-    (ROOT / "src/gen/portrait_index.c").write_text("\n".join(ci) + "\n", encoding="utf-8")
-    print(f"gen_portraits: 8 portraits, palettes per portrait {npal}")
+    print(f"gen_portraits: {len(reg)} portraits in banks {sorted(files)}")
 
 
 if __name__ == "__main__":

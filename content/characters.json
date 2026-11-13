@@ -23,49 +23,49 @@
    "id": 8,
    "tag": "CH_JIANYONG",
    "name": "TX_NAME_JIANYONG",
-   "portrait": null
+   "portrait": 36
   },
   {
    "id": 10,
    "tag": "CH_CHENGYUANZHI",
    "name": "TX_NAME_CHENGYUANZHI",
-   "portrait": null
+   "portrait": 16
   },
   {
    "id": 11,
    "tag": "CH_DENGMAO",
    "name": "TX_NAME_DENGMAO",
-   "portrait": null
+   "portrait": 20
   },
   {
    "id": 12,
    "tag": "CH_GONGJING",
    "name": "TX_NAME_GONGJING",
-   "portrait": null
+   "portrait": 26
   },
   {
    "id": 13,
    "tag": "CH_ZHANGBAO",
    "name": "TX_NAME_ZHANGBAO",
-   "portrait": null
+   "portrait": 75
   },
   {
    "id": 14,
    "tag": "CH_HUAXIONG",
    "name": "TX_NAME_HUAXIONG",
-   "portrait": null
+   "portrait": 35
   },
   {
    "id": 15,
    "tag": "CH_LVBU",
    "name": "TX_NAME_LVBU",
-   "portrait": null
+   "portrait": 48
   },
   {
    "id": 16,
    "tag": "CH_GONGSUNZAN",
    "name": "TX_NAME_GONGSUNZAN",
-   "portrait": null
+   "portrait": 27
   },
   {
    "id": 17,
@@ -77,55 +77,55 @@
    "id": 18,
    "tag": "CH_KONGRONG",
    "name": "TX_NAME_KONGRONG",
-   "portrait": null
+   "portrait": 39
   },
   {
    "id": 19,
    "tag": "CH_GUANHAI",
    "name": "TX_NAME_GUANHAI",
-   "portrait": null
+   "portrait": 29
   },
   {
    "id": 20,
    "tag": "CH_TAISHICI",
    "name": "TX_NAME_TAISHICI",
-   "portrait": null
+   "portrait": 59
   },
   {
    "id": 21,
    "tag": "CH_TAOQIAN",
    "name": "TX_NAME_TAOQIAN",
-   "portrait": null
+   "portrait": 60
   },
   {
    "id": 22,
    "tag": "CH_JILING",
    "name": "TX_NAME_JILING",
-   "portrait": null
+   "portrait": 37
   },
   {
    "id": 23,
    "tag": "CH_XUNZHENG",
    "name": "TX_NAME_XUNZHENG",
-   "portrait": null
+   "portrait": 70
   },
   {
    "id": 24,
    "tag": "CH_CHENGONG",
    "name": "TX_NAME_CHENGONG",
-   "portrait": null
+   "portrait": 15
   },
   {
    "id": 25,
    "tag": "CH_GAOSHUN",
    "name": "TX_NAME_GAOSHUN",
-   "portrait": null
+   "portrait": 24
   },
   {
    "id": 26,
    "tag": "CH_ZHANGLIAO",
    "name": "TX_NAME_ZHANGLIAO",
-   "portrait": null
+   "portrait": 77
   },
   {
    "id": 27,
@@ -137,103 +137,103 @@
    "id": 28,
    "tag": "CH_GANFUREN",
    "name": "TX_NAME_GANFUREN",
-   "portrait": null
+   "portrait": 22
   },
   {
    "id": 29,
    "tag": "CH_MIFUREN",
    "name": "TX_NAME_MIFUREN",
-   "portrait": null
+   "portrait": 53
   },
   {
    "id": 30,
    "tag": "CH_WENCHOU",
    "name": "TX_NAME_WENCHOU",
-   "portrait": null
+   "portrait": 63
   },
   {
    "id": 31,
    "tag": "CH_CAOBAO",
    "name": "TX_NAME_CAOBAO",
-   "portrait": null
+   "portrait": 11
   },
   {
    "id": 32,
    "tag": "CH_YUJIN",
    "name": "TX_NAME_YUJIN",
-   "portrait": null
+   "portrait": 74
   },
   {
    "id": 33,
    "tag": "CH_CHEZHOU",
    "name": "TX_NAME_CHEZHOU",
-   "portrait": null
+   "portrait": 19
   },
   {
    "id": 34,
    "tag": "CH_LIUDAI",
    "name": "TX_NAME_LIUDAI",
-   "portrait": null
+   "portrait": 42
   },
   {
    "id": 35,
    "tag": "CH_WANGZHONG",
    "name": "TX_NAME_WANGZHONG",
-   "portrait": null
+   "portrait": 61
   },
   {
    "id": 36,
    "tag": "CH_CAIYANG",
    "name": "TX_NAME_CAIYANG",
-   "portrait": null
+   "portrait": 10
   },
   {
    "id": 39,
    "tag": "CH_LIUPI",
    "name": "TX_NAME_LIUPI",
-   "portrait": null
+   "portrait": 44
   },
   {
    "id": 40,
    "tag": "CH_GONGDU",
    "name": "TX_NAME_GONGDU",
-   "portrait": null
+   "portrait": 25
   },
   {
    "id": 41,
    "tag": "CH_ZHANGWU",
    "name": "TX_NAME_ZHANGWU",
-   "portrait": null
+   "portrait": 79
   },
   {
    "id": 42,
    "tag": "CH_CHENSUN",
    "name": "TX_NAME_CHENSUN",
-   "portrait": null
+   "portrait": 17
   },
   {
    "id": 43,
    "tag": "CH_CAIMAO",
    "name": "TX_NAME_CAIMAO",
-   "portrait": null
+   "portrait": 9
   },
   {
    "id": 44,
    "tag": "CH_XUSHU",
    "name": "TX_NAME_XUSHU",
-   "portrait": null
+   "portrait": 71
   },
   {
    "id": 45,
    "tag": "CH_CAOREN",
    "name": "TX_NAME_CAOREN",
-   "portrait": null
+   "portrait": 14
   },
   {
    "id": 46,
    "tag": "CH_LIDIAN",
    "name": "TX_NAME_LIDIAN",
-   "portrait": null
+   "portrait": 40
   },
   {
    "id": 47,
@@ -245,7 +245,7 @@
    "id": 48,
    "tag": "CH_XIAHOUDUN",
    "name": "TX_NAME_XIAHOUDUN",
-   "portrait": null
+   "portrait": 66
   }
  ]
 }

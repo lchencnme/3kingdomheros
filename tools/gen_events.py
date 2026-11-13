@@ -16,7 +16,8 @@ TRIG = {"BATTLE_START": 0, "PHASE_START": 1, "POST_MOVE": 2, "PRE_ACTION": 3, "U
         "ROUND_END": 5, "PHASE_END": 6, "BATTLE_END": 7, "TALK": 8}
 PHASE = {"PLAYER": 0, "ALLY": 1, "ENEMY": 2}
 CMP = {"eq": 0, "ne": 1, "lt": 2, "le": 3, "gt": 4, "ge": 5}
-SPEAKER = {f"P{i + 1:04d}": i for i in range(8)} | {"NARRATOR": 0xFF}
+_PORTRAITS = [e["pinyin"] for e in json.loads((ROOT / "content/portraits.json").read_text(encoding="utf-8"))["portraits"]]
+SPEAKER = {f"P{i + 1:04d}": i for i in range(len(_PORTRAITS))} | {p: i for i, p in enumerate(_PORTRAITS)} | {"NARRATOR": 0xFF}
 FACTION = {"PLAYER": 0, "ALLY": 1, "ENEMY": 2}
 
 

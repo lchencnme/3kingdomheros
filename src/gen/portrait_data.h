@@ -2,13 +2,11 @@
 #ifndef PORTRAIT_DATA_H
 #define PORTRAIT_DATA_H
 #include <stdint.h>
-#define PORTRAIT_BANK 9u
-#define PORTRAIT_COUNT 8u
-#define PORTRAIT_MAX_PALS 5u
+#define PORTRAIT_REF_BANK 19u
+#define PORTRAIT_COUNT 82u
 #define PORTRAIT_NARRATOR 0xFFu
-/* 0 P0001 刘备, 1 P0002 关羽, 2 P0003 张飞, 3 P0004 诸葛亮, 4 P0005 赵云, 5 P0006 曹操, 6 P0007 周瑜, 7 P0008 司马懿 */
-extern const uint8_t *const portrait_tiles[PORTRAIT_COUNT];
-extern const uint8_t *const portrait_attr[PORTRAIT_COUNT];
-extern const uint16_t *const portrait_pal[PORTRAIT_COUNT];
-extern const uint8_t portrait_npal[PORTRAIT_COUNT];
+/* order: content/portraits.json (P0001 刘备 .. P0008 司马懿 first, then by pinyin) */
+typedef struct { uint8_t bank; const uint8_t *tiles; uint16_t name_tx; } PortraitRef;
+extern const PortraitRef portrait_refs[PORTRAIT_COUNT];   /* in PORTRAIT_REF_BANK */
+extern const uint16_t portrait_pal[4];                    /* in PORTRAIT_REF_BANK: paper light mid ink */
 #endif

@@ -38,13 +38,12 @@ static void put_text_map(void)
     }
 }
 
-/* portrait attrs/palettes are staged in WRAM bank5 (free in dialogue mode), not on the stack */
-#define W5_PATTR ((uint8_t *)0xD000u)
-#define W5_PPAL ((uint16_t *)0xD040u)
 
 static void show_portrait(uint8_t sp)
 {
-    uint8_t r, c, ids[8], at[8], o = SVBK_REG;
+    uint8_t r, c, ids[8], at[8];
+    PortraitRef ref;
+    uint16_t pal[4];
     if (sp >= PORTRAIT_COUNT) {
         for (r = 1; r < 9; r++) {
             for (c = 0; c < 8; c++) { ids[c] = 0; at[c] = TEXT_PAL; }
@@ -53,19 +52,22 @@ static void show_portrait(uint8_t sp)
         }
         return;
     }
-    rom_set_bkg_data(PORTRAIT_BANK, 1, 64, portrait_tiles[sp]);
-    SVBK_REG = 5;
-    rom_copy(PORTRAIT_BANK, W5_PATTR, portrait_attr[sp], 64);
-    rom_copy(PORTRAIT_BANK, W5_PPAL, portrait_pal[sp], PORTRAIT_MAX_PALS * 8u);
-    set_bkg_palette(0, PORTRAIT_MAX_PALS, W5_PPAL);
-    SVBK_REG = o;
+    rom_copy(PORTRAIT_REF_BANK, &ref, &portrait_refs[sp], sizeof ref);   /* 82 portraits over banks 19.. */
+    rom_set_bkg_data(ref.bank, 1, 64, ref.tiles);
+    rom_copy(PORTRAIT_REF_BANK, pal, portrait_pal, sizeof pal);
+    set_bkg_palette(0, 1, pal);                                        /* one 4-tone palette (绣像) */
     for (r = 0; r < 8; r++) {
-        SVBK_REG = 5;
-        for (c = 0; c < 8; c++) { ids[c] = (uint8_t)(1u + r * 8u + c); at[c] = W5_PATTR[r * 8u + c]; }
-        SVBK_REG = o;
+        for (c = 0; c < 8; c++) { ids[c] = (uint8_t)(1u + r * 8u + c); at[c] = 0; }
         VBK_REG = 1; set_bkg_tiles(1, (uint8_t)(1u + r), 8, 1, at);
         VBK_REG = 0; set_bkg_tiles(1, (uint8_t)(1u + r), 8, 1, ids);
     }
+}
+
+static uint16_t portrait_name(uint8_t sp)
+{
+    PortraitRef ref;
+    rom_copy(PORTRAIT_REF_BANK, &ref, &portrait_refs[sp], sizeof ref);
+    return ref.name_tx;
 }
 
 /* raster the 3 text lines; LCD off: direct copy, LCD on: GDMA in VBlank (design doc 12.3) */
@@ -101,7 +103,7 @@ uint8_t dialog_run_from(uint8_t i) BANKED
         for (;;) {
             uint8_t more;
             hud_begin();
-            if (sp < PORTRAIT_COUNT) hud_tx_list(2, (uint16_t)TX_PNAME_0, 0, sp);   /* name list */
+            if (sp < PORTRAIT_COUNT) hud_tx(2, portrait_name(sp), 0);          /* the portrait's character name */
             more = hud_tx_page(q->text[i], page);
             if (first || sp != last_sp) {
                 /* new speaker: paper, LCD off, reload portrait + text (no tearing, design doc 12.5) */

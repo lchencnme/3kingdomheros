@@ -1,0 +1,333 @@
+{
+ "_comment": "画像登记（设计文档 13.2、9.6）：序号 = 画像 ID（前 8 个是 P0001–P0008，不改顺序）。源图 art_src/grok/<pinyin>_bust.png，经 tools/import_art.py 转成 art_src/v05/。剧本里的说话人写 P000n 或拼音。",
+ "portraits": [
+  {
+   "pinyin": "liubei",
+   "name": "刘备"
+  },
+  {
+   "pinyin": "guanyu",
+   "name": "关羽"
+  },
+  {
+   "pinyin": "zhangfei",
+   "name": "张飞"
+  },
+  {
+   "pinyin": "zhugeliang",
+   "name": "诸葛亮"
+  },
+  {
+   "pinyin": "zhaoyun",
+   "name": "赵云"
+  },
+  {
+   "pinyin": "caocao",
+   "name": "曹操"
+  },
+  {
+   "pinyin": "zhouyu",
+   "name": "周瑜"
+  },
+  {
+   "pinyin": "simayi",
+   "name": "司马懿"
+  },
+  {
+   "pinyin": "baolong",
+   "name": "鲍隆"
+  },
+  {
+   "pinyin": "caimao",
+   "name": "蔡瑁"
+  },
+  {
+   "pinyin": "caiyang",
+   "name": "蔡阳"
+  },
+  {
+   "pinyin": "caobao",
+   "name": "曹豹"
+  },
+  {
+   "pinyin": "caochun",
+   "name": "曹纯"
+  },
+  {
+   "pinyin": "caopi",
+   "name": "曹丕"
+  },
+  {
+   "pinyin": "caoren",
+   "name": "曹仁"
+  },
+  {
+   "pinyin": "chengong",
+   "name": "陈宫"
+  },
+  {
+   "pinyin": "chengyuanzhi",
+   "name": "程远志"
+  },
+  {
+   "pinyin": "chensun",
+   "name": "陈孙"
+  },
+  {
+   "pinyin": "chenying",
+   "name": "陈应"
+  },
+  {
+   "pinyin": "chezhou",
+   "name": "车胄"
+  },
+  {
+   "pinyin": "dengmao",
+   "name": "邓茂"
+  },
+  {
+   "pinyin": "fazheng",
+   "name": "法正"
+  },
+  {
+   "pinyin": "ganfuren",
+   "name": "甘夫人"
+  },
+  {
+   "pinyin": "gaopei",
+   "name": "高沛"
+  },
+  {
+   "pinyin": "gaoshun",
+   "name": "高顺"
+  },
+  {
+   "pinyin": "gongdu",
+   "name": "龚都"
+  },
+  {
+   "pinyin": "gongjing",
+   "name": "龚景"
+  },
+  {
+   "pinyin": "gongsunzan",
+   "name": "公孙瓒"
+  },
+  {
+   "pinyin": "gongzhi",
+   "name": "巩志"
+  },
+  {
+   "pinyin": "guanhai",
+   "name": "管亥"
+  },
+  {
+   "pinyin": "guanping",
+   "name": "关平"
+  },
+  {
+   "pinyin": "hanxuan",
+   "name": "韩玄"
+  },
+  {
+   "pinyin": "huanggai",
+   "name": "黄盖"
+  },
+  {
+   "pinyin": "huangquan",
+   "name": "黄权"
+  },
+  {
+   "pinyin": "huangzhong",
+   "name": "黄忠"
+  },
+  {
+   "pinyin": "huaxiong",
+   "name": "华雄"
+  },
+  {
+   "pinyin": "jianyong",
+   "name": "简雍"
+  },
+  {
+   "pinyin": "jiling",
+   "name": "纪灵"
+  },
+  {
+   "pinyin": "jinxuan",
+   "name": "金旋"
+  },
+  {
+   "pinyin": "kongrong",
+   "name": "孔融"
+  },
+  {
+   "pinyin": "lidian",
+   "name": "李典"
+  },
+  {
+   "pinyin": "lihui",
+   "name": "李恢"
+  },
+  {
+   "pinyin": "liudai",
+   "name": "刘岱"
+  },
+  {
+   "pinyin": "liudu",
+   "name": "刘度"
+  },
+  {
+   "pinyin": "liupi",
+   "name": "刘辟"
+  },
+  {
+   "pinyin": "liuzhang",
+   "name": "刘璋"
+  },
+  {
+   "pinyin": "lusu",
+   "name": "鲁肃"
+  },
+  {
+   "pinyin": "luxun",
+   "name": "陆逊"
+  },
+  {
+   "pinyin": "lvbu",
+   "name": "吕布"
+  },
+  {
+   "pinyin": "lvmeng",
+   "name": "吕蒙"
+  },
+  {
+   "pinyin": "machao",
+   "name": "马超"
+  },
+  {
+   "pinyin": "madai",
+   "name": "马岱"
+  },
+  {
+   "pinyin": "maliang",
+   "name": "马良"
+  },
+  {
+   "pinyin": "mifuren",
+   "name": "糜夫人"
+  },
+  {
+   "pinyin": "mizhu",
+   "name": "糜竺"
+  },
+  {
+   "pinyin": "pangde",
+   "name": "庞德"
+  },
+  {
+   "pinyin": "pangtong",
+   "name": "庞统"
+  },
+  {
+   "pinyin": "sunqian",
+   "name": "孙乾"
+  },
+  {
+   "pinyin": "sunquan",
+   "name": "孙权"
+  },
+  {
+   "pinyin": "taishici",
+   "name": "太史慈"
+  },
+  {
+   "pinyin": "taoqian",
+   "name": "陶谦"
+  },
+  {
+   "pinyin": "wangzhong",
+   "name": "王忠"
+  },
+  {
+   "pinyin": "weiyan",
+   "name": "魏延"
+  },
+  {
+   "pinyin": "wenchou",
+   "name": "文丑"
+  },
+  {
+   "pinyin": "wenpin",
+   "name": "文聘"
+  },
+  {
+   "pinyin": "xiahoude",
+   "name": "夏侯德"
+  },
+  {
+   "pinyin": "xiahoudun",
+   "name": "夏侯惇"
+  },
+  {
+   "pinyin": "xiahouyuan",
+   "name": "夏侯渊"
+  },
+  {
+   "pinyin": "xingdaorong",
+   "name": "邢道荣"
+  },
+  {
+   "pinyin": "xuhuang",
+   "name": "徐晃"
+  },
+  {
+   "pinyin": "xunzheng",
+   "name": "荀正"
+  },
+  {
+   "pinyin": "xushu",
+   "name": "徐庶"
+  },
+  {
+   "pinyin": "yanghuai",
+   "name": "杨怀"
+  },
+  {
+   "pinyin": "yanyan",
+   "name": "严颜"
+  },
+  {
+   "pinyin": "yujin",
+   "name": "于禁"
+  },
+  {
+   "pinyin": "zhangbao",
+   "name": "张宝"
+  },
+  {
+   "pinyin": "zhanghe",
+   "name": "张郃"
+  },
+  {
+   "pinyin": "zhangliao",
+   "name": "张辽"
+  },
+  {
+   "pinyin": "zhangren",
+   "name": "张任"
+  },
+  {
+   "pinyin": "zhangwu",
+   "name": "张武"
+  },
+  {
+   "pinyin": "zhaofan",
+   "name": "赵范"
+  },
+  {
+   "pinyin": "zhoucang",
+   "name": "周仓"
+  }
+ ]
+}

@@ -21,8 +21,8 @@ PW, PH = 160, 104        # scene plate: 20 x 13 tiles
 PAPER, INK = (232, 220, 184), (48, 40, 32)
 PALS = [
     [PAPER, (200, 188, 156), (120, 104, 84), INK],     # 0 plate (only 0/3 used) and HUD text
-    [PAPER, (48, 80, 160), (224, 176, 128), INK],      # 1 player actor: blue, skin
-    [PAPER, (160, 48, 32), (224, 176, 128), INK],      # 2 enemy actor: red, skin
+    [PAPER, (172, 192, 230), (52, 62, 100), INK],      # 1 player actor: blue wash, dark mid, ink (绣像)
+    [PAPER, (236, 182, 164), (104, 46, 34), INK],      # 2 enemy actor: red wash, dark mid, ink
     [PAPER, (176, 64, 48), (138, 128, 112), INK],      # 3 spare
 ]
 
@@ -213,7 +213,29 @@ def horse(c, pose):
         c.line(hx - 5, 36, hx - 13, 4, 3, 2); c.line(hx - 13, 4, hx - 11, 9, 3, 1)
 
 
-BODIES = [("foot", lambda c, p: foot(c, p)), ("bow", bow), ("horse", horse)]
+V05 = ROOT / "art_src" / "v05"
+_TONE = {(232, 220, 184): 1, (176, 164, 136): 1, (104, 92, 76): 2, (32, 26, 20): 3, (255, 0, 255): 0}
+
+
+def from_master(body, fallback):
+    """delivered line art (art_src/v05/actor_<body>_<pose>.png, 48x64, from tools/import_art.py): paper inside
+    the figure becomes the team wash (1), mid (2), ink (3); transparent stays 0. Falls back to the drawn actor."""
+    def draw(c, pose):
+        src = V05 / f"actor_{body}_{pose}.png"
+        if not src.exists():
+            return fallback(c, pose)
+        import runpy
+        w, h, rows = runpy.run_path(str(ROOT / "tools/gen_portraits.py"), run_name="gen_actors")["read_png"](src)
+        if (w, h) != (AW, AH):
+            raise SystemExit(f"gen_actors: {src.name} is {w}x{h}, expected {AW}x{AH}")
+        for y in range(AH):
+            for x in range(AW):
+                c.px[y][x] = _TONE[tuple(rows[y][x * 3:x * 3 + 3])]
+    return draw
+
+
+BODIES = [("foot", from_master("foot", lambda c, p: foot(c, p))), ("bow", from_master("bow", bow)),
+          ("horse", from_master("horse", horse))]
 POSES = ["idle", "windup", "strike", "hit"]
 
 

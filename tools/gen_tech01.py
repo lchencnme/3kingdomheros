@@ -15,11 +15,12 @@ W, H = 32, 24
 
 # ---------------- palettes (RGB888 -> RGB555) ----------------
 PAPER, INK = (232, 220, 184), (48, 40, 32)
+# 绣像 woodcut map (art_src/v05 from the delivered line art): paper and ink with a faint tint per terrain group
 BG_PALS = [
-    [PAPER, (168, 192, 128), (192, 144, 80), INK],    # 0 ground: plain/road
-    [PAPER, (112, 160, 96), (138, 106, 64), INK],     # 1 nature: forest/hill
-    [PAPER, (144, 184, 208), (72, 120, 168), INK],    # 2 water: shallow/deep/bridge
-    [PAPER, (176, 64, 48), (138, 128, 112), INK],     # 3 buildings: village/fort/wall
+    [PAPER, (200, 190, 156), (128, 116, 92), INK],    # 0 ground: plain/road
+    [PAPER, (180, 188, 150), (98, 106, 78), INK],     # 1 nature: forest/hill
+    [PAPER, (178, 192, 196), (92, 110, 124), INK],    # 2 water: shallow/deep/bridge
+    [PAPER, (196, 180, 158), (120, 100, 86), INK],    # 3 buildings: village/fort/wall
 ]
 
 
@@ -29,10 +30,10 @@ def tint(c):  # move-range highlight: shift toward stone-blue
 
 # design doc 12.2 (v2): 4 player unit, 5 enemy unit, 6 shared move-range tint, 7 acted unit (gray)
 BG_PALS += [
-    [PAPER, (48, 80, 160), (224, 176, 128), INK],                     # 4 player unit
-    [PAPER, (160, 48, 32), (224, 176, 128), INK],                     # 5 enemy unit
-    [tint(PAPER), tint((168, 192, 128)), tint((120, 120, 110)), INK], # 6 highlight (any terrain)
-    [PAPER, (120, 120, 128), (190, 180, 168), INK],                   # 7 acted unit
+    [PAPER, (164, 186, 226), (64, 92, 150), INK],                     # 4 player unit: blue wash
+    [PAPER, (232, 170, 150), (152, 60, 44), INK],                     # 5 enemy unit: red wash
+    [tint(PAPER), tint((200, 190, 156)), tint((120, 116, 100)), INK], # 6 highlight (any terrain)
+    [PAPER, (186, 186, 186), (112, 112, 112), INK],                   # 7 acted unit: grey
 ]
 OBJ_PALS = [
     [PAPER, (48, 80, 160), (224, 176, 128), INK],      # 0 player
@@ -213,6 +214,59 @@ for k, v in UNIT24.items():
 ORDER = ["sword", "spear", "heavy", "bow", "horse", "armour", "robe", "mystic", "flag", "ranger", "civilian"]
 CLASS_BODY = {0: "sword", 1: "spear", 2: "heavy", 3: "bow", 4: "bow", 5: "bow", 6: "horse", 7: "armour", 8: "armour",
               9: "robe", 10: "robe", 11: "robe", 12: "flag", 13: "flag", 14: "ranger", 15: "ranger", 16: "mystic", 17: "civilian"}
+
+
+V05 = ROOT / "art_src" / "v05"
+TONE = {(232, 220, 184): ".", (176, 164, 136): ":", (104, 92, 76): "+", (32, 26, 20): "#", (255, 0, 255): "."}
+
+
+def master(name):
+    """a 4-tone master from art_src/v05 (tools/import_art.py) as rows of '.:+#' ('.' also = transparent)"""
+    import runpy
+    w, h, rows = runpy.run_path(str(ROOT / "tools/gen_portraits.py"), run_name="gen_tech01")["read_png"](V05 / name)
+    return ["".join(TONE[tuple(r[x * 3:x * 3 + 3])] for x in range(w)) for r in rows]
+
+
+# terrain from the delivered art where a 16x16 cell works (textures and compact objects); road, village,
+# fort floor and bridge stay hand-cut so they connect and repeat cleanly
+for _tid, _name in ((2, "terrain_forest.png"), (5, "terrain_cliff.png")):
+    if (V05 / _name).exists():
+        ART[_tid] = grid16(master(_name))
+# repeating ground and water are cut by hand in the same woodcut manner: they cover whole fields, so they
+# must stay sparse and regular (the delivered textures turn to noise at 16 px)
+ART[0] = grid16([  # plain: paper with two small grass tufts
+    "................", "................", "...+.+..........", "....+...........", "...:+:..........",
+    "................", "................", "................", "................", "...........+.+..",
+    "............+...", "...........:+:..", "................", "................", "................",
+    "................"])
+ART[6] = grid16([  # shallow: light water with sparse ripple arcs
+    "::::::::::::::::", "::::::::::::::::", "::++++::::::::::", ":+::::+:::::::::", "::::::::::::::::",
+    "::::::::::::::::", "::::::::::++++::", ":::::::::+::::+:", "::::::::::::::::", "::::::::::::::::",
+    "::::::::::::::::", ":::++++:::::::::", "::+::::+::::::::", "::::::::::::::::", "::::::::::::::::",
+    "::::::::::::::::"])
+ART[7] = grid16([  # deep: scalloped wave rows (woodcut 海水纹)
+    "::####::::####::", ":#::::#::#::::#:", "#::::::##::::::#", "::::::::::::::::", "####::::####::::",
+    "::::#::#::::#::#", ":::::##::::::##:", "::::::::::::::::", "::####::::####::", ":#::::#::#::::#:",
+    "#::::::##::::::#", "::::::::::::::::", "####::::####::::", "::::#::#::::#::#", ":::::##::::::##:",
+    "::::::::::::::::"])
+ART[8] = grid16([  # wall: ink battlements on top, light coursed stone below (woodcut 城墙)
+    "##..##..##..##..", "##..##..##..##..", "################", "+::+::::+::::+::", "++++++++++++++++",
+    ":::+::::+::::+::", "++++++++++++++++", "+::+::::+::::+::", "++++++++++++++++", ":::+::::+::::+::",
+    "++++++++++++++++", "+::+::::+::::+::", "++++++++++++++++", ":::+::::+::::+::", "++++++++++++++++",
+    "+::+::::+::::+::"])
+ART[4] = grid16([  # fort courtyard: paper with faint paving joints
+    "................", "................", "......:.........", "................", "...:............",
+    ":::::::.::::::::", "................", "..........:.....", "................", "................",
+    "................", "::::.:::::::.:::", "................", "................", "......:.........",
+    "................"])
+# map units: the delivered chibi soldiers (16x21 + 3 clear rows for the foot mark)
+_UNIT_FILES = {"sword": "unit_sword.png", "spear": "unit_spear.png", "heavy": "unit_heavy.png", "bow": "unit_bow.png",
+               "horse": "unit_horse.png", "armour": "unit_armour.png", "robe": "unit_strategist.png",
+               "mystic": "unit_mystic.png", "flag": "unit_drummer.png", "ranger": "unit_ranger.png",
+               "civilian": "unit_civilian.png"}
+for _k, _f in _UNIT_FILES.items():
+    if (V05 / _f).exists():
+        UNIT24[_k] = master(_f)
 
 
 def tile_bytes(rows8):
