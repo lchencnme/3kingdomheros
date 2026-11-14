@@ -980,6 +980,7 @@ def main():
           "/* flow.c (bank 14) accessors for code in other banks */",
           "uint8_t bd_treasure(uint8_t i, uint8_t *xyi) BANKED;            /* current battle: x, y, item */",
           "void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced) BANKED;",
+          "uint16_t bd_title(uint8_t bt) BANKED;                           /* TX of the battle title, 0 = none */",
           "uint8_t join_officer(uint8_t joiner) BANKED;                    /* flow.c: OP_JOIN / camp join */",
           "uint16_t char_name_tx(uint16_t character) BANKED;               /* main.c: TX name or 0 */",
           "#endif", "#endif"]

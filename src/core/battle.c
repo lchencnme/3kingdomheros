@@ -137,6 +137,10 @@ static uint8_t give_xp(uint8_t i, ActiveUnit *u, uint16_t xp)
         derive_into(i, u);
         u->hp = rules_keep_deficit(old_mhp, u->hp, u->max_hp, 1);
         u->mp = rules_keep_deficit(old_mmp, u->mp, u->max_mp, 0);
+#if LEVELUP_HEAL_PCT
+        u->hp = (uint16_t)(u->hp + rules_percent_ceil(u->max_hp, LEVELUP_HEAL_PCT));   /* experiment only */
+        if (u->hp > u->max_hp) u->hp = u->max_hp;
+#endif
     }
     (void)old_level;
     return ups;

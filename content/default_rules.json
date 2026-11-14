@@ -2,7 +2,7 @@
   "profile": "DEFAULT_D1",
   "revision": 2,
   "origin_claim": "original_design",
-  "level_max": 99, "morale_max": 100, "hp_max": 9999, "mp_max": 999,
+  "level_max": 99, "levelup_heal_percent": 0, "morale_max": 100, "hp_max": 9999, "mp_max": 999,
   "promotion_levels": [12, 24],
   "item_scroll_MAG": 60,
   "families": ["infantry", "bow", "cavalry", "strategist", "support", "ranger", "mystic", "civilian"],

@@ -34,7 +34,7 @@ def check(name, cond, detail=""):
 
 
 class Emu:
-    def __init__(self, ram=None, sound=False, auto_dialog=True):
+    def __init__(self, ram=None, sound=False, auto_dialog=True, title=False):
         import io
         kw = {"ram_file": io.BytesIO(ram)} if ram is not None else {}
         self.pb = PyBoy(str(ROM), window="null", cgb=True, sound_emulated=sound, **kw)
@@ -49,6 +49,16 @@ class Emu:
         while self.m[SYMS["_dbg_frame_lo"]] == 0 and n < 200:
             self.frames(1)
             n += 1
+        if ram is None and title is False:           # the game opens on the cover: A starts a new game
+            for _ in range(200):
+                if self.state() == G_TITLE:
+                    break
+                self.frames(1)
+            self.press("a", after=8)
+            for _ in range(600):
+                if self.state() != G_TITLE:
+                    break
+                self.frames(1)
 
     def frames(self, n):
         for _ in range(n):
@@ -1228,6 +1238,25 @@ for _ in range(2):                                       # T-SAVE-02: reading th
     c2.pb.stop(save=False)
 cs.pb.stop(save=False)
 
+# ------------------------------------------------------------------ the cover (title screen) and the rules pages
+tt = Emu(title=True)
+tt.wait_state([G_TITLE], 300)
+tt.frames(40); tt.png(ROM.parent / "shot_cover.png")
+check("the game opens on the cover", tt.state() == G_TITLE)
+pg0 = tt.r8("_dbg_dialog_pages")
+tt.press("b", after=8)
+for _ in range(3000):
+    if tt.r8("_dbg_dialog_active") == 0 and tt.r8("_dbg_dialog_pages") != pg0 and tt.state() == G_TITLE:
+        break
+    tt.frames(1)
+tt.frames(30)
+check(f"B on the cover: the rules pages, then the cover again ({tt.r8('_dbg_dialog_pages') - pg0} pages)",
+      tt.state() == G_TITLE and tt.r8("_dbg_dialog_pages") - pg0 >= 6)
+tt.press("a", after=8); tt.wait_state([G_IDLE], 900); tt.frames(40)
+check(f"A on the cover: a new game, the map is drawn (battle {tt.r8('_dbg_battle')})",
+      tt.state() == G_IDLE and tt.r8("_dbg_battle") == 0 and view_mismatches(tt) == 0)
+tt.pb.stop(save=False)
+
 # ------------------------------------------------------------------ T-UI-01/02 confirmations, T-UI-06 level-up panel
 q = Emu()
 q.wait_state([G_IDLE]); q.frames(30)
@@ -1294,7 +1323,7 @@ saved = dict(units=[s.unit(i) for i in range(N_UNITS)], hp=[s.hp(i) for i in ran
 ram = s.power_off()
 c = Emu(ram)
 c.wait_state([G_TITLE], 200)
-check("cold boot finds the suspend save (continue prompt)", c.state() == G_TITLE)
+check("cold boot finds the suspend save (the cover offers 继续)", c.state() == G_TITLE and c.m[SYMS["_title_opts"]] & 1)
 c.press("start")
 c.wait_state([G_IDLE], 400)                                # probing every slot copy takes ~100 frames
 got = dict(units=[c.unit(i) for i in range(N_UNITS)], hp=[c.hp(i) for i in range(N_UNITS)],
@@ -1318,7 +1347,9 @@ while f.state() != G_OUTCOME and f.fc < 40000:
 ram2 = f.power_off()
 g = Emu(ram2)
 g.frames(60)
-check("suspend invalidated after the battle ended", g.state() != G_TITLE)
+g.wait_state([G_TITLE], 200)
+check(f"suspend invalidated after the battle ended: the cover offers no 继续 (options {g.m[SYMS['_title_opts']]})",
+      g.state() == G_TITLE and not g.m[SYMS["_title_opts"]] & 1)
 g.pb.stop(save=False)
 
 ok = sum(1 for _, c, _ in results if c)

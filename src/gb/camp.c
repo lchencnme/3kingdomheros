@@ -102,7 +102,10 @@ static void compose(uint8_t k)
     hud_begin();
     switch (C->screen) {
     case SC_MAIN:
-        if (k == 0) { hud_tx(0, TX_CAMP_TITLE, 0); hud_space(0); hud_space(0); hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold); }
+        if (k == 0) {                                      /* T-SAVE-03: the battle ahead, the gold */
+            uint16_t bt = bd_title(C->next);
+            hud_tx(0, bt ? bt : TX_CAMP_TITLE, 0); hud_space(0); hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold);
+        }
         else if (k >= 1 && k <= N_CMD) {
             arrow(C->cur == k - 1u); hud_tx(0, cmd_tx[k - 1u], 0);
             if (k == 6) { hud_space(0); hud_num(0, prize_count()); }

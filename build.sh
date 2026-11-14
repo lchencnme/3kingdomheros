@@ -7,6 +7,7 @@ python3 -I tools/gen_rules.py
 python3 -I tools/gen_tech01.py
 python3 -I tools/gen_campaign.py
 python3 -I tools/gen_font.py
+python3 -I tools/gen_title.py
 python3 -I tools/gen_music.py
 python3 -I tools/gen_actors.py
 python3 -I tools/gen_portraits.py

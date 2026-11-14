@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define RULES_PROFILE_REVISION 2u
-#define RULES_PROFILE_CRC 0x6EA570A1ul
+#define RULES_PROFILE_CRC 0x3484E502ul
 #define NUM_CLASSES 18u
 #define NUM_TERRAIN 10u
 #define NUM_STRATEGIES 20u
@@ -30,6 +30,7 @@
 #define PROMO_L2 24u
 #define ITEM_SCROLL_MAG 60u
 #define RAIN_BOW_PERCENT 90u
+#define LEVELUP_HEAL_PCT 0u   /* T-BAL-02 experiment: extra heal on level-up, % of max hp */
 #define LEVEL_MAX 99u
 #define HP_MAX 9999u
 #define MP_MAX 999u

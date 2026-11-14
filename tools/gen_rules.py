@@ -95,6 +95,7 @@ def main():
     h.append(f"#define PROMO_L1 {d['promotion_levels'][0]}u\n#define PROMO_L2 {d['promotion_levels'][1]}u")
     h.append(f"#define ITEM_SCROLL_MAG {d['item_scroll_MAG']}u")
     h.append(f"#define RAIN_BOW_PERCENT {d['rain_bow_percent']}u")
+    h.append(f"#define LEVELUP_HEAL_PCT {d.get('levelup_heal_percent', 0)}u   /* T-BAL-02 experiment: extra heal on level-up, % of max hp */")
     h.append(f"#define LEVEL_MAX {d['level_max']}u\n#define HP_MAX {d['hp_max']}u\n#define MP_MAX {d['mp_max']}u")
     for i, f in enumerate(fams):
         h.append(f"#define FAM_{f.upper()} {i}u")

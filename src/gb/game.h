@@ -103,6 +103,9 @@ void hud_item_result(const ItemResult *r) BANKED;
 void hud_result(const AttackResult *r) BANKED;
 void hud_strat_result(uint8_t sid, const StrategyResult *sr) BANKED;
 void load_camp_and_go(void) BANKED;
+void show_title(void) BANKED;
+void show_help(void) BANKED;
+extern uint8_t title_opts;                          /* flow.c: bit0 suspend save, bit1 camp save */
 uint8_t prev_camp_battle(void) BANKED;              /* battle whose camp precedes the current one, or 0xFF */
 void retry_to_camp(void) BANKED;                    /* defeat: snapshot, then the camp before this battle */
 void lv_mark(uint8_t slot, uint8_t unit) BANKED;    /* T-UI-06: stats before an action that may level up */

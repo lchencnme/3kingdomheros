@@ -5,7 +5,7 @@
   "TX_PHASE_PLAYER": "第{n}回合 我军",
   "TX_PHASE_ENEMY": "第{n}回合 敌军",
   "TX_WIN": "胜利！按A重新开始",
-  "TX_LOSE": "败北……",
+  "TX_LOSE": "败北：",
   "TX_ACT_ATTACK": "攻击",
   "TX_ACT_WAIT": "待命",
   "TX_CHOOSE_TARGET": "选择目标  B返回",
@@ -114,7 +114,7 @@
   "TX_CMD_SAVE": "存档",
   "TX_CAMP_SAVED": "营地存档完成",
   "TX_TITLE_NEW": "A 新游戏",
-  "TX_TITLE_LOAD": "SELECT 读取营地存档",
+  "TX_TITLE_LOAD": "SELECT 读档",
   "TX_END_TITLE": "完",
   "TX_PHASE_ALLY": "第{n}回合 友军",
   "TX_NAME_CHENGYUANZHI": "程远志",
@@ -238,5 +238,10 @@
   "TX_ASK_DISCARD": "再按B确认舍弃",
   "TX_ASK_SELL": "再按SELECT确认卖出",
   "TX_ASK_RARE": "贵重物品！再按一次确认",
-  "TX_MENU_HINT": "左右选择 A确定 B返回"
+  "TX_MENU_HINT": "左右选择 A确定 B返回",
+  "TX_TITLE_CONT": "START 继续",
+  "TX_WHY_RETREAT": "撤退",
+  "TX_WHY_TURNS": "回合已尽",
+  "TX_XP": "经验",
+  "TX_TITLE_HELP": "B 规则"
 }

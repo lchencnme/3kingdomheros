@@ -82,6 +82,7 @@ static void hud_unit_or_terrain(void)
         if (a.character_id != ANON_CHARACTER) { hud_tx(0, class_name_tx[a.class_id], 0); hud_space(0); }
         hud_tx(0, TX_LV, 0); hud_num(0, a.level);
         hud_tx(1, TX_HP, 0); hud_space(1); hud_num(1, a.hp); hud_glyph(1, GLYPH_SLASH); hud_num(1, a.max_hp);
+        if (a.faction == FAC_PLAYER) { hud_space(1); hud_tx(1, TX_XP, 0); hud_num(1, a.exp); }   /* 100 = next level */
     } else {
         uint8_t t = grid_terrain(cur_x, cur_y) & 0x0F;
         hud_tx(0, TX_TERRAIN, 0); hud_space(0); hud_tx(0, terrain_name_tx[t], 0);
@@ -408,6 +409,10 @@ static void hud_result_line(const AttackResult *r)
         hud_tx(1, TX_COUNTER, 0); hud_space(1);
         if (r->c_hit) { hud_tx(1, TX_DMG, 0); hud_num(1, r->c_dmg); } else hud_tx(1, TX_MISS, 0);
         if (r->c_killed) { hud_space(1); hud_tx(1, TX_RETREAT, 0); }
+    }
+    {   /* experience gained by the player's unit (attacker, or defender on a counter) */
+        uint8_t xp = snap_fac[lv_old[0].unit] == FAC_PLAYER ? r->xp : (snap_fac[lv_old[1].unit] == FAC_PLAYER ? r->c_xp : 0u);
+        if (xp) { hud_space(1); hud_tx(1, TX_XP, 0); hud_glyph(1, GLYPH_PLUS); hud_num(1, xp); }
     }
     hud_end();
 }
@@ -945,6 +950,20 @@ static void logic_player(void)
 
 
 
+/* why the battle was lost (the same conditions as on the opening conditions page) */
+static void hud_lose_reason(void)
+{
+    ActiveUnit a;
+    uint8_t who = 0xFF;
+    load(B.leader, &a);
+    if (!unit_alive(&a)) who = B.leader;
+    else if (B.protect < B.n_units) { load(B.protect, &a); if (!unit_alive(&a)) who = B.protect; }
+    if (who == 0xFF && B.vic_kind == VIC_REACH && B.vic_unit < B.n_units) { load(B.vic_unit, &a); if (!unit_alive(&a)) who = B.vic_unit; }
+    if (who == 0xFF) { hud_tx(0, TX_WHY_TURNS, 0); return; }
+    load(who, &a);
+    hud_tx(0, unit_name_tx(&a), 0); hud_tx(0, TX_WHY_RETREAT, 0);
+}
+
 static void logic(void)
 {
     if (pending_start && state == G_BANNER) {
@@ -964,7 +983,7 @@ static void logic(void)
         hud_begin();
         if (B.outcome == OUT_WIN) hud_tx(0, TX_WIN_CAMP, 0);
         else {                                 /* T-FLOW-01: both ways restore the pre-battle snapshot */
-            hud_tx(0, TX_LOSE, 0); hud_tx(1, TX_LOSE_RETRY, 0);
+            hud_tx(0, TX_LOSE, 0); hud_lose_reason(); hud_tx(1, TX_LOSE_RETRY, 0);
             if (prev_camp_battle() != 0xFF) { hud_space(1); hud_tx(1, TX_LOSE_CAMP, 0); }
         }
         hud_end();
@@ -1007,15 +1026,21 @@ static void logic(void)
         else if (in_pressed & J_A) retry_battle();   /* defeat: from the pre-battle snapshot (11.6) */
         else if ((in_pressed & J_SELECT) && B.outcome == OUT_LOSE && prev_camp_battle() != 0xFF) retry_to_camp();
         break;
-    case G_TITLE:
-        if ((in_pressed & J_SELECT) && camp_save_ok) load_camp_and_go();
-        else if (in_pressed & J_START) {
+    case G_TITLE:                              /* the cover: every way out reloads the map mode */
+        if ((in_pressed & J_SELECT) && (title_opts & 2u)) load_camp_and_go();
+        else if ((in_pressed & J_START) && (title_opts & 1u)) {
             if (do_suspend_load() == SAVE_OK) {
+                DISPLAY_OFF;                   /* GBDK waits for VBlank itself; vb_wait lives in bank 10 */
                 state = G_IDLE; hud_dirty = 1;
-                DISPLAY_OFF; mapview_init(&tech01_meta[0][0], tech01_terrain_pal); DISPLAY_ON;
-            } else { hud_begin(); hud_tx(0, TX_LOAD_FAIL, 0); hud_end(); start_battle(); }
+                map_mode_restore();
+                music_play(&song_battle);
+            } else { hud_begin(); hud_tx(0, TX_LOAD_FAIL, 0); hud_end(); new_game(); }
+        } else if (in_pressed & J_B) {
+            show_help();                       /* T-RULE-02: the rules, then the cover again */
         } else if (in_pressed & J_A) {
+            DISPLAY_OFF;                   /* GBDK waits for VBlank itself; vb_wait lives in bank 10 */
             new_game();
+            map_mode_restore();
         }
         break;
     default:
@@ -1082,17 +1107,6 @@ void game_run(void) BANKED
     new_game();
     cam_x = 0; cam_y = (uint16_t)(cur_y * 16u + 8u - 56u);
     mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
-    {
-        uint8_t copy;
-        uint32_t seq;
-        if (save_probe(SAVE_SLOT_SUSPEND, &copy, &seq) == SAVE_OK) {
-            state = G_TITLE;
-            autosave_pending = 0;               /* never overwrite the found save before the choice */
-            hud_begin(); hud_tx(0, TX_CONTINUE_Q, 0); hud_tx(1, TX_CONTINUE_KEYS, 0);
-            if (camp_save_ok) { hud_space(1); hud_tx(1, TX_TITLE_LOAD, 0); }
-            hud_end();
-        } else if (camp_save_ok) show_title();
-    }
 
     input_init();
     audio_init();
@@ -1100,18 +1114,20 @@ void game_run(void) BANKED
     music_play(&song_battle);
     SPRITES_8x16;
     SHOW_BKG; SHOW_WIN; SHOW_SPRITES;
-    DISPLAY_ON;
+    show_title();                              /* the game always opens on the cover */
 
     for (;;) {
         input_update();
         logic();
-        mapview_camera_follow(cur_x, cur_y);
-        mapview_prepare();
+        if (state != G_TITLE) {                /* the cover owns the BG while it is up */
+            mapview_camera_follow(cur_x, cur_y);
+            mapview_prepare();
+            place_sprites();
+        }
         hud_service();
-        place_sprites();
         publish_debug();
         wait_vbl_done();
         hud_commit();          /* GDMA first: short and atomic */
-        mapview_commit();
+        if (state != G_TITLE) mapview_commit();
     }
 }
