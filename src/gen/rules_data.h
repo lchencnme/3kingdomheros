@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define RULES_PROFILE_REVISION 2u
-#define RULES_PROFILE_CRC 0x3484E502ul
+#define RULES_PROFILE_CRC 0xDF367671ul
 #define NUM_CLASSES 18u
 #define NUM_TERRAIN 10u
 #define NUM_STRATEGIES 20u

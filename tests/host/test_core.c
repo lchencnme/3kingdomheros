@@ -76,16 +76,16 @@ static void fixed_vectors(void)
     {
         StatIn s; Derived d;
         static const uint8_t cl[3] = {0, 6, 3};
-        static const uint16_t hp[3] = {300, 320, 280}, mp[3] = {20, 18, 20};
+        static const uint16_t hp[3] = {300, 290, 210}, mp[3] = {20, 18, 20};   /* class balance pass: lighter cavalry, fragile bows */
         memset(&s, 0, sizeof s);
         for (i = 0; i < 3; i++) {
             s.cls = cl[i]; s.level = 1; s.str = 70; s.intl = 60; s.cmd = 70;
             rules_derive(&s, &d);
             CHECK(d.max_hp == hp[i] && d.max_mp == mp[i], "fixture %u: %u %u", i, d.max_hp, d.max_mp);
         }
-        /* ttk table 4/5/5/5/5 */
+        /* ttk table 5/5/5/5/5 (infantry mirror; 4 at L1 before the class balance pass gave infantry +4 DEF) */
         {
-            static const uint8_t lv[5] = {1, 10, 30, 60, 99}, hits[5] = {4, 5, 5, 5, 5};
+            static const uint8_t lv[5] = {1, 10, 30, 60, 99}, hits[5] = {5, 5, 5, 5, 5};
             for (i = 0; i < 5; i++) {
                 uint16_t dmg;
                 s.cls = 0; s.level = lv[i]; s.str = 70; s.cmd = 70; s.intl = 60;

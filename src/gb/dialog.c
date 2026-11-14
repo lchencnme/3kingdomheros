@@ -69,8 +69,9 @@ static void show_portrait(uint8_t sp)
 /* double-rule woodcut frame round the 8x8 portrait (tiles 65..67, flipped by attribute for the 4 sides) */
 static void frame(uint8_t on)
 {
-    uint8_t k, id, at, fr[48];
-    if (on) { rom_copy(PORTRAIT_REF_BANK, fr, portrait_frame, 48); VBK_REG = 0; set_bkg_data(65, 3, fr); }
+    uint8_t k, id, at;
+    /* staged in the HUD line buffer (free here, the text lines are rastered after the portrait): no 48 B on the stack */
+    if (on) { rom_copy(PORTRAIT_REF_BANK, (uint8_t *)0xC800u, portrait_frame, 48); VBK_REG = 0; set_bkg_data(65, 3, (uint8_t *)0xC800u); }
     for (k = 0; k < 10; k++) {
         uint8_t edge = k == 0 || k == 9;
         id = on ? (edge ? 65u : 66u) : 0u; at = (uint8_t)(k == 9 ? 0x20u : 0u);           /* top row */
