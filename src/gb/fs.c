@@ -18,11 +18,11 @@
  * bank1 ids 0..95   composite buffer B        bank1 ids 160..231 HUD lines (top / bottom)
  * BG maps 9800 / 9C00 alternate (LCDC bit3); window and sprites off.
  * ---- WRAM plan (banks 5/6 are free while a presentation runs: AI field lives in 3/4)
- * bank5 D000 map ids (18x32), D240 map attrs, D500 plate map copy (260), D600 plate tiles (<=96x16)
+ * bank5 D000 map ids (18x32), D240 map attrs, D4F0 plate map copy (260), D600 plate tiles (<=96x16)
  * bank6 D000 pose A (1152), D480 pose B (1152), D900 composite output (<=96x16) */
 #define W5_IDS   ((uint8_t *)0xD000u)
 #define W5_ATTR  ((uint8_t *)0xD240u)
-#define W5_PMAP  ((uint8_t *)0xD500u)
+#define W5_PMAP  ((uint8_t *)0xD4F0u)   /* 260 B: D4F0..D5F3 (at D500 its last 4 entries ran into the tiles) */
 #define W5_PTILE ((uint8_t *)0xD600u)
 #define W6_POSEA ((uint8_t *)0xD000u)
 #define W6_POSEB ((uint8_t *)0xD480u)
@@ -90,7 +90,12 @@ static void base_map(void)
             uint16_t i = (uint16_t)r * 32u + c;
             uint8_t id = 0, at = 0;
             if (c < 20u) {
-                if (r >= SCENE_ROW0 && r < SCENE_ROW0 + FS_PLATE_H) id = W5_PMAP[(uint16_t)(r - SCENE_ROW0) * 20u + c];
+                if (r >= SCENE_ROW0 && r < SCENE_ROW0 + FS_PLATE_H) {
+                    uint8_t pr = (uint8_t)(r - SCENE_ROW0);          /* plate bands carry their own pigments */
+                    id = W5_PMAP[(uint16_t)pr * 20u + c];
+                    if (pr < FS_SKY_ROWS) at = (pr >= FS_SUN_ROW && pr < FS_SUN_ROW + 2u && c >= FS_SUN_COL && c < FS_SUN_COL + 2u) ? 5u : 3u;
+                    else if (pr >= FS_GROUND_ROW0) at = 4u;
+                }
                 else if ((r <= 1u || r >= 16u) && c >= 1u && c <= 18u) {
                     uint8_t base = r <= 1u ? HUD_TOP_ID : HUD_BOT_ID;
                     id = (uint8_t)(base + (uint8_t)((r & 1u) * 18u) + (uint8_t)(c - 1u));
@@ -226,7 +231,7 @@ void fs_present(const FsSide *a, const FsSide *d, const AttackResult *r) BANKED
         shown_map = 0; buf_sel = 1;
     }
     LCDC_REG &= (uint8_t)~LCDCF_BG9C00;
-    set_bkg_palette(0, 4, fs_pals);
+    set_bkg_palette(0, FS_PALS, fs_pals);
     DISPLAY_ON;
 
     /* ---- attack sequence */

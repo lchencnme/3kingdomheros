@@ -433,7 +433,7 @@ uint8_t title_opts;
 void show_title(void) BANKED
 {
     uint8_t row[TITLE_W], y, copy;
-    uint16_t pal[4];
+    uint16_t pal[4 * TITLE_PALS];
     uint32_t seq;
     state = G_TITLE;
     autosave_pending = 0;                      /* never overwrite a found save before the choice */
@@ -441,15 +441,15 @@ void show_title(void) BANKED
     DISPLAY_OFF;                               /* GBDK: waits for VBlank, no-op when already off */
     HIDE_SPRITES;
     rom_copy(TITLE_BANK, pal, title_pal, sizeof pal);
-    set_bkg_palette(0, 1, pal);
+    set_bkg_palette(0, TITLE_PALS, pal);       /* ink, 石绿, 朱砂, 赭石: per-tile palettes */
     VBK_REG = VBK_TILES;
     rom_set_bkg_data(TITLE_BANK, 0, 128, title_tiles);
     if (TITLE_TILES > 128u) rom_set_bkg_data(TITLE_BANK, 128, (uint8_t)(TITLE_TILES - 128u), title_tiles + 128u * 16u);
     for (y = 0; y < TITLE_H; y++) {
         rom_copy(TITLE_BANK, row, title_map + (uint16_t)y * TITLE_W, TITLE_W);
         VBK_REG = VBK_TILES; set_bkg_tiles(0, y, TITLE_W, 1, row);
-        memset(row, 0, TITLE_W);
-        VBK_REG = 1; set_bkg_tiles(0, y, TITLE_W, 1, row);      /* palette 0, tile bank 0 */
+        rom_copy(TITLE_BANK, row, title_attr + (uint16_t)y * TITLE_W, TITLE_W);
+        VBK_REG = 1; set_bkg_tiles(0, y, TITLE_W, 1, row);      /* palette per tile, tile bank 0 */
     }
     VBK_REG = 1; set_bkg_data(HUD_BLANK, 1, blank16);
     VBK_REG = VBK_TILES;

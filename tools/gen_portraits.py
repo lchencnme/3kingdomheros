@@ -108,6 +108,14 @@ def portrait(rows, x0, y0, name):
 FIRST_BANK = 19          # portrait banks 19.. (15 portraits of 1 KiB per bank); the ref table is in bank 19
 PER_BANK = 15
 PAPER, LIGHT, MID, INK = (232, 220, 184), (176, 164, 136), (104, 92, 76), (32, 26, 20)
+# 淡彩: the hatched areas (robes, armour, hair) take a mineral pigment by faction; faces stay paper and ink
+TINTS = {"shu": ((176, 204, 160), (64, 112, 88)),        # 石绿 malachite
+         "wei": ((168, 192, 216), (56, 84, 136)),        # 花青 indigo
+         "wu": ((236, 180, 160), (164, 56, 40)),         # 朱砂 vermilion
+         "huangjin": ((232, 204, 120), (160, 116, 32)),  # 藤黄 gamboge
+         "dong": ((204, 176, 208), (104, 64, 120)),      # 紫 purple
+         "lords": ((212, 184, 148), (136, 92, 56))}      # 赭石 ochre
+TINT_ORDER = list(TINTS)
 TONE = {PAPER: 0, LIGHT: 1, MID: 2, INK: 3}
 
 
@@ -152,17 +160,24 @@ def main():
             die(f"no TX_NAME_{e['pinyin'].upper()} in content/text/ui_zh.json")
         files.setdefault(bank, []).append(f"/* P{i + 1:04d} {e['name']} */\nconst uint8_t portrait_{i}_tiles[1024] = {{"
                                           + ", ".join(map(str, tiles_of(rows, src.name))) + "};")
-        refs.append((bank, i, name_tx))
+        if e.get("tint", "lords") not in TINTS:
+            die(f"{e['pinyin']}: unknown tint {e.get('tint')}")
+        refs.append((bank, i, name_tx, TINT_ORDER.index(e.get("tint", "lords"))))
     for old in (ROOT / "src/gen").glob("portrait_b*.c"):
         old.unlink()
     for bank, items in files.items():
         lines = [f"#pragma bank {bank}   /* portrait tiles: read only through the rom.c gateway */", '#include "portrait_data.h"'] + items
         if bank == FIRST_BANK:
-            lines += [f"extern const uint8_t portrait_{i}_tiles[1024];" for b, i, _ in refs]
+            lines += [f"extern const uint8_t portrait_{i}_tiles[1024];" for b, i, _, _ in refs]
             lines.append("const PortraitRef portrait_refs[PORTRAIT_COUNT] = {"
-                         + ", ".join(f"{{{b}, portrait_{i}_tiles, {n}}}" for b, i, n in refs) + "};")
-            pal = [rgb555(c) for c in (PAPER, LIGHT, MID, INK)]
-            lines.append("const uint16_t portrait_pal[4] = {" + ", ".join(map(str, pal)) + "};")
+                         + ", ".join(f"{{{b}, portrait_{i}_tiles, {n}, {tn}}}" for b, i, n, tn in refs) + "};")
+            pal = [rgb555(c) for k in TINT_ORDER for c in (PAPER, TINTS[k][0], TINTS[k][1], INK)]
+            lines.append(f"const uint16_t portrait_pal[{len(pal)}] = {{" + ", ".join(map(str, pal)) + "};")
+            lines.append("/* woodcut frame round the portrait: 0 corner, 1 top edge, 2 left edge (flipped for the others) */")
+            fr = [[0xFF, 0xFF, 0x80, 0x80, 0xBF, 0xBF, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0],
+                  [0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+                  [0xA0, 0xA0] * 8]
+            lines.append("const uint8_t portrait_frame[48] = {" + ", ".join(str(b) for t_ in fr for b in t_) + "};")
         (ROOT / f"src/gen/portrait_b{bank}.c").write_text("\n".join(lines) + "\n", encoding="utf-8")
     for old in ("portrait_data.c", "portrait_index.c"):
         if (ROOT / "src/gen" / old).exists():
@@ -171,9 +186,10 @@ def main():
           "#include <stdint.h>", f"#define PORTRAIT_REF_BANK {FIRST_BANK}u", f"#define PORTRAIT_COUNT {len(reg)}u",
           "#define PORTRAIT_NARRATOR 0xFFu",
           "/* order: content/portraits.json (P0001 刘备 .. P0008 司马懿 first, then by pinyin) */",
-          "typedef struct { uint8_t bank; const uint8_t *tiles; uint16_t name_tx; } PortraitRef;",
+          "typedef struct { uint8_t bank; const uint8_t *tiles; uint16_t name_tx; uint8_t tint; } PortraitRef;",
           "extern const PortraitRef portrait_refs[PORTRAIT_COUNT];   /* in PORTRAIT_REF_BANK */",
-          "extern const uint16_t portrait_pal[4];                    /* in PORTRAIT_REF_BANK: paper light mid ink */",
+          "extern const uint16_t portrait_pal[];                     /* in PORTRAIT_REF_BANK: 4 colours per tint */",
+          "extern const uint8_t portrait_frame[48];                  /* in PORTRAIT_REF_BANK: corner, top, left */",
           "#endif"]
     (ROOT / "src/gen/portrait_data.h").write_text("\n".join(h_) + "\n", encoding="utf-8")
     print(f"gen_portraits: {len(reg)} portraits in banks {sorted(files)}")

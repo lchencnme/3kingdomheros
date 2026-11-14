@@ -15,24 +15,25 @@ W, H = 32, 24
 
 # ---------------- palettes (RGB888 -> RGB555) ----------------
 PAPER, INK = (232, 220, 184), (48, 40, 32)
-# 绣像 woodcut map (art_src/v05 from the delivered line art): paper and ink with a faint tint per terrain group
+# 设色 map: woodcut ink lines over classical mineral pigments, one pigment family per terrain group
+# (赭石 ochre earth, 石绿 malachite hills and woods, 花青 indigo water, 青灰 grey brick and tile)
 BG_PALS = [
-    [PAPER, (200, 190, 156), (128, 116, 92), INK],    # 0 ground: plain/road
-    [PAPER, (180, 188, 150), (98, 106, 78), INK],     # 1 nature: forest/hill
-    [PAPER, (178, 192, 196), (92, 110, 124), INK],    # 2 water: shallow/deep/bridge
-    [PAPER, (196, 180, 158), (120, 100, 86), INK],    # 3 buildings: village/fort/wall
+    [PAPER, (218, 200, 152), (170, 128, 80), INK],    # 0 earth: plain/road        赭石
+    [PAPER, (156, 192, 144), (62, 116, 96), INK],     # 1 hills and woods          石绿
+    [PAPER, (176, 208, 212), (64, 108, 152), INK],    # 2 water: shallow/deep/bridge 花青
+    [PAPER, (196, 186, 170), (112, 98, 92), INK],     # 3 buildings: village/fort/wall 青灰
 ]
 
 
 def tint(c):  # move-range highlight: shift toward stone-blue
-    return tuple((v * 5 + t * 3) // 8 for v, t in zip(c, (96, 140, 220)))
+    return tuple((v * 6 + t * 2) // 8 for v, t in zip(c, (96, 150, 210)))
 
 
 # design doc 12.2 (v2): 4 player unit, 5 enemy unit, 6 shared move-range tint, 7 acted unit (gray)
 BG_PALS += [
-    [PAPER, (164, 186, 226), (64, 92, 150), INK],                     # 4 player unit: blue wash
-    [PAPER, (232, 170, 150), (152, 60, 44), INK],                     # 5 enemy unit: red wash
-    [tint(PAPER), tint((200, 190, 156)), tint((120, 116, 100)), INK], # 6 highlight (any terrain)
+    [PAPER, (160, 188, 228), (44, 84, 156), INK],                     # 4 player unit: 花青 indigo
+    [PAPER, (240, 168, 144), (176, 52, 36), INK],                     # 5 enemy unit: 朱砂 vermilion
+    [tint(PAPER), tint((206, 196, 160)), tint((120, 120, 110)), INK], # 6 highlight (any terrain)
     [PAPER, (186, 186, 186), (112, 112, 112), INK],                   # 7 acted unit: grey
 ]
 OBJ_PALS = [
@@ -229,9 +230,52 @@ def master(name):
 
 # terrain from the delivered art where a 16x16 cell works (textures and compact objects); road, village,
 # fort floor and bridge stay hand-cut so they connect and repeat cleanly
-for _tid, _name in ((2, "terrain_forest.png"), (5, "terrain_cliff.png")):
+for _tid, _name in ((2, "terrain_forest.png"),):
     if (V05 / _name).exists():
         ART[_tid] = grid16(master(_name))
+
+
+def _mountain():
+    """青绿山水 peak cut for a 16 px cell: two overlapping peaks, the shaded flank in the deep pigment, the lit
+    flank in the pale one, ink contour and 皴 strokes down the ridge; the foot fades into the paper (mist)"""
+    g = [["."] * 16 for _ in range(16)]
+    for cx, top, half, base in ((11, 6, 5, 14), (6, 1, 6, 15)):       # back peak first, the main peak over it
+        for y in range(top, base):
+            w = (y - top) * half // (base - 1 - top) if base - 1 > top else 0
+            for x in range(cx - w, cx + w + 1):
+                if 0 <= x < 16:
+                    fade = y >= base - 2 and (x + y) % 2
+                    g[y][x] = "." if fade else ("+" if x < cx else ":")
+            for x in (cx - w, cx + w):
+                if 0 <= x < 16 and y < base - 2:
+                    g[y][x] = "#"
+            if y < base - 3 and (y - top) % 2 == 0 and y > top:
+                g[y][cx] = "#"                                          # ridge
+                if 0 <= cx + 2 < 16 and y > top + 2:
+                    g[y][cx + 2 + (y % 3 == 0)] = "+"                   # 皴: texture strokes on the lit flank
+        g[top][cx] = "#"
+    return ["".join(r) for r in g]
+
+
+def _road():
+    """packed earth: direction-neutral so roads can run either way; pale ochre with darker pebbles"""
+    g = []
+    for y in range(16):
+        r = ""
+        for x in range(16):
+            v = (x * 7 + y * 13 + (x * y) % 5) % 11
+            r += "+" if v == 0 else (":" if (x + y) % 2 == 0 or v < 4 else ".")
+        g.append(r)
+    return g
+
+
+ART[5] = grid16(_mountain())
+ART[1] = grid16(_road())
+ART[3] = grid16([  # village: a tiled-roof house with a door, a fence line in front
+    "................", "......####......", ".....#++++#.....", "....#++#+++#....", "...#+++++#++#...",
+    "..############..", "...#::::::::#...", "...#:##::##:#...", "...#:##::##:#...", "...#::::##::#...",
+    "...#::::##::#...", "...##########...", "................", ".#.#.#....#.#.#.", ".######..######.",
+    "................"])
 # repeating ground and water are cut by hand in the same woodcut manner: they cover whole fields, so they
 # must stay sparse and regular (the delivered textures turn to noise at 16 px)
 ART[0] = grid16([  # plain: paper with two small grass tufts

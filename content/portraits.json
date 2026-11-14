@@ -1,333 +1,415 @@
 {
- "_comment": "画像登记（设计文档 13.2、9.6）：序号 = 画像 ID（前 8 个是 P0001–P0008，不改顺序）。源图 art_src/grok/<pinyin>_bust.png，经 tools/import_art.py 转成 art_src/v05/。剧本里的说话人写 P000n 或拼音。",
+ "_comment": "画像登记（设计文档 13.2、9.6）：序号 = 画像 ID（前 8 个是 P0001–P0008，不改顺序）。源图 art_src/grok/<pinyin>_bust.png，经 tools/import_art.py 转成 art_src/v05/。剧本里的说话人写 P000n 或拼音。 tint = 淡彩颜料（按阵营）：shu 石绿、wei 花青、wu 朱砂、huangjin 藤黄、dong 紫、lords 赭石。",
  "portraits": [
   {
    "pinyin": "liubei",
-   "name": "刘备"
+   "name": "刘备",
+   "tint": "shu"
   },
   {
    "pinyin": "guanyu",
-   "name": "关羽"
+   "name": "关羽",
+   "tint": "shu"
   },
   {
    "pinyin": "zhangfei",
-   "name": "张飞"
+   "name": "张飞",
+   "tint": "shu"
   },
   {
    "pinyin": "zhugeliang",
-   "name": "诸葛亮"
+   "name": "诸葛亮",
+   "tint": "shu"
   },
   {
    "pinyin": "zhaoyun",
-   "name": "赵云"
+   "name": "赵云",
+   "tint": "shu"
   },
   {
    "pinyin": "caocao",
-   "name": "曹操"
+   "name": "曹操",
+   "tint": "wei"
   },
   {
    "pinyin": "zhouyu",
-   "name": "周瑜"
+   "name": "周瑜",
+   "tint": "wu"
   },
   {
    "pinyin": "simayi",
-   "name": "司马懿"
+   "name": "司马懿",
+   "tint": "wei"
   },
   {
    "pinyin": "baolong",
-   "name": "鲍隆"
+   "name": "鲍隆",
+   "tint": "lords"
   },
   {
    "pinyin": "caimao",
-   "name": "蔡瑁"
+   "name": "蔡瑁",
+   "tint": "lords"
   },
   {
    "pinyin": "caiyang",
-   "name": "蔡阳"
+   "name": "蔡阳",
+   "tint": "wei"
   },
   {
    "pinyin": "caobao",
-   "name": "曹豹"
+   "name": "曹豹",
+   "tint": "dong"
   },
   {
    "pinyin": "caochun",
-   "name": "曹纯"
+   "name": "曹纯",
+   "tint": "wei"
   },
   {
    "pinyin": "caopi",
-   "name": "曹丕"
+   "name": "曹丕",
+   "tint": "wei"
   },
   {
    "pinyin": "caoren",
-   "name": "曹仁"
+   "name": "曹仁",
+   "tint": "wei"
   },
   {
    "pinyin": "chengong",
-   "name": "陈宫"
+   "name": "陈宫",
+   "tint": "dong"
   },
   {
    "pinyin": "chengyuanzhi",
-   "name": "程远志"
+   "name": "程远志",
+   "tint": "huangjin"
   },
   {
    "pinyin": "chensun",
-   "name": "陈孙"
+   "name": "陈孙",
+   "tint": "huangjin"
   },
   {
    "pinyin": "chenying",
-   "name": "陈应"
+   "name": "陈应",
+   "tint": "lords"
   },
   {
    "pinyin": "chezhou",
-   "name": "车胄"
+   "name": "车胄",
+   "tint": "wei"
   },
   {
    "pinyin": "dengmao",
-   "name": "邓茂"
+   "name": "邓茂",
+   "tint": "huangjin"
   },
   {
    "pinyin": "fazheng",
-   "name": "法正"
+   "name": "法正",
+   "tint": "shu"
   },
   {
    "pinyin": "ganfuren",
-   "name": "甘夫人"
+   "name": "甘夫人",
+   "tint": "shu"
   },
   {
    "pinyin": "gaopei",
-   "name": "高沛"
+   "name": "高沛",
+   "tint": "lords"
   },
   {
    "pinyin": "gaoshun",
-   "name": "高顺"
+   "name": "高顺",
+   "tint": "dong"
   },
   {
    "pinyin": "gongdu",
-   "name": "龚都"
+   "name": "龚都",
+   "tint": "shu"
   },
   {
    "pinyin": "gongjing",
-   "name": "龚景"
+   "name": "龚景",
+   "tint": "lords"
   },
   {
    "pinyin": "gongsunzan",
-   "name": "公孙瓒"
+   "name": "公孙瓒",
+   "tint": "lords"
   },
   {
    "pinyin": "gongzhi",
-   "name": "巩志"
+   "name": "巩志",
+   "tint": "lords"
   },
   {
    "pinyin": "guanhai",
-   "name": "管亥"
+   "name": "管亥",
+   "tint": "huangjin"
   },
   {
    "pinyin": "guanping",
-   "name": "关平"
+   "name": "关平",
+   "tint": "shu"
   },
   {
    "pinyin": "hanxuan",
-   "name": "韩玄"
+   "name": "韩玄",
+   "tint": "lords"
   },
   {
    "pinyin": "huanggai",
-   "name": "黄盖"
+   "name": "黄盖",
+   "tint": "wu"
   },
   {
    "pinyin": "huangquan",
-   "name": "黄权"
+   "name": "黄权",
+   "tint": "shu"
   },
   {
    "pinyin": "huangzhong",
-   "name": "黄忠"
+   "name": "黄忠",
+   "tint": "shu"
   },
   {
    "pinyin": "huaxiong",
-   "name": "华雄"
+   "name": "华雄",
+   "tint": "dong"
   },
   {
    "pinyin": "jianyong",
-   "name": "简雍"
+   "name": "简雍",
+   "tint": "shu"
   },
   {
    "pinyin": "jiling",
-   "name": "纪灵"
+   "name": "纪灵",
+   "tint": "lords"
   },
   {
    "pinyin": "jinxuan",
-   "name": "金旋"
+   "name": "金旋",
+   "tint": "lords"
   },
   {
    "pinyin": "kongrong",
-   "name": "孔融"
+   "name": "孔融",
+   "tint": "lords"
   },
   {
    "pinyin": "lidian",
-   "name": "李典"
+   "name": "李典",
+   "tint": "wei"
   },
   {
    "pinyin": "lihui",
-   "name": "李恢"
+   "name": "李恢",
+   "tint": "shu"
   },
   {
    "pinyin": "liudai",
-   "name": "刘岱"
+   "name": "刘岱",
+   "tint": "wei"
   },
   {
    "pinyin": "liudu",
-   "name": "刘度"
+   "name": "刘度",
+   "tint": "lords"
   },
   {
    "pinyin": "liupi",
-   "name": "刘辟"
+   "name": "刘辟",
+   "tint": "shu"
   },
   {
    "pinyin": "liuzhang",
-   "name": "刘璋"
+   "name": "刘璋",
+   "tint": "lords"
   },
   {
    "pinyin": "lusu",
-   "name": "鲁肃"
+   "name": "鲁肃",
+   "tint": "wu"
   },
   {
    "pinyin": "luxun",
-   "name": "陆逊"
+   "name": "陆逊",
+   "tint": "wu"
   },
   {
    "pinyin": "lvbu",
-   "name": "吕布"
+   "name": "吕布",
+   "tint": "dong"
   },
   {
    "pinyin": "lvmeng",
-   "name": "吕蒙"
+   "name": "吕蒙",
+   "tint": "wu"
   },
   {
    "pinyin": "machao",
-   "name": "马超"
+   "name": "马超",
+   "tint": "shu"
   },
   {
    "pinyin": "madai",
-   "name": "马岱"
+   "name": "马岱",
+   "tint": "shu"
   },
   {
    "pinyin": "maliang",
-   "name": "马良"
+   "name": "马良",
+   "tint": "shu"
   },
   {
    "pinyin": "mifuren",
-   "name": "糜夫人"
+   "name": "糜夫人",
+   "tint": "shu"
   },
   {
    "pinyin": "mizhu",
-   "name": "糜竺"
+   "name": "糜竺",
+   "tint": "shu"
   },
   {
    "pinyin": "pangde",
-   "name": "庞德"
+   "name": "庞德",
+   "tint": "wei"
   },
   {
    "pinyin": "pangtong",
-   "name": "庞统"
+   "name": "庞统",
+   "tint": "shu"
   },
   {
    "pinyin": "sunqian",
-   "name": "孙乾"
+   "name": "孙乾",
+   "tint": "shu"
   },
   {
    "pinyin": "sunquan",
-   "name": "孙权"
+   "name": "孙权",
+   "tint": "wu"
   },
   {
    "pinyin": "taishici",
-   "name": "太史慈"
+   "name": "太史慈",
+   "tint": "wu"
   },
   {
    "pinyin": "taoqian",
-   "name": "陶谦"
+   "name": "陶谦",
+   "tint": "lords"
   },
   {
    "pinyin": "wangzhong",
-   "name": "王忠"
+   "name": "王忠",
+   "tint": "wei"
   },
   {
    "pinyin": "weiyan",
-   "name": "魏延"
+   "name": "魏延",
+   "tint": "shu"
   },
   {
    "pinyin": "wenchou",
-   "name": "文丑"
+   "name": "文丑",
+   "tint": "lords"
   },
   {
    "pinyin": "wenpin",
-   "name": "文聘"
+   "name": "文聘",
+   "tint": "wei"
   },
   {
    "pinyin": "xiahoude",
-   "name": "夏侯德"
+   "name": "夏侯德",
+   "tint": "wei"
   },
   {
    "pinyin": "xiahoudun",
-   "name": "夏侯惇"
+   "name": "夏侯惇",
+   "tint": "wei"
   },
   {
    "pinyin": "xiahouyuan",
-   "name": "夏侯渊"
+   "name": "夏侯渊",
+   "tint": "wei"
   },
   {
    "pinyin": "xingdaorong",
-   "name": "邢道荣"
+   "name": "邢道荣",
+   "tint": "lords"
   },
   {
    "pinyin": "xuhuang",
-   "name": "徐晃"
+   "name": "徐晃",
+   "tint": "wei"
   },
   {
    "pinyin": "xunzheng",
-   "name": "荀正"
+   "name": "荀正",
+   "tint": "lords"
   },
   {
    "pinyin": "xushu",
-   "name": "徐庶"
+   "name": "徐庶",
+   "tint": "shu"
   },
   {
    "pinyin": "yanghuai",
-   "name": "杨怀"
+   "name": "杨怀",
+   "tint": "lords"
   },
   {
    "pinyin": "yanyan",
-   "name": "严颜"
+   "name": "严颜",
+   "tint": "shu"
   },
   {
    "pinyin": "yujin",
-   "name": "于禁"
+   "name": "于禁",
+   "tint": "wei"
   },
   {
    "pinyin": "zhangbao",
-   "name": "张宝"
+   "name": "张宝",
+   "tint": "huangjin"
   },
   {
    "pinyin": "zhanghe",
-   "name": "张郃"
+   "name": "张郃",
+   "tint": "wei"
   },
   {
    "pinyin": "zhangliao",
-   "name": "张辽"
+   "name": "张辽",
+   "tint": "wei"
   },
   {
    "pinyin": "zhangren",
-   "name": "张任"
+   "name": "张任",
+   "tint": "lords"
   },
   {
    "pinyin": "zhangwu",
-   "name": "张武"
+   "name": "张武",
+   "tint": "huangjin"
   },
   {
    "pinyin": "zhaofan",
-   "name": "赵范"
+   "name": "赵范",
+   "tint": "lords"
   },
   {
    "pinyin": "zhoucang",
-   "name": "周仓"
+   "name": "周仓",
+   "tint": "shu"
   }
  ]
 }

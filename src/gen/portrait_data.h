@@ -6,7 +6,8 @@
 #define PORTRAIT_COUNT 82u
 #define PORTRAIT_NARRATOR 0xFFu
 /* order: content/portraits.json (P0001 刘备 .. P0008 司马懿 first, then by pinyin) */
-typedef struct { uint8_t bank; const uint8_t *tiles; uint16_t name_tx; } PortraitRef;
+typedef struct { uint8_t bank; const uint8_t *tiles; uint16_t name_tx; uint8_t tint; } PortraitRef;
 extern const PortraitRef portrait_refs[PORTRAIT_COUNT];   /* in PORTRAIT_REF_BANK */
-extern const uint16_t portrait_pal[4];                    /* in PORTRAIT_REF_BANK: paper light mid ink */
+extern const uint16_t portrait_pal[];                     /* in PORTRAIT_REF_BANK: 4 colours per tint */
+extern const uint8_t portrait_frame[48];                  /* in PORTRAIT_REF_BANK: corner, top, left */
 #endif

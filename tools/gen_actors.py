@@ -23,7 +23,9 @@ PALS = [
     [PAPER, (200, 188, 156), (120, 104, 84), INK],     # 0 plate (only 0/3 used) and HUD text
     [PAPER, (172, 192, 230), (52, 62, 100), INK],      # 1 player actor: blue wash, dark mid, ink (绣像)
     [PAPER, (236, 182, 164), (104, 46, 34), INK],      # 2 enemy actor: red wash, dark mid, ink
-    [PAPER, (176, 64, 48), (138, 128, 112), INK],      # 3 spare
+    [PAPER, (180, 208, 196), (84, 136, 124), INK],     # 3 sky band: mist, 石绿 ranges
+    [PAPER, (220, 200, 150), (172, 132, 84), INK],     # 4 ground band: 赭石 earth
+    [PAPER, (240, 176, 150), (196, 56, 36), INK],      # 5 the sun: 朱砂
 ]
 
 
@@ -259,21 +261,55 @@ def tiles_of(cv, tw, th):
 
 
 # ---------------------------------------------------------------- plate: ink-line landscape on paper
+# plate bands (rows of 8 px): the actors only ever cover rows 3..10, so the sky / mountain band above and the
+# ground band below can carry their own pigments (per-tile palettes) without tinting under an actor
+SKY_ROWS, GROUND_ROW0 = 3, 11
+SUN_COL, SUN_ROW = 16, 0          # 2 x 2 tiles in the vermilion palette
+
+
 def plate():
+    """设色山水 backdrop: a red sun and layered 青绿 ranges fading into mist (top band), an empty paper
+    middle for the fight with two ink pines, an ochre ground with grass strokes (bottom band)"""
     c = Canvas(PW, PH)
-    for x in range(PW):                                    # distant mountains
-        y = 22 + 8 * math.sin(x / 17.0) + 4 * math.sin(x / 7.3)
-        c.put(x, y, 3)
-        if x % 9 == 0:
-            c.line(x, y, x + 3, y + 5, 3)
-    for x in range(0, PW, 2):                              # ground line + hatching
-        c.put(x, 84, 3)
-        if x % 12 == 0:
-            c.line(x, 88, x + 5, 92, 3)
-    for x in (12, 140):                                    # two pines
-        c.line(x, 84, x, 52, 3)
+    top = SKY_ROWS * 8
+    def ridge(x, k):
+        return [9 + 5 * math.sin(x / 13.0 + 1.0) + 3 * math.sin(x / 5.1),
+                15 + 4 * math.sin(x / 19.0 + 4.0) + 2 * math.sin(x / 6.7 + 2.0)][k]
+    for x in range(PW):
+        far, near = ridge(x, 0), ridge(x, 1)
+        for y in range(top):
+            if y >= near:
+                fade = (y - near) / max(1.0, top - near)             # the near range thins out into mist
+                if (x * 3 + y * 5) % 7 >= fade * 9:
+                    c.put(x, y, 2 if (x + y) % 2 == 0 or fade < 0.3 else 1)
+            elif y >= far:
+                if (x + y) % 2 == 0:
+                    c.put(x, y, 1)                                      # the far range: a pale wash
+        c.put(x, far, 3)
+        c.put(x, near, 3)
+        if x % 11 == 3:
+            c.line(x, near + 1, x + 2, near + 5, 3)                     # 皴 strokes
+    sx, sy = SUN_COL * 8 + 8, SUN_ROW * 8 + 7                            # 红日
+    for y in range(SUN_ROW * 8, SUN_ROW * 8 + 16):
+        for x in range(SUN_COL * 8, SUN_COL * 8 + 16):
+            d = math.hypot(x - sx + 0.5, y - sy + 0.5)
+            c.put(x, y, 2 if d < 5.2 else (3 if d < 6.2 and c.px[y][x] == 0 else c.px[y][x] if d >= 6.2 else 2))
+    gy = GROUND_ROW0 * 8
+    for x in range(PW):                                                 # ground: line, wash, grass strokes
+        c.put(x, gy, 3)
+        for y in range(gy + 1, PH):
+            v = (x * 5 + y * 9) % 8
+            c.put(x, y, 2 if v == 0 and y > gy + 3 else (1 if (x + y) % 2 == 0 else 0))
+        if x % 16 in (2, 3):
+            c.line(x, gy + 6, x + 1, gy + 2, 3)
+            c.line(x + 2, gy + 6, x + 4, gy + 3, 3)
+    for x in (12, 147):                                                 # two pines frame the field (ink only)
+        c.line(x, gy, x, 44, 3, 2)
         for k in range(5):
-            c.line(x - 7 + k, 56 + k * 5, x + 7 - k, 56 + k * 5, 3)
+            wd = 8 - k
+            c.line(x - wd, 50 + k * 7, x + wd, 50 + k * 7, 3)
+            c.line(x - wd, 50 + k * 7, x - wd + 2, 47 + k * 7, 3)
+            c.line(x + wd, 50 + k * 7, x + wd - 2, 47 + k * 7, 3)
     tiles, index, tmap = [[0] * 16], {tuple([0] * 16): 0}, []   # tile 0 = blank paper (HUD margins)
     for ty in range(PH // 8):
         for tx in range(PW // 8):
@@ -340,7 +376,9 @@ def main():
          "/* pose index = (body * 2 + facing) * 4 + pose; facing 0 = faces left, 1 = faces right */",
          "extern const uint8_t fs_plate_tiles[];", "extern const uint8_t fs_plate_map[];",
          "extern const uint8_t fs_pose_bank[FS_POSES];", "extern const uint8_t *const fs_pose_ptr[FS_POSES];",
-         "extern const uint16_t fs_pals[16];", "#endif"]
+         f"#define FS_PALS {len(PALS)}u", f"#define FS_SKY_ROWS {SKY_ROWS}u", f"#define FS_GROUND_ROW0 {GROUND_ROW0}u",
+         f"#define FS_SUN_COL {SUN_COL}u", f"#define FS_SUN_ROW {SUN_ROW}u",
+         "extern const uint16_t fs_pals[];   /* FS_PALS x 4: plate, player, enemy, sky, ground, sun */", "#endif"]
     out = {}
     for i, blob in enumerate(poses):
         out.setdefault(banks[i], []).extend(arr(f"fs_pose_{i}", blob))

@@ -3,7 +3,7 @@
 #define FS_DATA_H
 #include <stdint.h>
 #define FS_PLATE_BANK 15u
-#define FS_PLATE_TILES 47u
+#define FS_PLATE_TILES 85u
 #define FS_PLATE_W 20u
 #define FS_PLATE_H 13u
 #define FS_ACTOR_W 6u
@@ -23,5 +23,10 @@ extern const uint8_t fs_plate_tiles[];
 extern const uint8_t fs_plate_map[];
 extern const uint8_t fs_pose_bank[FS_POSES];
 extern const uint8_t *const fs_pose_ptr[FS_POSES];
-extern const uint16_t fs_pals[16];
+#define FS_PALS 6u
+#define FS_SKY_ROWS 3u
+#define FS_GROUND_ROW0 11u
+#define FS_SUN_COL 16u
+#define FS_SUN_ROW 0u
+extern const uint16_t fs_pals[];   /* FS_PALS x 4: plate, player, enemy, sky, ground, sun */
 #endif

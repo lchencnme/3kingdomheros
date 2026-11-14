@@ -39,6 +39,7 @@ static void put_text_map(void)
 }
 
 
+static void frame(uint8_t on);
 static void show_portrait(uint8_t sp)
 {
     uint8_t r, c, ids[8], at[8];
@@ -50,17 +51,40 @@ static void show_portrait(uint8_t sp)
             VBK_REG = 1; set_bkg_tiles(1, r, 8, 1, at);
             VBK_REG = 0; set_bkg_tiles(1, r, 8, 1, ids);
         }
+        frame(0);                                  /* narration: no portrait, no frame */
         return;
     }
     rom_copy(PORTRAIT_REF_BANK, &ref, &portrait_refs[sp], sizeof ref);   /* 82 portraits over banks 19.. */
     rom_set_bkg_data(ref.bank, 1, 64, ref.tiles);
-    rom_copy(PORTRAIT_REF_BANK, pal, portrait_pal, sizeof pal);
-    set_bkg_palette(0, 1, pal);                                        /* one 4-tone palette (绣像) */
+    rom_copy(PORTRAIT_REF_BANK, pal, portrait_pal + (uint16_t)ref.tint * 4u, sizeof pal);
+    set_bkg_palette(0, 1, pal);                                        /* 淡彩: the faction's pigment */
     for (r = 0; r < 8; r++) {
         for (c = 0; c < 8; c++) { ids[c] = (uint8_t)(1u + r * 8u + c); at[c] = 0; }
         VBK_REG = 1; set_bkg_tiles(1, (uint8_t)(1u + r), 8, 1, at);
         VBK_REG = 0; set_bkg_tiles(1, (uint8_t)(1u + r), 8, 1, ids);
     }
+    frame(1);
+}
+
+/* double-rule woodcut frame round the 8x8 portrait (tiles 65..67, flipped by attribute for the 4 sides) */
+static void frame(uint8_t on)
+{
+    uint8_t k, id, at, fr[48];
+    if (on) { rom_copy(PORTRAIT_REF_BANK, fr, portrait_frame, 48); VBK_REG = 0; set_bkg_data(65, 3, fr); }
+    for (k = 0; k < 10; k++) {
+        uint8_t edge = k == 0 || k == 9;
+        id = on ? (edge ? 65u : 66u) : 0u; at = (uint8_t)(k == 9 ? 0x20u : 0u);           /* top row */
+        VBK_REG = 1; set_bkg_tiles(k, 0, 1, 1, &at); VBK_REG = 0; set_bkg_tiles(k, 0, 1, 1, &id);
+        at |= 0x40u;                                                                       /* bottom row: Y flip */
+        VBK_REG = 1; set_bkg_tiles(k, 9, 1, 1, &at); VBK_REG = 0; set_bkg_tiles(k, 9, 1, 1, &id);
+        if (!edge) {
+            id = on ? 67u : 0u; at = 0;                                                    /* left / right columns */
+            VBK_REG = 1; set_bkg_tiles(0, k, 1, 1, &at); VBK_REG = 0; set_bkg_tiles(0, k, 1, 1, &id);
+            at = 0x20u;
+            VBK_REG = 1; set_bkg_tiles(9, k, 1, 1, &at); VBK_REG = 0; set_bkg_tiles(9, k, 1, 1, &id);
+        }
+    }
+    VBK_REG = 0;
 }
 
 static uint16_t portrait_name(uint8_t sp)
