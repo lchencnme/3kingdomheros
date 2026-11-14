@@ -4,7 +4,7 @@
 #include <stdint.h>
 #define TECH01_W 32u
 #define TECH01_H 24u
-#define TECH01_BG_TILES 40u
+#define TECH01_BG_TILES 48u
 #define TECH01_OBJ_TILES 12u
 #define TECH01_UNITS 8u
 #define TECH01_BANK 11u
@@ -32,8 +32,8 @@ extern const uint8_t tech01_bg_tiles[];
 extern const uint8_t tech01_obj_tiles[];
 extern const uint16_t tech01_bg_pals[32];
 extern const uint16_t tech01_obj_pals[16];
-extern const uint8_t tech01_meta[10][4];
-extern const uint8_t tech01_terrain_pal[10];
+extern const uint8_t tech01_meta[12][4];
+extern const uint8_t tech01_terrain_pal[12];
 extern const uint8_t tech01_terrain[];
 extern const Tech01Unit tech01_units[];
 #define TECH01_START_ITEMS 1u

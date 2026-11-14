@@ -24,6 +24,10 @@ for y in range(VH):
         if wx >= w * 16 or wy >= h * 16:
             continue
         t = terr[(wy // 16) * w + wx // 16]
+        if t == 0:
+            v = ((wx // 16) * 7 + (wy // 16) * 13) & 7
+            t = 10 if v == 0 else (11 if v == 3 else 0)
+        pt = t
         img[y][x] = PALS[g["TERRAIN_PAL"][t]][CH[g["ART"][t][wy % 16][wx % 16]]]
 units = [(s[0], s[1], 0, 0) for s in b["deploy"]["slots"][:b["deploy"]["max_count"]]]
 units += [(u["x"], u["y"], u["class"], {"PLAYER": 0, "ALLY": 1, "ENEMY": 2}[u["faction"]]) for u in b["units"]]

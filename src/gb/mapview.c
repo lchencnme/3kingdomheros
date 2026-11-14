@@ -167,6 +167,10 @@ static uint8_t compose(int16_t wx, int16_t wy, uint8_t *dst, uint8_t hl, uint8_t
     } else {
         uint8_t cx = (uint8_t)(wx >> 1), cy = (uint8_t)(wy >> 1), t = grid_terrain(cx, cy) & 0x0F;
         uint8_t q = (uint8_t)(((wy & 1) << 1) | (wx & 1));
+        if (t == 0) {                        /* open ground: two variants by position, so fields are not a grid */
+            uint8_t v = (uint8_t)((cx * 7u + cy * 13u) & 7u);
+            if (v == 0) t = 10; else if (v == 3) t = 11;
+        }
         memcpy(dst, &tech01_bg_tiles[(uint16_t)meta[t * 4 + q] * 16u], 16);   /* same ROM bank as this code */
         pal = hl ? PAL_HL : tpal[t];
         if (q == 3u) {     /* treasure chest in the cell's lower-right tile, under any unit (7.4) */

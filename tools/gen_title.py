@@ -42,7 +42,7 @@ def text(img, x, y, s, scale=1, tone=3):
                             yy, xx = y + r * scale + dy, x + px * scale + dx
                             if 0 <= yy < H and 0 <= xx < W:
                                 img[yy][xx] = tone
-        x += wd * scale + (2 if scale > 1 else 0)
+        x += wd * scale + (1 if scale > 1 else 0)
     return x
 
 
@@ -61,37 +61,41 @@ def bust(img, name, x, y):
 
 def main():
     img = [[0] * W for _ in range(H)]
-    for x in range(W):                               # outer double rule
-        for y in (1, 3, H - 4, H - 2):
-            if 2 <= x < W - 2:
-                img[y][x] = 3
-    for y in range(1, H - 1):
-        for x in (2, 4, W - 5, W - 3):
-            if 1 <= y:
-                img[y][x] = 3
-    text(img, 9, 8, "三国豪杰传", 2)
-    # 朱文印: a vermilion seal with the era in reversed-out seal style, right of the title
-    for y in range(8, 32):
-        for x in range(136, 152):
-            edge = x in (136, 151) or y in (8, 31)
-            img[y][x] = 0 if edge else 2
+    # 回纹 (fret) border, one 8 px tile repeated round the picture, in the ochre pigment with ink rails
+    FRET = ["########", ".......#", ".#####.#", ".#...#.#", ".#.#.#.#", ".#.###.#", ".#.....#", ".#######"]
+    for ty in range(H // 8):
+        for tx in range(W // 8):
+            if tx in (0, W // 8 - 1) or ty in (0, H // 8 - 1):
+                for y in range(8):
+                    for x in range(8):
+                        if FRET[y][x] == "#":
+                            img[ty * 8 + y][tx * 8 + x] = 2
+    for x in range(7, W - 7):                        # inner ink rail
+        img[7][x] = img[H - 8][x] = 3
+    for y in range(7, H - 7):
+        img[y][7] = img[y][W - 8] = 3
+    text(img, 11, 10, "三国豪杰传", 2)
+    # 朱文印: a vermilion seal with the era cut out in paper, right of the title
+    for y in range(10, 34):
+        for x in range(137, 151):
+            img[y][x] = 2
     seal = [[0] * W for _ in range(H)]
-    text(seal, 138, 8, "汉", 1); text(seal, 138, 20, "末", 1)
-    for y in range(8, 32):
-        for x in range(136, 152):
+    text(seal, 138, 10, "汉", 1); text(seal, 138, 22, "末", 1)
+    for y in range(10, 34):
+        for x in range(137, 151):
             if seal[y][x]:
-                img[y][x] = 0                       # paper-coloured characters cut out of the red field
-    for x in range(8, W - 8):
-        img[35][x] = 3
-        img[37][x] = 2
+                img[y][x] = 0
+    for x in range(12, W - 12):                      # rule under the title: ink over a pigment hairline
+        img[36][x] = 3
+        img[38][x] = 2
     for k, (nm, label) in enumerate((("guanyu", "关羽"), ("liubei", "刘备"), ("zhangfei", "张飞"))):
-        bx = 8 + k * 50
-        bust(img, nm, bx, 43)
-        for y in range(93, 107):                    # name band: a pale ochre wash under the names
+        bx = 9 + k * 47
+        bust(img, nm, bx, 41)
+        for y in range(90, 103):                     # name band: a pale wash under the names
             for x in range(bx, bx + 48):
                 if (x + y) % 2 == 0:
                     img[y][x] = 1
-        text(img, bx + 12, 94, label)
+        text(img, bx + 12, 90, label)
     tiles, index, tmap, attr = [[0] * 16], {tuple([0] * 16): 0}, [], []
     for ty in range(H // 8):
         for tx in range(W // 8):
@@ -108,7 +112,8 @@ def main():
                 index[k] = len(tiles)
                 tiles.append(d)
             tmap.append(index[k])
-            attr.append(2 if (tx >= 17 and 1 <= ty <= 3) else (1 if 5 <= ty <= 10 else (3 if ty >= 11 and ty <= 12 else 0)))
+            border = tx in (0, 19) or ty in (0, 13)
+            attr.append(3 if border else (2 if (tx in (17, 18) and 1 <= ty <= 4) else (1 if 5 <= ty <= 10 else (3 if ty in (11, 12) else 0))))
     if len(tiles) > 255:
         die(f"{len(tiles)} unique tiles > 255 (BG tile ids of VRAM bank 0)")
 

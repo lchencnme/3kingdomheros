@@ -3,7 +3,7 @@
 #define FS_DATA_H
 #include <stdint.h>
 #define FS_PLATE_BANK 15u
-#define FS_PLATE_TILES 85u
+#define FS_PLATE_TILES 92u
 #define FS_PLATE_W 20u
 #define FS_PLATE_H 13u
 #define FS_ACTOR_W 6u

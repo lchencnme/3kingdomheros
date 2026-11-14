@@ -88,9 +88,16 @@ static void blit_rows(uint8_t *d, const uint8_t *src, uint8_t n, uint8_t sh, uin
     }
 }
 
+/* map-mode info panel: a double rule (ink over the earth pigment) along its top edge, in the two pixel
+ * rows above the glyphs; the edge columns carry it through tile blank + 1 */
 static void raster_line(uint8_t line)
 {
     hud_raster(line);
+    if (line == 0) {
+        uint8_t k;
+        uint8_t *t = hud_tiles;
+        for (k = 0; k < LINE_TILES; k++, t += 16) { t[0] = 0xFF; t[1] = 0xFF; t[2] = 0x00; t[3] = 0xFF; }
+    }
 }
 
 /* page p of a paginated TXD_* string into lists 0 and 1; returns 1 if more pages follow */
@@ -160,7 +167,8 @@ void hud_service(void)
         uint8_t *s = hud_tiles;
         for (r = 0; r < 4; r++)
             for (c = 0; c < 32; c++)
-                *s++ = (c == 0 || c >= 19) ? blank : (uint8_t)(base + (r >> 1) * 36 + (r & 1) * 18 + (c - 1));
+                *s++ = (c == 0 || c >= 19) ? (uint8_t)(r == 0 ? blank + 1u : blank)
+                                           : (uint8_t)(base + (r >> 1) * 36 + (r & 1) * 18 + (c - 1));
         job = 6;
     }
 }
@@ -219,6 +227,9 @@ void hud_init(uint8_t blank_tile)
     /* clear both pages once (LCD is off during init) */
     memset(hud_tiles, 0, LINE_BYTES);
     VBK_REG = VBK_BANK_1;
+    hud_tiles[0] = 0xFF; hud_tiles[1] = 0xFF; hud_tiles[3] = 0xFF;      /* edge tile: the same double rule */
+    set_bkg_data((uint8_t)(blank + 1u), 1, hud_tiles);
+    hud_tiles[0] = 0; hud_tiles[1] = 0; hud_tiles[3] = 0;
     set_bkg_data(0, 36, hud_tiles); set_bkg_data(36, 36, hud_tiles);
     set_bkg_data(128, 36, hud_tiles); set_bkg_data(164, 36, hud_tiles);
     VBK_REG = VBK_BANK_0;

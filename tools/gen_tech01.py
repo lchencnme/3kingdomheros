@@ -33,7 +33,7 @@ def tint(c):  # move-range highlight: shift toward stone-blue
 BG_PALS += [
     [PAPER, (160, 188, 228), (44, 84, 156), INK],                     # 4 player unit: 花青 indigo
     [PAPER, (240, 168, 144), (176, 52, 36), INK],                     # 5 enemy unit: 朱砂 vermilion
-    [tint(PAPER), tint((206, 196, 160)), tint((120, 120, 110)), INK], # 6 highlight (any terrain)
+    [(214, 230, 216), (178, 204, 188), (110, 138, 126), INK],          # 6 move range: a pale celadon wash (any terrain)
     [PAPER, (186, 186, 186), (112, 112, 112), INK],                   # 7 acted unit: grey
 ]
 OBJ_PALS = [
@@ -230,9 +230,23 @@ def master(name):
 
 # terrain from the delivered art where a 16x16 cell works (textures and compact objects); road, village,
 # fort floor and bridge stay hand-cut so they connect and repeat cleanly
-for _tid, _name in ((2, "terrain_forest.png"),):
-    if (V05 / _name).exists():
-        ART[_tid] = grid16(master(_name))
+ART[2] = grid16([  # woods: three pines in tiers (松), the way woodcut maps mark a forest
+    "....#......#....", "...#+#....#+#...", "..#+++#..#+++#..", ".#++:++##++:++#.",
+    "...#+#....#+#...", "..#+++#..#+++#..", ".#+++++##+++++#.", "#++:+++##+++:++#",
+    "...###....###...", "....#......#....", "....#..#...#....", ".......+#.......",
+    "......#+++#.....", ".....#++:++#....", "......#####.....", ".......#........"])
+ART[10] = grid16([  # plain variant: tufts and a pebble
+    "................", "................", "...+.+..........", "....+...........",
+    "...:+:..........", "................", "..........::....", ".........:++:...",
+    "..........::....", "................", "................", "................",
+    "..+.+...........", "...+............", "................", "................"])
+ART[11] = grid16([  # plain variant: wild flowers
+    "................", "......+.........", ".....+:+........", "......+.........",
+    "................", "................", "................", "...........+....",
+    "..........+:+...", "...........+....", "................", "..+.............",
+    ".+:+............", "..+.............", "................", "................"])
+N_ART = 12        # 10 terrain kinds + 2 plain variants picked by cell position (mapview.c compose)
+TERRAIN_PAL[10] = TERRAIN_PAL[11] = 0
 
 
 def _mountain():
@@ -410,7 +424,7 @@ def main():
     terrain = build_map()
     tiles = []
     meta = []                      # per terrain: 4 tile ids
-    for tid in range(10):
+    for tid in range(N_ART):
         q = split16(ART[tid])
         base = len(tiles)
         tiles += q
@@ -447,7 +461,7 @@ def main():
          f"#define TECH01_DEPLOY_MAX {CAMP['deploy']['max_count']}u", "extern const uint8_t tech01_ai_groups[];   /* {id, mode, target lo, hi, leash} */",
          "extern const uint8_t tech01_bg_tiles[];", "extern const uint8_t tech01_obj_tiles[];",
          "extern const uint16_t tech01_bg_pals[32];", "extern const uint16_t tech01_obj_pals[16];",
-         "extern const uint8_t tech01_meta[10][4];", "extern const uint8_t tech01_terrain_pal[10];",
+         "extern const uint8_t tech01_meta[12][4];", "extern const uint8_t tech01_terrain_pal[12];",
          "extern const uint8_t tech01_terrain[];", "extern const Tech01Unit tech01_units[];",
          f"#define TECH01_START_ITEMS {len(START_ITEMS)}u", "extern const uint8_t tech01_start_items[][2];",
          "#endif"]
@@ -468,11 +482,11 @@ def main():
     c += arr("tech01_class_body", "uint8_t", [ORDER.index(CLASS_BODY[k]) for k in range(18)])
     ci += arr("tech01_bg_pals", "uint16_t", [rgb555(col) for p in BG_PALS for col in p], 4)
     ci += arr("tech01_obj_pals", "uint16_t", [rgb555(col) for p in OBJ_PALS for col in p], 4)
-    ci.append("const uint8_t tech01_meta[10][4] = {" + ", ".join("{" + ", ".join(map(str, m)) + "}" for m in meta) + "};")
+    ci.append("const uint8_t tech01_meta[12][4] = {" + ", ".join("{" + ", ".join(map(str, m)) + "}" for m in meta) + "};")
     rt = remap_table()
     ci.append("const uint8_t tech01_remap[8][4] = {" + ", ".join("{" + ", ".join(map(str, rt[i:i + 4])) + "}" for i in range(0, 32, 4))
               + "};   /* [src pal][unit pal - 4] */")
-    ci.append("const uint8_t tech01_terrain_pal[10] = {" + ", ".join(str(TERRAIN_PAL[i]) for i in range(10)) + "};")
+    ci.append("const uint8_t tech01_terrain_pal[12] = {" + ", ".join(str(TERRAIN_PAL.get(i, 0)) for i in range(12)) + "};")
     fac = {"PLAYER": 0, "ALLY": 1, "ENEMY": 2}
     ci.append("const uint8_t tech01_start_items[][2] = {" + ", ".join(f"{{{u}, {i}}}" for u, i in START_ITEMS) + "};")
     recs = []

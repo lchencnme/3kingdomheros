@@ -303,6 +303,16 @@ def plate():
         if x % 16 in (2, 3):
             c.line(x, gy + 6, x + 1, gy + 2, 3)
             c.line(x + 2, gy + 6, x + 4, gy + 3, 3)
+    def cloud(cx, cy, s=1):                                             # 如意云: curled scroll cloud, ink only
+        for k, (dx, r) in enumerate(((-9, 4), (0, 6), (9, 4))):
+            for a in range(180, 361, 6):
+                c.put(cx + dx * s + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a)) * 0.8, 3)
+        c.line(cx - 14 * s, cy, cx + 14 * s, cy, 3)
+        for sx in (-1, 1):                                              # curled tails
+            for a in range(0, 271, 12):
+                rr = 2.6 - a / 160.0
+                c.put(cx + sx * (15 * s + rr * math.cos(math.radians(a))), cy + 2 - rr * math.sin(math.radians(a)), 3)
+    cloud(80, 34, 0.8)                                                  # one cloud: the plate budget is 96 tiles
     for x in (12, 147):                                                 # two pines frame the field (ink only)
         c.line(x, gy, x, 44, 3, 2)
         for k in range(5):

@@ -11,6 +11,7 @@
 #include "vblank.h"
 #include "debug.h"
 #include "../gen/portrait_data.h"
+#include "../gen/scroll_data.h"
 #include "../gen/text_data.h"
 #include "../gen/fs_data.h"
 
@@ -39,21 +40,46 @@ static void put_text_map(void)
 }
 
 
+/* the 青绿山水 scroll beside the portrait (tiles 68..167) and the 回纹 divider under both (tile 168):
+ * own palette 1; staged through the HUD line buffer at C800 like the frame tiles */
+static void scroll_panel(void)
+{
+    uint8_t ids[20], at[20];
+    uint16_t pal[4];
+    rom_copy(SCROLL_BANK, pal, scroll_pal, sizeof pal);
+    set_bkg_palette(1, 1, pal);
+    VBK_REG = 0;
+    rom_set_bkg_data(SCROLL_BANK, 68, SCROLL_TILES, scroll_tiles);
+    rom_set_bkg_data(SCROLL_BANK, 168, 1, scroll_fret);
+    memset(at, 1, 20);
+    memset(ids, 168, 20);
+    VBK_REG = 1; set_bkg_tiles(0, 10, 20, 1, at);
+    VBK_REG = 0; set_bkg_tiles(0, 10, 20, 1, ids);
+}
+
+/* the scroll at column col0 of the picture rows (10 beside a portrait, 5 = centred for narration);
+ * the rest of those rows is cleared */
+static void scroll_at(uint8_t col0)
+{
+    uint8_t r, c, ids[20], at[20];
+    for (r = 0; r < 10; r++) {
+        for (c = 0; c < 20; c++) {
+            if (c >= col0 && c < col0 + 10u) { ids[c] = (uint8_t)(68u + r * 10u + (c - col0)); at[c] = 1; }
+            else { ids[c] = 0; at[c] = TEXT_PAL; }
+        }
+        VBK_REG = 1; set_bkg_tiles(0, r, 20, 1, at);
+        VBK_REG = 0; set_bkg_tiles(0, r, 20, 1, ids);
+    }
+}
+
 static void frame(uint8_t on);
 static void show_portrait(uint8_t sp)
 {
     uint8_t r, c, ids[8], at[8];
     PortraitRef ref;
     uint16_t pal[4];
-    if (sp >= PORTRAIT_COUNT) {
-        for (r = 1; r < 9; r++) {
-            for (c = 0; c < 8; c++) { ids[c] = 0; at[c] = TEXT_PAL; }
-            VBK_REG = 1; set_bkg_tiles(1, r, 8, 1, at);
-            VBK_REG = 0; set_bkg_tiles(1, r, 8, 1, ids);
-        }
-        frame(0);                                  /* narration: no portrait, no frame */
-        return;
-    }
+    if (sp >= PORTRAIT_COUNT) { scroll_at(5); return; }   /* narration: the scroll alone, centred */
+    scroll_at(10);
     rom_copy(PORTRAIT_REF_BANK, &ref, &portrait_refs[sp], sizeof ref);   /* 82 portraits over banks 19.. */
     rom_set_bkg_data(ref.bank, 1, 64, ref.tiles);
     rom_copy(PORTRAIT_REF_BANK, pal, portrait_pal + (uint16_t)ref.tint * 4u, sizeof pal);
@@ -147,6 +173,7 @@ uint8_t dialog_run_from(uint8_t i) BANKED
                     VBK_REG = 0;
                     set_bkg_palette(TEXT_PAL, 1, pal7);
                     put_text_map();
+                    scroll_panel();
                 }
                 show_portrait(sp);
                 put_lines(1);

@@ -3,7 +3,7 @@
 #define TITLE_DATA_H
 #include <stdint.h>
 #define TITLE_BANK 26u
-#define TITLE_TILES 199u
+#define TITLE_TILES 192u
 #define TITLE_W 20u
 #define TITLE_H 14u
 #define TITLE_PALS 4u

@@ -182,8 +182,8 @@ for _bt in _CAMPAIGN["battles"]:
     _MAPS.append((_bj["map"]["width"], _bj["map"]["height"], _bj["map"]["terrain"], [tuple(x) for x in _bj.get("treasures", [])]))
 _IDX = (ROM.resolve().parents[2] / "src/gen/tech01_index.c").read_text()
 _META = [list(map(int, m.split(","))) for m in _re.findall(r"\{(\d+, \d+, \d+, \d+)\}",
-         _re.search(r"tech01_meta\[10\]\[4\] = \{(.*?)\};", _IDX).group(1))]
-_TPAL = list(map(int, _re.search(r"tech01_terrain_pal\[10\] = \{(.*?)\}", _IDX).group(1).split(",")))
+         _re.search(r"tech01_meta\[12\]\[4\] = \{(.*?)\};", _IDX).group(1))]
+_TPAL = list(map(int, _re.search(r"tech01_terrain_pal\[12\] = \{(.*?)\}", _IDX).group(1).split(",")))
 _BLANK = 40
 _TRE = [tuple(map(int, m)) for m in _re.findall(r"\{(\d+), (\d+), (\d+)\}",
         _re.search(r"tech01_treasures\[\]\[3\] = \{(.*?)\};", _IDX).group(1))]
@@ -268,6 +268,9 @@ def view_mismatches(em, highlight=False, danger=False):
                 data, pal = [0] * 16, 0
             else:
                 tt = _TERR[(wy >> 1) * _W + (wx >> 1)]
+                if tt == 0:                                      # open ground variants by cell position
+                    _v = ((wx >> 1) * 7 + (wy >> 1) * 13) & 7
+                    tt = 10 if _v == 0 else (11 if _v == 3 else 0)
                 tid = _META[tt][((wy & 1) << 1) | (wx & 1)]
                 data, pal = list(_BGT[tid * 16:tid * 16 + 16]), _TPAL[tt]
                 q = ((wy & 1) << 1) | (wx & 1)
