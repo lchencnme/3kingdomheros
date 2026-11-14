@@ -129,23 +129,42 @@ def portrait(name, tw, th, long_side, zoom=0.82):
     save(q, name)
 
 
-def sprite(name, tw, th, line=False, pad_bottom=0):
-    L = load(SRC / name, 4 * max(tw, th) * 2)
-    y0, y1, x0, x1 = bbox(L)
-    F = fit(L, y0, y1, x0, x1, tw, th, anchor_bottom=True)
-    bg = background_mask(F)
+def dilate(m, r):
+    out = m.copy()
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            out |= np.roll(np.roll(m, dy, 0), dx, 1)
+    return out
+
+
+def sprite(name, tw, th, line=False, pad_bottom=0, thr=(0.10, 0.05, 0.70, 0.60)):
+    if line:
+        # map units (outline drawings): work at 512 px so thin strokes stay dark, close small gaps in the
+        # outline before the background flood fill, keep stroke-only pixels (weapons) even when mostly paper
+        L = load(SRC / name, 512)
+        y0, y1, x0, x1 = bbox(L, 0.7)
+        F = fit(L, y0, y1, x0, x1, tw, th, anchor_bottom=True)
+        closed = dilate(F < thr[3], 3)
+        bg = background_mask(np.where(closed, 0.0, 1.0), 0.5)
+    else:
+        L = load(SRC / name, 4 * max(tw, th) * 2)
+        y0, y1, x0, x1 = bbox(L)
+        F = fit(L, y0, y1, x0, x1, tw, th, anchor_bottom=True)
+        bg = background_mask(F)
     ys = np.linspace(0, F.shape[0], th + 1).astype(int)
     xs = np.linspace(0, F.shape[1], tw + 1).astype(int)
-    solid = np.array([[bg[ys[j]:ys[j + 1], xs[i]:xs[i + 1]].mean() <= 0.55 for i in range(tw)] for j in range(th)])
-    if line:          # map units: line coverage inside, flat light fill, ink outline round the silhouette
-        q = line_reduce(F, tw, th, 0.34, 0.20, 0.70)
-        q[(q == 0) & solid] = 1
+    if line:          # line coverage inside, flat light fill, ink outline round the silhouette
+        q = line_reduce(F, tw, th, *thr)
+        solid = np.array([[bg[ys[j]:ys[j + 1], xs[i]:xs[i + 1]].mean() <= 0.6 or q[j, i] >= 2
+                           for i in range(tw)] for j in range(th)])
+        q[(q < 2) & solid] = 1
         for j in range(th):
             for i in range(tw):
                 if solid[j, i] and any(not (0 <= j + dy < th and 0 <= i + dx < tw) or not solid[j + dy, i + dx]
                                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
                     q[j, i] = 3
     else:
+        solid = np.array([[bg[ys[j]:ys[j + 1], xs[i]:xs[i + 1]].mean() <= 0.55 for i in range(tw)] for j in range(th)])
         q = tones(reduce(F, tw, th, 0.5))
     q[~solid] = TRANSPARENT
     if pad_bottom:    # map units: rows below the feet stay clear for the foot mark (design doc 12.2)
