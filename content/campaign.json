@@ -126,6 +126,36 @@
       "id": "BT_20",
       "title": "TX_BT_TITLE_22",
       "camp": "CAMP_C3_LONGZHONG",
+      "next": "BT_21"
+    },
+    {
+      "id": "BT_21",
+      "title": "TX_BT_TITLE_23",
+      "camp": "CAMP_C4_BOWANG",
+      "next": "BT_22"
+    },
+    {
+      "id": "BT_22",
+      "title": "TX_BT_TITLE_24",
+      "camp": "CAMP_C4_FANCHENG",
+      "next": "BT_23"
+    },
+    {
+      "id": "BT_23",
+      "title": "TX_BT_TITLE_25",
+      "camp": null,
+      "next": "BT_24"
+    },
+    {
+      "id": "BT_24",
+      "title": "TX_BT_TITLE_26",
+      "camp": "CAMP_C4_XIAKOU",
+      "next": "BT_25"
+    },
+    {
+      "id": "BT_25",
+      "title": "TX_BT_TITLE_27",
+      "camp": null,
       "next": null
     }
   ],

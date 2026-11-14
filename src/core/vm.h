@@ -51,6 +51,7 @@
 #define OP_SET_AI 0x0Du       /* subject u16 (0..95 instance, 0x8000|g group), mode u8, target u16, leash u8 */
 #define OP_JOIN 0x0Fu         /* joiner u8: officer from the join table enters the roster (no-op if already in) */
 #define OP_FATE 0x10u         /* character u16, fate u8 (FATE_OWNED / FATE_LEFT): party leave / return */
+#define OP_HP_CAP 0x11u       /* unit u8, value u16: hp = min(hp, value) - scripted damage (fire, flood) */
 #define OP_FACTION_SET 0x0Cu  /* unit u8, faction u8: clears the unit's action for this phase (9.3) */
 
 #define SCOPE_GLOBAL 0u

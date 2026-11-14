@@ -112,6 +112,8 @@ class Compiler:
                 out += [0x09] + u16(args[0])
             elif name == "HP_SET":
                 out += [0x0A, self.unit(args[0])] + u16(min(args[1], 9999))
+            elif name == "HP_CAP":     # [unit, value]: scripted damage, never heals
+                out += [0x11, self.unit(args[0])] + u16(args[1])
             elif name == "DUEL":
                 out += [0x0B, self.unit(args[0]), self.unit(args[1])] + u16(min(args[2], 9999))
             elif name == "GIVE_ITEM":   # [item id]: scripted reward -> prize queue (design doc 7.4)

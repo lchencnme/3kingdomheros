@@ -19,7 +19,8 @@ CONT = {"NORMAL": 0, "NO_REPLENISH": 1}
 ROUND = {"RESET": 0, "CARRY": 1}
 VIC = {"ALL": 0, "DEFEAT": 1, "SURVIVE": 2, "REACH": 3}
 FAC = {"PLAYER": 0, "ALLY": 1, "ENEMY": 2}
-SPK = {"LIUBEI": 0, "GUANYU": 1, "ZHANGFEI": 2, "NARRATOR": 0xFF}
+SPK = {e["pinyin"].upper(): i for i, e in enumerate(
+    json.loads((ROOT / "content/portraits.json").read_text(encoding="utf-8"))["portraits"])} | {"NARRATOR": 0xFF}
 OFFICER_TAGS = ["CH_LIUBEI", "CH_GUANYU", "CH_ZHANGFEI", "CH_JIANYONG"]
 
 
@@ -766,7 +767,180 @@ BT20 = {
                                    ["LEAVE", 44], ["GIVE_GOLD", 800]], WIN0),
     ],
 }
-EXTRA = [BT01, BT02, BT03, BT04, BT05, BT06, BT07, BT08, BT09, BT10, BT11, BT12, BT13, BT14, BT15, BT16, BT17, BT18, BT19, BT20]
+# ================================================================ Chapter 4 卧龙（荆襄与赤壁） BT_21..BT_25
+# from here on battles have 7+ player entries: 诸葛亮 is roster officer 6 (instance = roster index)
+# ---------------------------------------------------------------- BT_21 博望坡 (回目 39, fire in the woods)
+BT21 = {
+    "id": "BT_21", "goal": ("击退夏侯惇", "诸葛亮带着火攻书：森林里的敌人更怕火。"), "map": [
+        "55522222000000000000222255",
+        "55222220000000000000022225",
+        "52222200000000000000002222",
+        "22222000000000000000000222",
+        "22220000002222200000000022",
+        "00000000022222220000000000",
+        "11111111111111111111111111",
+        "00000000022222220000000000",
+        "22220000002222200000000022",
+        "22222000000000000000000222",
+        "52222200000000000000002222",
+        "55222220000000000000022225",
+        "55522222000000000000222255",
+        "55552222200000000002222555"],
+    "slots": [(2, 6), (3, 5), (3, 7), (1, 5), (1, 7), (0, 6), (2, 4)],
+    "others": [U(7, 22, 6, ai=0, lv=16, ch=48),                     # 7 夏侯惇 charges down the road
+               U(7, 19, 5, lv=14, ch=32), U(1, 19, 7, lv=14, ch=46),  # 8 于禁, 9 李典
+               U(1, 12, 6, lv=13), U(1, 13, 5, lv=13), U(1, 13, 7, lv=13),
+               U(4, 16, 4, lv=13), U(4, 16, 8, lv=13), U(7, 24, 5, lv=13), U(7, 24, 7, lv=13)],
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD")],
+    "items": [(0, 2)], "treasures": [(11, 4, 0x11)],
+    "victory": ("DEFEAT", 7, 0), "protect": None,
+    "turn_limit": 25, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 6, "forced": [0], "seed": 83,
+    "events": [
+        EV(1, "BATTLE_START", None, [["TEXT", "NARRATOR", "TXD_B21_OPEN_0"], ["TEXT", "zhugeliang", "TXD_B21_OPEN_1"], ["TEXT", "P0003", "TXD_B21_OPEN_2"],
+                                     ["TEXT", "NARRATOR", "TXD_B21_GOAL"]]),
+        EV(2, "PHASE_START", "PLAYER", [["TEXT", "zhugeliang", "TXD_B21_FIRE"]], {"leaf": "turn_cmp", "op": "ge", "n": 3}),
+        EV(3, "BATTLE_END", None, [["TEXT", "P0003", "TXD_B21_WIN_1"], ["TEXT", "P0001", "TXD_B21_WIN_2"], ["GIVE_GOLD", 800], ["GIVE_ITEM", 0x50]], WIN0),
+    ],
+}
+# ---------------------------------------------------------------- BT_22 火烧新野 (回目 40, the city burns)
+BT22 = {
+    "id": "BT_22", "goal": ("全灭曹军", "第3回合城中火起，城里的敌军兵力大减。"), "map": [
+        "00000000000000000000000000",
+        "00888888888888000000022200",
+        "00844444444448000000222220",
+        "00840000000048000000022200",
+        "00840033300048000000000000",
+        "00840030300000000000000000",
+        "00800030300011111111111111",
+        "00840033300000000000000000",
+        "00840000000048000000000000",
+        "00844444444448000005550000",
+        "00888888888888000055555000",
+        "00000000000000000005550000",
+        "00000066660000000000000000",
+        "00000667766000000000000000",
+        "00000066660000000000000000"],
+    "slots": [(20, 6), (21, 5), (21, 7), (22, 5), (22, 7), (23, 6), (22, 6)],
+    "others": [U(7, 6, 6, ai=0, lv=16, ch=45),                      # 7 曹仁 inside the empty city
+               U(1, 5, 4, lv=14), U(1, 5, 8, lv=14), U(7, 9, 5, lv=14), U(7, 9, 7, lv=14),
+               U(4, 11, 3, lv=14), U(4, 11, 9, lv=14), U(1, 12, 6, lv=14), U(2, 3, 6, ai=1, lv=14, ch=46)],   # 15 李典
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD")],
+    "items": [(0, 2)], "treasures": [(7, 6, 0x53)],
+    "victory": ("ALL", None, 0), "protect": None,
+    "turn_limit": 25, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 6, "forced": [0], "seed": 89,
+    "events": [
+        EV(1, "BATTLE_START", None, [["TEXT", "NARRATOR", "TXD_B22_OPEN_0"], ["TEXT", "zhugeliang", "TXD_B22_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B22_GOAL"]]),
+        EV(2, "PHASE_START", "PLAYER", [["TEXT", "NARRATOR", "TXD_B22_FIRE_1"],
+                                        ["HP_CAP", 7, 200], ["HP_CAP", 8, 120], ["HP_CAP", 9, 120], ["HP_CAP", 10, 140], ["HP_CAP", 11, 140],
+                                        ["TEXT", "zhaoyun", "TXD_B22_FIRE_2"]], {"leaf": "turn_cmp", "op": "ge", "n": 3}),
+        EV(3, "BATTLE_END", None, [["TEXT", "NARRATOR", "TXD_B22_WIN_1"], ["TEXT", "P0001", "TXD_B22_WIN_2"], ["GIVE_GOLD", 600]], WIN0),
+    ],
+}
+# ---------------------------------------------------------------- BT_23 长坂坡 (回目 41, escort 甘夫人)
+BT23 = {
+    "id": "BT_23", "goal": ("护送甘夫人到东边的长坂桥", "虎豹骑来得很快，先挡住骑兵。"), "map": [
+        "00000000000000000000067600",
+        "00222000000000000000067600",
+        "02222200000005550000067600",
+        "00222000000055555000067600",
+        "00000000000005550000067600",
+        "00000000000000000000067600",
+        "11111111111111111111199911",
+        "00000000000000000000067600",
+        "00000000002220000000067600",
+        "00000000022222000000067600",
+        "00555000002220000000067600",
+        "05555500000000000000067600",
+        "00555000000000000000067600",
+        "00000000000000000000067600"],
+    "slots": [(10, 6), (11, 5), (11, 7), (12, 5), (12, 7), (13, 6), (12, 6)],
+    "others": [U(17, 9, 6, ai=2, lv=5, ch=28, fac="ALLY"),          # 7 甘夫人 flees east over the bridge
+               U(8, 1, 6, ai=3, lv=17, ch=49),                      # 8 曹纯 and the 虎豹骑
+               U(7, 2, 4, ai=3, lv=15), U(7, 2, 8, ai=3, lv=15), U(7, 0, 5, lv=15), U(7, 0, 7, lv=15),
+               U(1, 4, 6, lv=15, ch=50), U(4, 5, 3, lv=14), U(4, 5, 9, lv=14)],   # 13 文聘
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(2, "ESCAPE", [25, 6], 0), G(3, "AGGRESSIVE", 7)],
+    "items": [(1, 1)], "treasures": [(13, 3, 0x02)],
+    "victory": ("REACH", 7, 0), "area": (23, 5, 25, 7), "protect": 7,
+    "turn_limit": 20, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 6, "forced": [0], "seed": 97,
+    "events": [
+        EV(1, "BATTLE_START", None, [["TEXT", "NARRATOR", "TXD_B23_OPEN_0"], ["TEXT", "P0001", "TXD_B23_OPEN_1"], ["TEXT", "zhugeliang", "TXD_B23_OPEN_2"],
+                                     ["TEXT", "NARRATOR", "TXD_B23_GOAL"]]),
+        EV(2, "BATTLE_END", None, [["TEXT", "NARRATOR", "TXD_B23_WIN_1"], ["TEXT", "P0003", "TXD_B23_WIN_2"]], WIN0),
+    ],
+}
+# ---------------------------------------------------------------- BT_24 长坂桥 (回目 41-42, 刘备 crosses; 张飞 holds)
+BT24 = {
+    "id": "BT_24", "goal": ("刘备到达桥东", "连续战：兵力不会恢复。张飞必须出阵。"), "map": [
+        "00000000000000067600000000",
+        "00022200000000067600002220",
+        "00222220000000067600022222",
+        "00022200000000067600002220",
+        "00000000000000067600000000",
+        "00000000000000067600000000",
+        "11111111111111199911111111",
+        "00000000000000067600000000",
+        "00000000000000067600000000",
+        "00555000000000067600000000",
+        "05555500000000067600005550",
+        "00555000000000067600055555",
+        "00000000000000067600005550",
+        "00000000000000067600000000"],
+    "slots": [(8, 6), (9, 5), (9, 7), (10, 5), (10, 7), (11, 6), (10, 6)],
+    "others": [U(8, 1, 6, ai=3, lv=17, ch=49),                      # 7 曹纯
+               U(7, 2, 5, ai=3, lv=15), U(7, 2, 7, ai=3, lv=15), U(7, 0, 4, lv=15), U(7, 0, 8, lv=15),
+               U(1, 4, 6, lv=15, ch=50), U(4, 4, 3, lv=14), U(4, 4, 9, lv=14), U(8, 0, 6, ai=1, lv=18, ch=27)],   # 12 文聘, 15 曹操
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(3, "AGGRESSIVE", 0)],
+    "items": [], "treasures": [],
+    "victory": ("REACH", 0, 0), "area": (22, 5, 25, 7), "protect": None,
+    "turn_limit": 15, "continuity": "NO_REPLENISH", "round_mode": "RESET", "deploy_max": 6, "forced": [0, 2], "seed": 101,
+    "events": [
+        EV(1, "BATTLE_START", None, [["TEXT", "NARRATOR", "TXD_B24_OPEN_0"], ["TEXT", "P0003", "TXD_B24_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B24_GOAL"]]),
+        EV(2, "PHASE_START", "PLAYER", [["TEXT", "NARRATOR", "TXD_B24_ZHAOYUN_1"], ["TEXT", "zhaoyun", "TXD_B24_ZHAOYUN_2"]],
+           {"leaf": "turn_cmp", "op": "ge", "n": 2}),
+        EV(3, "BATTLE_END", None, [["TEXT", "P0003", "TXD_B24_WIN_1"], ["TEXT", "NARRATOR", "TXD_B24_WIN_2"], ["TEXT", "P0001", "TXD_B24_WIN_3"],
+                                   ["GIVE_GOLD", 600]], WIN0),
+    ],
+}
+# ---------------------------------------------------------------- BT_25 赤壁 (回目 49-50, the east wind; 孙刘 allies)
+BT25 = {
+    "id": "BT_25", "goal": ("击退张辽", "第4回合东风起，火烧连环船。周瑜、黄盖是友军。"), "map": [
+        "77777777777777777777777777",
+        "77777777777777777777777777",
+        "66666666666666666666666666",
+        "00000000000000000000000000",
+        "00000000022200000000044400",
+        "00000000222220000000044400",
+        "00000000022200000000044400",
+        "11111111111111111111111111",
+        "00000000000000000000044400",
+        "00055500000000000000044400",
+        "00555550000000002220044400",
+        "00055500000000022222000000",
+        "00000000000000002220000000",
+        "00000000000000000000000000"],
+    "slots": [(2, 7), (3, 6), (3, 8), (1, 6), (1, 8), (0, 7), (2, 5)],
+    "others": [U(7, 21, 7, ai=2, lv=18, ch=26),                     # 7 张辽 guards 曹操's retreat
+               U(8, 23, 5, ai=1, lv=19, ch=27),                     # 8 曹操
+               U(1, 18, 5, lv=16), U(1, 18, 9, lv=16), U(4, 21, 4, ai=1, lv=16), U(4, 21, 10, ai=1, lv=16),
+               U(7, 15, 6, lv=16), U(7, 15, 8, lv=16), U(2, 19, 7, lv=16),
+               U(10, 5, 4, ai=0, lv=17, ch=51, fac="ALLY"),         # 16 周瑜
+               U(1, 6, 10, ai=0, lv=16, ch=52, fac="ALLY")],        # 17 黄盖
+    "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(2, "GUARD_POINT", [21, 7], 3)],
+    "items": [(0, 2), (1, 5)], "treasures": [(4, 10, 0x12)],
+    "victory": ("DEFEAT", 7, 0), "protect": None,
+    "turn_limit": 25, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 6, "forced": [0], "seed": 103,
+    "events": [
+        EV(1, "BATTLE_START", None, [["TEXT", "NARRATOR", "TXD_B25_OPEN_0"], ["TEXT", "zhouyu", "TXD_B25_OPEN_1"], ["TEXT", "zhugeliang", "TXD_B25_OPEN_2"],
+                                     ["TEXT", "NARRATOR", "TXD_B25_GOAL"]]),
+        EV(2, "PHASE_START", "PLAYER", [["TEXT", "zhugeliang", "TXD_B25_WIND_1"], ["TEXT", "NARRATOR", "TXD_B25_WIND_2"],
+                                        ["HP_CAP", 9, 150], ["HP_CAP", 10, 150], ["HP_CAP", 13, 180], ["HP_CAP", 14, 180], ["HP_CAP", 15, 200]],
+           {"leaf": "turn_cmp", "op": "ge", "n": 4}),
+        EV(3, "BATTLE_END", None, [["TEXT", "NARRATOR", "TXD_B25_WIN_1"], ["TEXT", "P0002", "TXD_B25_WIN_2"], ["TEXT", "zhugeliang", "TXD_B25_WIN_3"],
+                                   ["GIVE_GOLD", 1000], ["GIVE_ITEM", 0x51]], WIN0),
+    ],
+}
+EXTRA = [BT01, BT02, BT03, BT04, BT05, BT06, BT07, BT08, BT09, BT10, BT11, BT12, BT13, BT14, BT15, BT16, BT17, BT18, BT19, BT20,
+         BT21, BT22, BT23, BT24, BT25]
 
 
 def battle_json(bt):
@@ -825,7 +999,8 @@ def main():
     c = ["/* GENERATED by tools/gen_campaign.py - do not edit */", '#include "campaign_data.h"', '#include "text_data.h"']
     bt_c = ["#pragma bank 14   /* battle tables: read only by flow.c (same bank); others use its BANKED accessors */",
             "/* GENERATED by tools/gen_campaign.py - do not edit */", '#include "campaign_data.h"', '#include "text_data.h"']
-    asset = ["#pragma bank 15   /* asset bank: terrain of battles 2+ (read through the gateway) */", '#include "campaign_data.h"']
+    asset = ["#pragma bank 15   /* asset bank: terrain of battles 1..20 (read through the gateway) */", '#include "campaign_data.h"']
+    asset_b = ["#pragma bank 9   /* asset bank: terrain of battles 21+ */", '#include "campaign_data.h"']
     rows = {}
     ui_names = json.loads((ROOT / "content/text/ui_zh.json").read_text(encoding="utf-8"))
     ch_name = {ch["id"]: ui_names[ch["name"]] for ch in chars}
@@ -840,7 +1015,8 @@ def main():
         js, terrain, w, h = battle_json(bt)
         (ROOT / f"content/battles/{bid}.json").write_text(json.dumps(js, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         p = f"bt{n}"
-        asset.append(f"const uint8_t {p}_terrain[{w * h}] = {{" + ", ".join(map(str, terrain)) + "};")
+        tbank = 15 if n <= 20 else 9
+        (asset if tbank == 15 else asset_b).append(f"const uint8_t {p}_terrain[{w * h}] = {{" + ", ".join(map(str, terrain)) + "};")
         units = [(roster[k]["class"] if k < len(roster) else 0, 0, x, y, 0, 0) for k, (x, y) in enumerate(bt["slots"])]
         if not 1 <= bt["deploy_max"] <= min(8, len(bt["slots"])):
             die(f"{bid}: deploy_max must be 1..min(8, slots)")
@@ -886,7 +1062,7 @@ def main():
         rect = bt.get("area", (0, 0, 0, 0))
         if vk == "REACH" and not (0 <= rect[0] <= rect[2] < w and 0 <= rect[1] <= rect[3] < h):
             die(f"{bid}: bad REACH area {rect}")
-        rows[n] = (p, w, h, 15, len(units), len(ei), len(bt["ai_groups"]), len(bt["treasures"]), bt["turn_limit"],
+        rows[n] = (p, w, h, tbank, len(units), len(ei), len(bt["ai_groups"]), len(bt["treasures"]), bt["turn_limit"],
                    CONT[bt["continuity"]], ROUND[bt["round_mode"]], bt["deploy_max"], sum(1 << k for k in bt["forced"]),
                    bt["seed"], VIC[vk], 0xFF if vu is None else vu, vr, 0xFF if bt["protect"] is None else bt["protect"]) + tuple(rect)
 
@@ -989,6 +1165,7 @@ def main():
     (ROOT / "src/gen/campaign_camps.c").write_text("\n".join(camp_c) + "\n", encoding="utf-8")
     (ROOT / "src/gen/campaign_battles.c").write_text("\n".join(bt_c) + "\n", encoding="utf-8")
     (ROOT / "src/gen/campaign_assets.c").write_text("\n".join(asset) + "\n", encoding="utf-8")
+    (ROOT / "src/gen/campaign_assets_b.c").write_text("\n".join(asset_b) + "\n", encoding="utf-8")
     print(f"gen_campaign: {len(ids)} battles, {len(camp_ids)} camps, {len(roster)} officers, {len(chars)} characters")
 
 

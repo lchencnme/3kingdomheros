@@ -243,5 +243,10 @@
   "TX_WHY_RETREAT": "撤退",
   "TX_WHY_TURNS": "回合已尽",
   "TX_XP": "经验",
-  "TX_TITLE_HELP": "B 规则"
+  "TX_TITLE_HELP": "B 规则",
+  "TX_BT_TITLE_23": "第廿一战 博望坡",
+  "TX_BT_TITLE_24": "第廿二战 火烧新野",
+  "TX_BT_TITLE_25": "第廿三战 长坂坡",
+  "TX_BT_TITLE_26": "第廿四战 长坂桥",
+  "TX_BT_TITLE_27": "第廿五战 赤壁"
 }

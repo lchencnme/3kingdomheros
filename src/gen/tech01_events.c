@@ -178,6 +178,45 @@ const VmEvent bt20_events[] = {
 const VmTemplate bt20_templates[] = {
     {0}
 };
+const VmEvent bt21_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 17},
+    {1, 0, 0, 0, 0x0001, 0x0011, 0x0015, 5},
+    {7, 255, 0, 0, 0x0002, 0x001A, 0x001C, 14},
+};
+const VmTemplate bt21_templates[] = {
+    {0}
+};
+const VmEvent bt22_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 13},
+    {1, 0, 0, 0, 0x0001, 0x000D, 0x0011, 29},
+    {7, 255, 0, 0, 0x0002, 0x002E, 0x0030, 12},
+};
+const VmTemplate bt22_templates[] = {
+    {0}
+};
+const VmEvent bt23_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 17},
+    {7, 255, 0, 0, 0x0001, 0x0011, 0x0013, 9},
+};
+const VmTemplate bt23_templates[] = {
+    {0}
+};
+const VmEvent bt24_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 13},
+    {1, 0, 0, 0, 0x0001, 0x000D, 0x0011, 9},
+    {7, 255, 0, 0, 0x0002, 0x001A, 0x001C, 16},
+};
+const VmTemplate bt24_templates[] = {
+    {0}
+};
+const VmEvent bt25_events[] = {
+    {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 17},
+    {1, 0, 0, 0, 0x0001, 0x0011, 0x0015, 29},
+    {7, 255, 0, 0, 0x0002, 0x0032, 0x0034, 18},
+};
+const VmTemplate bt25_templates[] = {
+    {0}
+};
 const BattleEv battle_ev[] = {
     {7, 2, tech01_events, tech01_templates, tech01_script},
     {3, 0, bt1_events, bt1_templates, bt1_script},
@@ -200,4 +239,9 @@ const BattleEv battle_ev[] = {
     {3, 0, bt18_events, bt18_templates, bt18_script},
     {3, 0, bt19_events, bt19_templates, bt19_script},
     {3, 0, bt20_events, bt20_templates, bt20_script},
+    {3, 0, bt21_events, bt21_templates, bt21_script},
+    {3, 0, bt22_events, bt22_templates, bt22_script},
+    {2, 0, bt23_events, bt23_templates, bt23_script},
+    {3, 0, bt24_events, bt24_templates, bt24_script},
+    {3, 0, bt25_events, bt25_templates, bt25_script},
 };

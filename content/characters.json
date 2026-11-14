@@ -1,5 +1,5 @@
 {
- "_comment": "具名人物登记（设计文档 15.3，节选第一至三章）。id 是 character_id（只追加）；portrait = 画像序号（P0001 起为 0），null = 旁白式台词。",
+ "_comment": "具名人物登记（设计文档 15.3，全七章）。id 是 character_id（只追加）；portrait = 画像序号（P0001 起为 0），null = 旁白式台词。",
  "characters": [
   {
    "id": 1,
@@ -246,6 +246,240 @@
    "tag": "CH_XIAHOUDUN",
    "name": "TX_NAME_XIAHOUDUN",
    "portrait": 66
+  },
+  {
+   "id": 49,
+   "tag": "CH_CAOCHUN",
+   "name": "TX_NAME_CAOCHUN",
+   "portrait": 12
+  },
+  {
+   "id": 50,
+   "tag": "CH_WENPIN",
+   "name": "TX_NAME_WENPIN",
+   "portrait": 64
+  },
+  {
+   "id": 51,
+   "tag": "CH_ZHOUYU",
+   "name": "TX_NAME_ZHOUYU",
+   "portrait": 6
+  },
+  {
+   "id": 52,
+   "tag": "CH_HUANGGAI",
+   "name": "TX_NAME_HUANGGAI",
+   "portrait": 32
+  },
+  {
+   "id": 53,
+   "tag": "CH_LUSU",
+   "name": "TX_NAME_LUSU",
+   "portrait": 46
+  },
+  {
+   "id": 54,
+   "tag": "CH_SUNQUAN",
+   "name": "TX_NAME_SUNQUAN",
+   "portrait": 58
+  },
+  {
+   "id": 55,
+   "tag": "CH_GUANPING",
+   "name": "TX_NAME_GUANPING",
+   "portrait": 30
+  },
+  {
+   "id": 56,
+   "tag": "CH_ZHOUCANG",
+   "name": "TX_NAME_ZHOUCANG",
+   "portrait": 81
+  },
+  {
+   "id": 57,
+   "tag": "CH_LIUDU",
+   "name": "TX_NAME_LIUDU",
+   "portrait": 43
+  },
+  {
+   "id": 58,
+   "tag": "CH_XINGDAORONG",
+   "name": "TX_NAME_XINGDAORONG",
+   "portrait": 68
+  },
+  {
+   "id": 59,
+   "tag": "CH_ZHAOFAN",
+   "name": "TX_NAME_ZHAOFAN",
+   "portrait": 80
+  },
+  {
+   "id": 60,
+   "tag": "CH_CHENYING",
+   "name": "TX_NAME_CHENYING",
+   "portrait": 18
+  },
+  {
+   "id": 61,
+   "tag": "CH_BAOLONG",
+   "name": "TX_NAME_BAOLONG",
+   "portrait": 8
+  },
+  {
+   "id": 62,
+   "tag": "CH_JINXUAN",
+   "name": "TX_NAME_JINXUAN",
+   "portrait": 38
+  },
+  {
+   "id": 63,
+   "tag": "CH_GONGZHI",
+   "name": "TX_NAME_GONGZHI",
+   "portrait": 28
+  },
+  {
+   "id": 64,
+   "tag": "CH_HANXUAN",
+   "name": "TX_NAME_HANXUAN",
+   "portrait": 31
+  },
+  {
+   "id": 65,
+   "tag": "CH_HUANGZHONG",
+   "name": "TX_NAME_HUANGZHONG",
+   "portrait": 34
+  },
+  {
+   "id": 66,
+   "tag": "CH_WEIYAN",
+   "name": "TX_NAME_WEIYAN",
+   "portrait": 62
+  },
+  {
+   "id": 67,
+   "tag": "CH_PANGTONG",
+   "name": "TX_NAME_PANGTONG",
+   "portrait": 56
+  },
+  {
+   "id": 68,
+   "tag": "CH_MALIANG",
+   "name": "TX_NAME_MALIANG",
+   "portrait": 52
+  },
+  {
+   "id": 69,
+   "tag": "CH_LIUZHANG",
+   "name": "TX_NAME_LIUZHANG",
+   "portrait": 45
+  },
+  {
+   "id": 70,
+   "tag": "CH_YANGHUAI",
+   "name": "TX_NAME_YANGHUAI",
+   "portrait": 72
+  },
+  {
+   "id": 71,
+   "tag": "CH_GAOPEI",
+   "name": "TX_NAME_GAOPEI",
+   "portrait": 23
+  },
+  {
+   "id": 72,
+   "tag": "CH_YANYAN",
+   "name": "TX_NAME_YANYAN",
+   "portrait": 73
+  },
+  {
+   "id": 73,
+   "tag": "CH_ZHANGREN",
+   "name": "TX_NAME_ZHANGREN",
+   "portrait": 78
+  },
+  {
+   "id": 74,
+   "tag": "CH_MACHAO",
+   "name": "TX_NAME_MACHAO",
+   "portrait": 50
+  },
+  {
+   "id": 75,
+   "tag": "CH_MADAI",
+   "name": "TX_NAME_MADAI",
+   "portrait": 51
+  },
+  {
+   "id": 76,
+   "tag": "CH_LIHUI",
+   "name": "TX_NAME_LIHUI",
+   "portrait": 41
+  },
+  {
+   "id": 77,
+   "tag": "CH_FAZHENG",
+   "name": "TX_NAME_FAZHENG",
+   "portrait": 21
+  },
+  {
+   "id": 78,
+   "tag": "CH_HUANGQUAN",
+   "name": "TX_NAME_HUANGQUAN",
+   "portrait": 33
+  },
+  {
+   "id": 79,
+   "tag": "CH_ZHANGHE",
+   "name": "TX_NAME_ZHANGHE",
+   "portrait": 76
+  },
+  {
+   "id": 80,
+   "tag": "CH_XIAHOUDE",
+   "name": "TX_NAME_XIAHOUDE",
+   "portrait": 65
+  },
+  {
+   "id": 81,
+   "tag": "CH_XIAHOUYUAN",
+   "name": "TX_NAME_XIAHOUYUAN",
+   "portrait": 67
+  },
+  {
+   "id": 82,
+   "tag": "CH_XUHUANG",
+   "name": "TX_NAME_XUHUANG",
+   "portrait": 69
+  },
+  {
+   "id": 83,
+   "tag": "CH_LVMENG",
+   "name": "TX_NAME_LVMENG",
+   "portrait": 49
+  },
+  {
+   "id": 84,
+   "tag": "CH_LUXUN",
+   "name": "TX_NAME_LUXUN",
+   "portrait": 47
+  },
+  {
+   "id": 85,
+   "tag": "CH_PANGDE",
+   "name": "TX_NAME_PANGDE",
+   "portrait": 55
+  },
+  {
+   "id": 86,
+   "tag": "CH_SIMAYI",
+   "name": "TX_NAME_SIMAYI",
+   "portrait": 7
+  },
+  {
+   "id": 87,
+   "tag": "CH_CAOPI",
+   "name": "TX_NAME_CAOPI",
+   "portrait": 13
   }
  ]
 }

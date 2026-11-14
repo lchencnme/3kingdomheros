@@ -122,6 +122,36 @@ static const uint8_t bt20_levels[] = {1, 1, 1, 1, 1, 1, 14, 12, 12, 12, 12, 12, 
 static const uint8_t bt20_items[][2] = {{21, 2}};
 static const uint8_t bt20_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3, 2, 2, 199, 0, 3};
 static const uint8_t bt20_tre[][3] = {{2, 12, 29}};
+extern const uint8_t bt21_terrain[];
+static const Tech01Unit bt21_units[] = {{0, 0, 2, 6, 0, 0}, {6, 0, 3, 5, 0, 0}, {6, 0, 3, 7, 0, 0}, {9, 0, 1, 5, 0, 0}, {0, 0, 1, 7, 0, 0}, {0, 0, 0, 6, 0, 0}, {0, 0, 2, 4, 0, 0}, {7, 2, 22, 6, 0, 48}, {7, 2, 19, 5, 0, 32}, {1, 2, 19, 7, 0, 46}, {1, 2, 12, 6, 0, 0}, {1, 2, 13, 5, 0, 0}, {1, 2, 13, 7, 0, 0}, {4, 2, 16, 4, 0, 0}, {4, 2, 16, 8, 0, 0}, {7, 2, 24, 5, 0, 0}, {7, 2, 24, 7, 0, 0}};
+static const uint8_t bt21_levels[] = {1, 1, 1, 1, 1, 1, 1, 16, 14, 14, 13, 13, 13, 13, 13, 13, 13};
+static const uint8_t bt21_items[][2] = {{14, 2}};
+static const uint8_t bt21_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3};
+static const uint8_t bt21_tre[][3] = {{11, 4, 17}};
+extern const uint8_t bt22_terrain[];
+static const Tech01Unit bt22_units[] = {{0, 0, 20, 6, 0, 0}, {6, 0, 21, 5, 0, 0}, {6, 0, 21, 7, 0, 0}, {9, 0, 22, 5, 0, 0}, {0, 0, 22, 7, 0, 0}, {0, 0, 23, 6, 0, 0}, {0, 0, 22, 6, 0, 0}, {7, 2, 6, 6, 0, 45}, {1, 2, 5, 4, 0, 0}, {1, 2, 5, 8, 0, 0}, {7, 2, 9, 5, 0, 0}, {7, 2, 9, 7, 0, 0}, {4, 2, 11, 3, 0, 0}, {4, 2, 11, 9, 0, 0}, {1, 2, 12, 6, 0, 0}, {2, 2, 3, 6, 1, 46}};
+static const uint8_t bt22_levels[] = {1, 1, 1, 1, 1, 1, 1, 16, 14, 14, 14, 14, 14, 14, 14, 14};
+static const uint8_t bt22_items[][2] = {{14, 2}};
+static const uint8_t bt22_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3};
+static const uint8_t bt22_tre[][3] = {{7, 6, 83}};
+extern const uint8_t bt23_terrain[];
+static const Tech01Unit bt23_units[] = {{0, 0, 10, 6, 0, 0}, {6, 0, 11, 5, 0, 0}, {6, 0, 11, 7, 0, 0}, {9, 0, 12, 5, 0, 0}, {0, 0, 12, 7, 0, 0}, {0, 0, 13, 6, 0, 0}, {0, 0, 12, 6, 0, 0}, {17, 1, 9, 6, 2, 28}, {8, 2, 1, 6, 3, 49}, {7, 2, 2, 4, 3, 0}, {7, 2, 2, 8, 3, 0}, {7, 2, 0, 5, 0, 0}, {7, 2, 0, 7, 0, 0}, {1, 2, 4, 6, 0, 50}, {4, 2, 5, 3, 0, 0}, {4, 2, 5, 9, 0, 0}};
+static const uint8_t bt23_levels[] = {1, 1, 1, 1, 1, 1, 1, 5, 17, 15, 15, 15, 15, 15, 14, 14};
+static const uint8_t bt23_items[][2] = {{15, 1}};
+static const uint8_t bt23_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3, 2, 4, 181, 0, 0, 3, 1, 7, 0, 3};
+static const uint8_t bt23_tre[][3] = {{13, 3, 2}};
+extern const uint8_t bt24_terrain[];
+static const Tech01Unit bt24_units[] = {{0, 0, 8, 6, 0, 0}, {6, 0, 9, 5, 0, 0}, {6, 0, 9, 7, 0, 0}, {9, 0, 10, 5, 0, 0}, {0, 0, 10, 7, 0, 0}, {0, 0, 11, 6, 0, 0}, {0, 0, 10, 6, 0, 0}, {8, 2, 1, 6, 3, 49}, {7, 2, 2, 5, 3, 0}, {7, 2, 2, 7, 3, 0}, {7, 2, 0, 4, 0, 0}, {7, 2, 0, 8, 0, 0}, {1, 2, 4, 6, 0, 50}, {4, 2, 4, 3, 0, 0}, {4, 2, 4, 9, 0, 0}, {8, 2, 0, 6, 1, 27}};
+static const uint8_t bt24_levels[] = {1, 1, 1, 1, 1, 1, 1, 17, 15, 15, 15, 15, 15, 14, 14, 18};
+static const uint8_t bt24_items[][2] = {{0xFF, 0xFF}};
+static const uint8_t bt24_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3, 3, 1, 0, 0, 3};
+static const uint8_t bt24_tre[][3] = {{0, 0, 0}};
+extern const uint8_t bt25_terrain[];
+static const Tech01Unit bt25_units[] = {{0, 0, 2, 7, 0, 0}, {6, 0, 3, 6, 0, 0}, {6, 0, 3, 8, 0, 0}, {9, 0, 1, 6, 0, 0}, {0, 0, 1, 8, 0, 0}, {0, 0, 0, 7, 0, 0}, {0, 0, 2, 5, 0, 0}, {7, 2, 21, 7, 2, 26}, {8, 2, 23, 5, 1, 27}, {1, 2, 18, 5, 0, 0}, {1, 2, 18, 9, 0, 0}, {4, 2, 21, 4, 1, 0}, {4, 2, 21, 10, 1, 0}, {7, 2, 15, 6, 0, 0}, {7, 2, 15, 8, 0, 0}, {2, 2, 19, 7, 0, 0}, {10, 1, 5, 4, 0, 51}, {1, 1, 6, 10, 0, 52}};
+static const uint8_t bt25_levels[] = {1, 1, 1, 1, 1, 1, 1, 18, 19, 16, 16, 16, 16, 16, 16, 16, 17, 16};
+static const uint8_t bt25_items[][2] = {{14, 2}, {15, 5}};
+static const uint8_t bt25_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3, 2, 2, 203, 0, 3};
+static const uint8_t bt25_tre[][3] = {{4, 10, 18}};
 const BattleDef battle_defs[N_BATTLES] = {
     {TECH01_W, TECH01_H, TECH01_BANK, tech01_terrain, TECH01_UNITS, tech01_units, tech01_levels, TECH01_START_ITEMS, tech01_start_items, TECH01_AI_GROUPS, tech01_ai_groups, TECH01_TREASURES, tech01_treasures, 30, 0, 0, TECH01_DEPLOY_MAX, 1, 1, 0, 1, TX_BT_TITLE_0, 0, 0xFF, 0, 0xFF, 0, 0, 0, 0},
     {24, 16, 15, bt1_terrain, 11, bt1_units, bt1_levels, 1, bt1_items, 2, bt1_ai, 1, bt1_tre, 20, 0, 0, 3, 7, 3, 1, 2, TX_BT_TITLE_3, 1, 4, 0, 255, 0, 0, 0, 0},
@@ -143,7 +173,12 @@ const BattleDef battle_defs[N_BATTLES] = {
     {26, 14, 15, bt17_terrain, 17, bt17_units, bt17_levels, 1, bt17_items, 3, bt17_ai, 1, bt17_tre, 6, 0, 0, 5, 1, 67, 14, 18, TX_BT_TITLE_19, 2, 255, 6, 255, 0, 0, 0, 0},
     {26, 14, 15, bt18_terrain, 15, bt18_units, bt18_levels, 1, bt18_items, 3, bt18_ai, 1, bt18_tre, 25, 0, 0, 5, 1, 71, 0xFF, 19, TX_BT_TITLE_20, 1, 6, 0, 255, 0, 0, 0, 0},
     {24, 14, 15, bt19_terrain, 13, bt19_units, bt19_levels, 0, bt19_items, 3, bt19_ai, 0, bt19_tre, 15, 0, 0, 1, 1, 73, 15, 20, TX_BT_TITLE_21, 3, 0, 0, 255, 0, 0, 2, 13},
-    {26, 16, 15, bt20_terrain, 17, bt20_units, bt20_levels, 1, bt20_items, 3, bt20_ai, 1, bt20_tre, 25, 0, 0, 6, 1, 79, 16, 0xFF, TX_BT_TITLE_22, 1, 6, 0, 255, 0, 0, 0, 0},
+    {26, 16, 15, bt20_terrain, 17, bt20_units, bt20_levels, 1, bt20_items, 3, bt20_ai, 1, bt20_tre, 25, 0, 0, 6, 1, 79, 16, 21, TX_BT_TITLE_22, 1, 6, 0, 255, 0, 0, 0, 0},
+    {26, 14, 9, bt21_terrain, 17, bt21_units, bt21_levels, 1, bt21_items, 2, bt21_ai, 1, bt21_tre, 25, 0, 0, 6, 1, 83, 17, 22, TX_BT_TITLE_23, 1, 7, 0, 255, 0, 0, 0, 0},
+    {26, 15, 9, bt22_terrain, 16, bt22_units, bt22_levels, 1, bt22_items, 2, bt22_ai, 1, bt22_tre, 25, 0, 0, 6, 1, 89, 18, 23, TX_BT_TITLE_24, 0, 255, 0, 255, 0, 0, 0, 0},
+    {26, 14, 9, bt23_terrain, 16, bt23_units, bt23_levels, 1, bt23_items, 4, bt23_ai, 1, bt23_tre, 20, 0, 0, 6, 1, 97, 0xFF, 24, TX_BT_TITLE_25, 3, 7, 0, 7, 23, 5, 25, 7},
+    {26, 14, 9, bt24_terrain, 16, bt24_units, bt24_levels, 0, bt24_items, 3, bt24_ai, 0, bt24_tre, 15, 1, 0, 6, 5, 101, 19, 25, TX_BT_TITLE_26, 3, 0, 0, 255, 22, 5, 25, 7},
+    {26, 14, 9, bt25_terrain, 18, bt25_units, bt25_levels, 2, bt25_items, 3, bt25_ai, 1, bt25_tre, 25, 0, 0, 6, 1, 103, 0xFF, 0xFF, TX_BT_TITLE_27, 1, 7, 0, 255, 0, 0, 0, 0},
 };
 const RosterInit roster_init[N_ROSTER_INIT] = {
     {1, 0, 1, 70, 68, 72, TX_NAME_LIUBEI, {1, 7, 255, 255, 255, 255, 255, 255}},

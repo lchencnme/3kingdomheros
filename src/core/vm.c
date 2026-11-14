@@ -194,6 +194,14 @@ static uint8_t run_code(Battle *b, const VmFact *f, uint16_t off, uint16_t len)
                 }
             }
             break;
+        case OP_HP_CAP:
+            vm_read((uint16_t)(off + 1u), a, 3);
+            off += 4;
+            if (a[0] < b->n_units) {
+                unit_load(a[0], &u);
+                if (unit_alive(&u) && rd16(a + 1) && u.hp > rd16(a + 1)) { u.hp = rd16(a + 1); unit_store(a[0], &u); }
+            }
+            break;
         case OP_GIVE_ITEM:
             vm_read((uint16_t)(off + 1u), a, 1);
             off += 2;

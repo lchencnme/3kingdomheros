@@ -102,7 +102,12 @@ class Emu:
 
     def end_turn(self):
         """START asks for a confirmation (T-UI-01); A confirms"""
-        self.press("start")
+        if self.state() != G_ENDTURN:
+            self.press("start")
+            for _ in range(30):                      # the question appears a few frames later
+                if self.state() == G_ENDTURN:
+                    break
+                self.frames(1)
         if self.state() == G_ENDTURN:
             self.press("a")
 
@@ -453,7 +458,7 @@ def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
                         em.png(ROM.parent / "shot_result.png")
                         shot_done = True
                 em.wait_state([G_IDLE, G_BANNER, G_ENEMY, G_OUTCOME], 200)
-            if em.state() == G_IDLE:
+            if em.state() in (G_IDLE, G_ENDTURN):
                 em.end_turn()     # end turn if anyone is left
         elif st in (G_MOVE, G_MENU, G_TARGET):
             em.press("b")             # never get stuck in a sub-menu
@@ -594,7 +599,7 @@ check(f"POST_MOVE village event ran ({v.r8('_dbg_dialog_pages')} pages)", v.r8("
       and v.unit(0) == (7, 10) and v.hp(0) == (v.m[1, 0xD000 + 12] | (v.m[1, 0xD000 + 13] << 8)))
 # end turns until round 3 enemy phase: reinforcements appear in reserved slots 7 and 8
 while v.r16("_dbg_round") < 4 and v.fc < 30000 and v.state() != G_OUTCOME:
-    if v.state() == G_IDLE:
+    if v.state() in (G_IDLE, G_ENDTURN):
         v.end_turn()
     v.frames(1)
 check(f"round-3 reinforcements spawned (units {v.r8('_dbg_n_units')})", v.r8("_dbg_n_units") == 10)
@@ -608,7 +613,7 @@ w.press("start"); w.wait_state([G_IDLE], 300)
 pages0 = w.r8("_dbg_dialog_pages")
 check("continue: opening dialogue does not replay", pages0 == 0, f"pages={pages0}")
 while w.r16("_dbg_round") < 6 and w.fc < 40000 and w.state() != G_OUTCOME:
-    if w.state() == G_IDLE:
+    if w.state() in (G_IDLE, G_ENDTURN):
         w.end_turn()
     w.frames(1)
 check("battle flags restored: no duplicate spawn / BAD_SCRIPT after load",
@@ -1211,12 +1216,62 @@ for _ in range(300):                                      # 隆中 camp: 三顾�
     it.frames(1)
 check(f"三顾茅庐: 诸葛亮 joins at the 隆中 camp (roster {sram(it, 12, 7890)}, character {sram(it, 12, 6 * 48)})",
       sram(it, 12, 7890) == 7 and sram(it, 12, 6 * 48) == 47)
-through_camp(it)                                          # depart: the chapter ending follows
+through_camp(it)                                          # depart for chapter 4
+
+# ------------------------------------------------------------------ Chapter 4 卧龙 (BT_21..BT_25)
+check(f"BT_21 博望坡 ({it.r8('_dbg_battle')}); 诸葛亮 (roster 6) deployed as unit 6 (character {it.m[1, 0xD000 + 240]}, hp {it.hp(6)})",
+      it.r8("_dbg_battle") == 21 and it.state() == G_IDLE and it.m[1, 0xD000 + 240] == 47 and it.hp(6) > 0)
+it.frames(60)
+check("BT_21 map consistent", view_mismatches(it) == 0)
+win_now(it, [7])                                          # 夏侯惇
+it.press("a", after=16)
+through_camp(it)
+check(f"BT_22 火烧新野 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 22 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_22 map consistent", view_mismatches(it) == 0)
+hp8 = it.hp(8)
+it.m[SYMS["_B"] + 8] = 2; it.m[SYMS["_B"] + 9] = 0          # round 2 -> the fire starts with round 3
+it.end_turn(); it.wait_state([G_IDLE, G_OUTCOME], 4000)
+check(f"BT_22: the fire on round 3 cuts the garrison down (unit 8 hp {hp8} -> {it.hp(8)}, vm {it.r8('_dbg_vm_err')})",
+      0 < it.hp(8) <= 120 and it.r8("_dbg_vm_err") == 0)
+win_now(it, range(7, 16))
+check("BT_22 won (all enemies)", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it)
+check(f"BT_23 长坂坡 ({it.r8('_dbg_battle')}); 甘夫人 is the escorted ally (character {it.m[1, 0xD000 + 280]})",
+      it.r8("_dbg_battle") == 23 and it.state() == G_IDLE and it.m[1, 0xD000 + 280] == 28)
+it.frames(60)
+check("BT_23 map consistent", view_mismatches(it) == 0)
+put(it, 7, 24, 6)
+end_turn_outcome(it)
+check(f"BT_23: 甘夫人 over the bridge wins (outcome {it.r8('_dbg_outcome')})", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it, deploy=False)
+check(f"BT_24 长坂桥 follows directly ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 24 and it.state() == G_IDLE)
+it.frames(60)
+check("BT_24 map consistent", view_mismatches(it) == 0)
+put(it, 0, 23, 6)
+end_turn_outcome(it)
+check(f"BT_24: 刘备 east of the bridge wins (outcome {it.r8('_dbg_outcome')})", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it)
+check(f"BT_25 赤壁 ({it.r8('_dbg_battle')}); 周瑜 fights as an ally (character {it.m[1, 0xD000 + 640]}, side {it.m[1, 0xD000 + 643]})",
+      it.r8("_dbg_battle") == 25 and it.state() == G_IDLE and it.m[1, 0xD000 + 640] == 51 and it.m[1, 0xD000 + 643] == 1)
+it.frames(60)
+check("BT_25 map consistent", view_mismatches(it) == 0)
+win_now(it, [7])                                          # 张辽
+check("BT_25 won by driving off 张辽", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+check("BT_25: the spoils first, then the ending", camp_wait(it, 25, 300))
+for k in range(48):
+    if it.state() != 25:
+        break
+    it.press("a" if k % 2 == 0 else "right", after=16)
 for _ in range(1500):                                     # the ending pages run in dialogue mode
     if it.state() == G_TITLE and it.r8("_dbg_dialog_active") == 0:
         break
     it.frames(1)
-check(f"chapter 3 won -> ending -> title (state {it.state()})", it.state() == G_TITLE)
+check(f"chapter 4 won -> ending -> title (state {it.state()})", it.state() == G_TITLE)
 it.frames(10); it.png(ROM.parent / "shot_title.png")
 ram_end = it.power_off()
 # cold boot: the camp save is offered at the title (SELECT)
@@ -1344,7 +1399,7 @@ n.pb.stop(save=False)
 f = Emu(ram)
 f.wait_state([G_TITLE], 200); f.press("a"); f.wait_state([G_IDLE], 200)
 while f.state() != G_OUTCOME and f.fc < 40000:
-    if f.state() == G_IDLE:
+    if f.state() in (G_IDLE, G_ENDTURN):
         f.end_turn()
     f.frames(1)
 ram2 = f.power_off()

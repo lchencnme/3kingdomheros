@@ -51,20 +51,30 @@ void hud_num(uint8_t line, uint16_t n)
 void hud_space(uint8_t line) { add(line, GLYPH_SPACE); }
 void hud_glyph(uint8_t line, uint16_t g) { add(line, g); }
 
-/* n glyph ids of string tx from its pool bank (the pool is split over two banks at text_split_id) */
-static void text_fetch(uint16_t *buf, uint16_t tx, uint16_t n)
+/* offset and length (glyph ids) of string tx: the index lives in its own bank */
+static uint16_t text_span(uint16_t tx, uint16_t *off)
 {
-    if (tx >= text_split_id) rom_copy(TEXT_POOL_BANK_B, buf, &text_pool_b[text_offset[tx] - text_split_off], (uint16_t)(n * 2u));
-    else rom_copy(TEXT_POOL_BANK, buf, &text_pool[text_offset[tx]], (uint16_t)(n * 2u));
+    uint16_t o[2];
+    rom_copy(TEXT_INDEX_BANK, o, &text_offset[tx], 4);
+    *off = o[0];
+    return (uint16_t)(o[1] - o[0]);
+}
+
+/* n glyph ids of string tx from its pool bank (the pool is cut into TEXT_POOLS banks at string boundaries) */
+static void text_fetch(uint16_t *buf, uint16_t tx, uint16_t off, uint16_t n)
+{
+    uint8_t k = 0;
+    while (k + 1u < TEXT_POOLS && tx >= text_pool_id0[k + 1u]) k++;
+    rom_copy(text_pool_bank[k], buf, text_pool_ptr[k] + (off - text_pool_off0[k]), (uint16_t)(n * 2u));
 }
 
 void hud_tx(uint8_t line, uint16_t tx, uint16_t var)
 {
     uint16_t *buf = LINE_BUF;
-    uint16_t n = (uint16_t)(text_offset[tx + 1] - text_offset[tx]);
+    uint16_t off, n = text_span(tx, &off);
     uint8_t i;
     if (n > LINE_GLYPHS + 1) n = LINE_GLYPHS + 1;           /* HUD lines never exceed 24 glyphs */
-    text_fetch(buf, tx, n);
+    text_fetch(buf, tx, off, n);
     for (i = 0; i < n && buf[i] != TXC_END; i++) {
         if (buf[i] == TXC_VAR) hud_num(line, var);
         else if (buf[i] != TXC_NL) add(line, buf[i]);
@@ -104,10 +114,10 @@ static void raster_line(uint8_t line)
 uint8_t hud_tx_page(uint16_t tx, uint8_t page)
 {
     uint16_t *buf = PAGE_BUF;
-    uint16_t n = (uint16_t)(text_offset[tx + 1] - text_offset[tx]), i;
+    uint16_t off, n = text_span(tx, &off), i;
     uint8_t p = 0, line = 0;
     if (n > 64u) n = 64u;
-    text_fetch(buf, tx, n);
+    text_fetch(buf, tx, off, n);
     for (i = 0; i < n && buf[i] != TXC_END; i++) {
         if (buf[i] == TXC_PAGE) { if (p == page) return 1; p++; line = 0; continue; }
         if (p != page) continue;
@@ -131,11 +141,11 @@ void hud_raster(uint8_t line)
     memset(hud_bits, 0, sizeof hud_bits);
     for (i = 0; i < nglyph[line]; i++) {
         uint16_t g = GLY(line, i);
-        uint8_t w = glyph_width[g], col, sh, last;
+        uint8_t w, col, sh, last, gb = (uint8_t)(g / GLYPH_SPLIT);
         uint8_t rows[24];
+        rom_copy(TEXT_INDEX_BANK, &w, &glyph_width[g], 1);
         if ((uint16_t)x + w > LINE_TILES * 8u) break;
-        if (g < GLYPH_SPLIT) rom_copy(TEXT_BANK, rows, &glyph_rows[(uint16_t)g * 24u], 24);
-        else rom_copy(TEXT_BANK_B, rows, &glyph_rows_b[(uint16_t)(g - GLYPH_SPLIT) * 24u], 24);   /* second glyph bank */
+        rom_copy(glyph_bank[gb], rows, glyph_ptr[gb] + (uint16_t)(g - (uint16_t)gb * GLYPH_SPLIT) * 24u, 24);
         col = (uint8_t)(x >> 3); sh = (uint8_t)(x & 7);
         last = (uint8_t)(col + 2u < LINE_TILES);
         blit_rows(&hud_bits[(uint16_t)col * 8u + 2u], rows, 6, sh, last);                     /* rows 2..7 */

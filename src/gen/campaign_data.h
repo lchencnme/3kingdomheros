@@ -3,10 +3,10 @@
 #define CAMPAIGN_DATA_H
 #include <stdint.h>
 #include "tech01_data.h"
-#define N_BATTLES 21u
-#define N_CAMPS 17u
+#define N_BATTLES 26u
+#define N_CAMPS 20u
 #define N_ROSTER_INIT 4u
-#define N_CHARS 41u
+#define N_CHARS 80u
 #define N_JOINERS 3u
 #define N_ENDING_PAGES 3u
 #define CONT_NORMAL 0u
