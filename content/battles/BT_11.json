@@ -944,7 +944,7 @@
   "round": 8
  },
  "protect": null,
- "turn_limit": 20,
+ "turn_limit": 8,
  "round_mode": "RESET",
  "continuity": "NO_REPLENISH",
  "seed": 41,

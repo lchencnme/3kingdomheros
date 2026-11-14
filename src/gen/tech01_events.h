@@ -5,7 +5,7 @@
 #include "../core/vm.h"
 #define TECH01_EVENT_COUNT 7u
 #define TECH01_TEMPLATE_COUNT 2u
-#define TECH01_SCRIPT_BYTES 124u
+#define TECH01_SCRIPT_BYTES 128u
 #define TECH01_SCRIPT_BANK 15u
 #define TECH01_ONCE_BITS 7u
 typedef struct { uint8_t n_events, n_templates; const VmEvent *events; const VmTemplate *templates;

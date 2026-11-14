@@ -47,7 +47,7 @@ void vm_clear_battle_flags(void);
 
 enum {
     G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE, G_SLIST, G_SAIM,
-    G_ILIST, G_IAIM, G_XLIST, G_CAMP, G_SHOP, G_XRECV, G_DANGER
+    G_ILIST, G_IAIM, G_XLIST, G_CAMP, G_SHOP, G_XRECV, G_DANGER, G_ENDTURN
 };
 
 #define MI_ATTACK 0u
@@ -103,6 +103,11 @@ void hud_item_result(const ItemResult *r) BANKED;
 void hud_result(const AttackResult *r) BANKED;
 void hud_strat_result(uint8_t sid, const StrategyResult *sr) BANKED;
 void load_camp_and_go(void) BANKED;
+uint8_t prev_camp_battle(void) BANKED;              /* battle whose camp precedes the current one, or 0xFF */
+void retry_to_camp(void) BANKED;                    /* defeat: snapshot, then the camp before this battle */
+void lv_mark(uint8_t slot, uint8_t unit) BANKED;    /* T-UI-06: stats before an action that may level up */
+void hud_item_effect(uint8_t line, uint8_t it) BANKED;   /* T-UI-05: what an item does, on a HUD line */
+extern uint8_t camp_council_done;                   /* camp.c: the camp opens with 军议 already held */
 void map_mode_restore(void) BANKED;
 void new_game(void) BANKED;
 void play_queue(void) BANKED;

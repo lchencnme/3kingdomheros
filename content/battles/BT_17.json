@@ -1011,7 +1011,7 @@
   "round": 6
  },
  "protect": null,
- "turn_limit": 20,
+ "turn_limit": 6,
  "round_mode": "RESET",
  "continuity": "NORMAL",
  "seed": 67,

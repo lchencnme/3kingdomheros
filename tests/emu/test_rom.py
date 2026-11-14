@@ -24,6 +24,7 @@ for line in ROM.with_suffix(".noi").read_text().splitlines():
 
 G_IDLE, G_MOVE, G_MENU, G_TARGET, G_SHOW, G_ENEMY, G_BANNER, G_OUTCOME, G_TITLE = range(9)
 G_SLIST, G_SAIM, G_ILIST, G_IAIM, G_XLIST, G_CAMP, G_SHOP = range(9, 16)
+G_ENDTURN = 18
 N_UNITS = 8
 results = []
 
@@ -88,6 +89,12 @@ class Emu:
 
     def cur(self):
         return self.r8("_dbg_cur_x"), self.r8("_dbg_cur_y")
+
+    def end_turn(self):
+        """START asks for a confirmation (T-UI-01); A confirms"""
+        self.press("start")
+        if self.state() == G_ENDTURN:
+            self.press("a")
 
     def press(self, btn, after=4):
         self.pb.button_press(btn)
@@ -321,8 +328,8 @@ e = Emu()
 check("boot: main loop running", e.r8("_dbg_frame_lo") != 0)
 check("CGB double speed (KEY1 bit7)", e.m[0xFF4D] & 0x80, f"KEY1={e.m[0xFF4D]:02X}")
 hdr = ROM.read_bytes()
-check("header: CGB-only + MBC5+RAM+BATT + 8MiB/128KiB",
-      hdr[0x143] == 0xC0 and hdr[0x147] == 0x1B and hdr[0x148] == 0x08 and hdr[0x149] == 0x04)
+check("header: CGB-only + MBC5+RAM+BATT + 512KiB/128KiB",
+      hdr[0x143] == 0xC0 and hdr[0x147] == 0x1B and hdr[0x148] == 0x04 and hdr[0x149] == 0x04)
 check(f"SM83 CRC32 self-test = CBF43926 ({e.r32('_dbg_crc_check'):08X})", e.r32("_dbg_crc_check") == 0xCBF43926)
 e.wait_state([G_IDLE])
 check("player phase idle, round 1", e.state() == G_IDLE and e.r16("_dbg_round") == 1)
@@ -434,7 +441,7 @@ def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
                         shot_done = True
                 em.wait_state([G_IDLE, G_BANNER, G_ENEMY, G_OUTCOME], 200)
             if em.state() == G_IDLE:
-                em.press("start")     # end turn if anyone is left
+                em.end_turn()     # end turn if anyone is left
         elif st in (G_MOVE, G_MENU, G_TARGET):
             em.press("b")             # never get stuck in a sub-menu
         else:
@@ -546,7 +553,7 @@ v.png(ROM.parent / "shot_dialog_open.png")
 pages = 0
 while v.r8("_dbg_dialog_active") == 1 and pages < 20:
     v.press("a", after=14); pages += 1
-check(f"opening dialogue: 3 speakers, 4 pages ({v.r8('_dbg_dialog_pages')})", v.r8("_dbg_dialog_pages") == 4)
+check(f"opening dialogue: 3 speakers + the conditions text (2 pages), 6 pages ({v.r8('_dbg_dialog_pages')})", v.r8("_dbg_dialog_pages") == 6)
 v.wait_state([G_IDLE], 200)
 check("map restored after dialogue", view_mismatches(v) == 0 and v.state() == G_IDLE)
 # 刘备 walks into the village (7,10) over two turns: one-shot supply event on POST_MOVE
@@ -567,7 +574,7 @@ def move_unit(em, i, x, y):
 
 move_unit(v, 0, 6, 11)
 pages_before = v.r8("_dbg_dialog_pages")
-v.press("start")
+v.end_turn()
 v.wait_state([G_IDLE], 2000)
 move_unit(v, 0, 7, 10)
 check(f"POST_MOVE village event ran ({v.r8('_dbg_dialog_pages')} pages)", v.r8("_dbg_dialog_pages") == pages_before + 1
@@ -575,7 +582,7 @@ check(f"POST_MOVE village event ran ({v.r8('_dbg_dialog_pages')} pages)", v.r8("
 # end turns until round 3 enemy phase: reinforcements appear in reserved slots 7 and 8
 while v.r16("_dbg_round") < 4 and v.fc < 30000 and v.state() != G_OUTCOME:
     if v.state() == G_IDLE:
-        v.press("start")
+        v.end_turn()
     v.frames(1)
 check(f"round-3 reinforcements spawned (units {v.r8('_dbg_n_units')})", v.r8("_dbg_n_units") == 10)
 check("no VM error", v.r8("_dbg_vm_err") == 0)
@@ -589,7 +596,7 @@ pages0 = w.r8("_dbg_dialog_pages")
 check("continue: opening dialogue does not replay", pages0 == 0, f"pages={pages0}")
 while w.r16("_dbg_round") < 6 and w.fc < 40000 and w.state() != G_OUTCOME:
     if w.state() == G_IDLE:
-        w.press("start")
+        w.end_turn()
     w.frames(1)
 check("battle flags restored: no duplicate spawn / BAD_SCRIPT after load",
       w.r8("_dbg_vm_err") == 0 and w.r8("_dbg_n_units") == 10)
@@ -675,7 +682,7 @@ for _round in range(12):
                   d.hp(3) == 0 and d.r32("_dbg_draws") == draws0 and d.r8("_dbg_fs_count") > fs0,
                   f"hp3={d.hp(3)} draws {draws0}->{d.r32('_dbg_draws')} fs {fs0}->{d.r8('_dbg_fs_count')}")
             continue
-    d.press("start")
+    d.end_turn()
 check("DUEL scenario exercised", duel_done)
 check("no VM error during duel", d.r8("_dbg_vm_err") == 0)
 d.pb.stop(save=False)
@@ -792,7 +799,12 @@ check("win -> the spoils come first (prize screen)", camp_wait(it, 25))
 it.press("b", after=16)
 check("plot item 传国玉玺 cannot be discarded", it.state() == 25 and camp_cur(it) == 0)
 it.press("a", after=16)                                  # 传国玉玺 -> 刘备
-it.press("select", after=16)                             # 美酒 sold for 40
+it.press("select", after=16)                             # 美酒: the first SELECT only asks (T-UI-03)
+check(f"selling a prize needs a confirmation (gold {it.r16('_dbg_gold')})", it.state() == 25 and it.r16("_dbg_gold") == 500)
+it.press("up", after=16)                                 # any other key cancels the question
+it.press("select", after=16)
+check("the question is cancelled by another key", it.state() == 25 and it.r16("_dbg_gold") == 500)
+it.press("select", after=16)                             # asked and confirmed: sold for 40
 check(f"prizes distributed / sold, back to the menu (gold {it.r16('_dbg_gold')})",
       camp_wait(it, C_MAIN) and it.r16("_dbg_gold") == 540 and 0x70 in [it.m[SYMS["_dbg_inv"] + k] for k in range(8)])
 it.frames(10); it.png(ROM.parent / "shot_camp.png")
@@ -883,7 +895,7 @@ def win_now(em, enemies):
         a = 0xD000 + 40 * i
         em.m[1, a + 10] = 0; em.m[1, a + 11] = 0
         em.m[1, a + 34] = em.m[1, a + 34] | 0x08
-    em.press("start")
+    em.end_turn()
     em.wait_state([G_OUTCOME], 1500)
     outcome_ready(em)
 
@@ -920,6 +932,33 @@ def through_camp(em, deploy=True):
         em.press("a", after=16); em.press("start", after=16)
     em.wait_state([G_IDLE], 1500)
 
+# T-FLOW-01: defeat -> SELECT goes back to the camp before the battle with the pre-battle state
+gold_b = it.r16("_dbg_gold")
+it.m[1, 0xD000 + 10] = 0; it.m[1, 0xD000 + 11] = 0; it.m[1, 0xD000 + 34] = it.m[1, 0xD000 + 34] | 0x08   # 刘备 falls
+it.end_turn()
+it.wait_state([G_OUTCOME], 1500)
+outcome_ready(it)
+check(f"BT_01 lost with the leader gone (outcome {it.r8('_dbg_outcome')})", it.r8("_dbg_outcome") == 2)
+it.press("select", after=16)
+check(f"defeat -> SELECT: back in the camp (state {it.state()}, gold {it.r16('_dbg_gold')})",
+      camp_wait(it, C_MAIN, 300) and it.r16("_dbg_gold") == gold_b)
+while camp_cur(it) != 4:
+    it.press("down", after=16)
+it.press("a", after=16); it.frames(4)
+check("back from a defeat: 军议 need not be repeated", it.state() == C_DEPLOY)
+it.press("start", after=16)
+it.wait_state([G_IDLE], 1500)
+check(f"setting out again: BT_01 from the start, 刘备 restored ({it.r8('_dbg_battle')}, hp {it.hp(0)}, gold {it.r16('_dbg_gold')})",
+      it.r8("_dbg_battle") == 1 and it.hp(0) > 0 and it.r16("_dbg_gold") == gold_b and all(it.hp(i) > 0 for i in range(4, 11)))
+# defeat -> A: the battle again at once
+it.m[1, 0xD000 + 10] = 0; it.m[1, 0xD000 + 11] = 0; it.m[1, 0xD000 + 34] = it.m[1, 0xD000 + 34] | 0x08
+it.end_turn()
+it.wait_state([G_OUTCOME], 1500)
+outcome_ready(it)
+it.press("a", after=16)
+it.wait_state([G_IDLE], 1500)
+check(f"defeat -> A: BT_01 again with the pre-battle state (hp {it.hp(0)}, gold {it.r16('_dbg_gold')})",
+      it.r8("_dbg_battle") == 1 and it.hp(0) > 0 and it.r16("_dbg_gold") == gold_b)
 # BT_01: 程远志 (unit 4) alone decides the battle (VIC_DEFEAT_UNIT)
 win_now(it, [4])
 check("BT_01: driving off 程远志 wins with other rebels still on the field",
@@ -933,7 +972,7 @@ it.frames(60)
 check("BT_02 map consistent", view_mismatches(it) == 0)
 # the ally phase runs: end the turn and see the allies act (or at least the phase pass) without errors
 r0 = it.r16("_dbg_round")
-it.press("start"); it.wait_state([G_IDLE], 4000)
+it.end_turn(); it.wait_state([G_IDLE], 4000)
 check(f"BT_02: a full round with the ally phase (round {r0} -> {it.r16('_dbg_round')}, vm {it.r8('_dbg_vm_err')})",
       it.r16("_dbg_round") == r0 + 1 and it.r8("_dbg_vm_err") == 0)
 it.m[1, 0xD000 + 10] = 100; it.m[1, 0xD000 + 11] = 0      # 刘备 wounded at the end of BT_02
@@ -965,7 +1004,7 @@ for i in range(5, 12):
     a = 0xD000 + 40 * i
     it.m[1, a + 10] = 0; it.m[1, a + 11] = 0; it.m[1, a + 34] = it.m[1, a + 34] | 0x08
 it.m[SYMS["_B"] + 8] = 4; it.m[SYMS["_B"] + 9] = 0          # Battle.round (after the 8 B Rng)
-it.press("start"); it.wait_state([G_IDLE, G_OUTCOME], 4000)
+it.end_turn(); it.wait_state([G_IDLE, G_OUTCOME], 4000)
 check(f"BT_05: 吕布 appears on round 4 (units {it.r8('_dbg_n_units')}, hp {it.hp(12)}, round {it.r16('_dbg_round')})",
       it.r8("_dbg_n_units") == 13 and it.hp(12) > 0 and it.m[1, 0xD000 + 40 * 12] == 15)   # character 15
 # 三英战吕布: place 张飞 next to 吕布 and attack -> the duel replaces the attack, 吕布 retreats, the battle is won
@@ -997,7 +1036,7 @@ def put(em, i, x, y):
     em.m[1, a + 7] = x; em.m[1, a + 8] = y
 
 def end_turn_outcome(em):
-    em.press("start")
+    em.end_turn()
     em.wait_state([G_OUTCOME], 3000)
     outcome_ready(em)
 
@@ -1008,7 +1047,7 @@ check(f"BT_06: 公孙瓒 (unit 4, character 16) is an ally ({it.m[1, 0xD000 + 40
 it.frames(60)
 check("BT_06 map consistent", view_mismatches(it) == 0)
 r0 = it.r16("_dbg_round")                                 # the ambush holds 公孙瓒 east of the area for a round
-it.press("start"); it.wait_state([G_IDLE, G_OUTCOME], 4000)
+it.end_turn(); it.wait_state([G_IDLE, G_OUTCOME], 4000)
 check(f"BT_06: outside the area the battle goes on; 赵云 joins on round 2 (round {it.r16('_dbg_round')}, units {it.r8('_dbg_n_units')})",
       it.state() == G_IDLE and it.r16("_dbg_round") == r0 + 1 and it.r8("_dbg_n_units") == 17
       and it.m[1, 0xD000 + 40 * 16] == 17 and it.m[1, 0xD000 + 40 * 16 + 3] == 1)
@@ -1173,7 +1212,70 @@ cs.wait_state([G_TITLE], 300)
 cs.press("select", after=16)
 check("title: SELECT loads the camp save into the camp screen", camp_wait(cs, C_MAIN, 300) or camp_wait(cs, 25, 10))
 check(f"camp save restored the gold ({cs.r16('_dbg_gold')})", cs.r16("_dbg_gold") == 90)
+if cs.state() == C_MAIN:
+    while camp_cur(cs) != 4:
+        cs.press("down", after=16)
+    cs.press("a", after=16); cs.frames(4)
+check(f"T-SAVE-01: 军议已毕 comes back with the camp save, 出阵 opens at once (state {cs.state()})", cs.state() == C_DEPLOY)
+inv_a = [cs.m[SYMS["_dbg_inv"] + k] for k in range(8)]
+for _ in range(2):                                       # T-SAVE-02: reading the same save again never adds anything
+    c2 = Emu(ram_end)
+    c2.wait_state([G_TITLE], 300)
+    c2.press("select", after=16)
+    camp_wait(c2, C_MAIN, 300)
+    check(f"same camp save read again: gold and items unchanged ({c2.r16('_dbg_gold')})",
+          c2.r16("_dbg_gold") == 90 and [c2.m[SYMS["_dbg_inv"] + k] for k in range(8)] == inv_a)
+    c2.pb.stop(save=False)
 cs.pb.stop(save=False)
+
+# ------------------------------------------------------------------ T-UI-01/02 confirmations, T-UI-06 level-up panel
+q = Emu()
+q.wait_state([G_IDLE]); q.frames(30)
+r0 = q.r16("_dbg_round")
+q.press("start")
+check("START on the map asks first (T-UI-01)", q.state() == G_ENDTURN and q.r16("_dbg_round") == r0)
+q.press("start"); q.press("start")
+check("START again does not confirm", q.state() == G_ENDTURN)
+q.press("b")
+check("B cancels: still the player's turn", q.state() == G_IDLE and q.r16("_dbg_round") == r0)
+q.press("start"); q.press("right")
+check(f"right in the question jumps to a unit that can still act ({q.cur()})",
+      q.state() == G_IDLE and q.cur() in [q.unit(i) for i in range(4)])
+q.goto(*q.unit(0)); q.press("a"); q.wait_state([G_MOVE], 20)
+q.press("start")
+check("START while choosing the destination: refused, nothing ends (T-UI-02)", q.state() == G_MOVE and q.r16("_dbg_round") == r0)
+q.press("b"); q.wait_state([G_IDLE], 20)
+# level-up: 关羽 one hit away from the next level attacks an enemy
+ex, ey = q.unit(4)
+a1 = 0xD000 + 40
+q.m[1, a1 + 7] = ex - 1; q.m[1, a1 + 8] = ey; q.m[1, a1 + 6] = 99
+q.m[SYMS["_unit_gen"]] = (q.m[SYMS["_unit_gen"]] + 1) & 0xFF
+q.frames(10)
+lv0, mhp0, hp0 = q.m[1, a1 + 5], q.m[1, a1 + 12] | (q.m[1, a1 + 13] << 8), q.hp(1)
+q.auto_dialog = False
+q.goto(ex - 1, ey); q.press("a"); q.wait_state([G_MOVE], 20); q.press("a"); q.wait_state([G_MENU], 60)
+q.press("a"); q.wait_state([G_TARGET], 30); q.press("a", after=1)
+n = 0
+while q.r8("_dbg_dialog_active") != 1 and n < 900:
+    q.frames(1); n += 1
+q.frames(20); q.png(ROM.parent / "shot_levelup.png")
+lv1, mhp1 = q.m[1, a1 + 5], q.m[1, a1 + 12] | (q.m[1, a1 + 13] << 8)
+check(f"level-up panel waits for A (Lv {lv0}->{lv1}, max {mhp0}->{mhp1})", q.r8("_dbg_dialog_active") == 1 and lv1 == lv0 + 1 and mhp1 > mhp0)
+q.frames(120)
+check("the panel stays until A", q.r8("_dbg_dialog_active") == 1)
+q.press("a", after=8)
+check("A closes the panel", q.r8("_dbg_dialog_active") == 0)
+q.pb.stop(save=False)
+# T-RULE-01: every battle's conditions page names its turn limit (built from the battle data)
+_goals = _json.load(open(ROM.resolve().parents[2] / "content/text/goals_zh.json"))
+_bad = []
+for _bt in _CAMPAIGN["battles"][1:]:
+    _bj = _json.load(open(ROM.resolve().parents[2] / f"content/battles/{_bt['id']}.json"))
+    _g = _goals[f"TXD_B{_bt['id'][3:]}_GOAL"]
+    _ok = (f"第{_bj['victory']['round']}回合" in _g) if _bj["victory"]["kind"] == "SURVIVE" else (f"{_bj['turn_limit']}回合内" in _g)
+    if not _ok or "败北条件" not in _g:
+        _bad.append(_bt["id"])
+check(f"conditions page of all 20 battles states the turn limit and the defeat conditions ({_bad})", not _bad)
 
 # ------------------------------------------------------------------ in-game save: SELECT -> power off -> cold boot
 s = Emu()
@@ -1211,7 +1313,7 @@ f = Emu(ram)
 f.wait_state([G_TITLE], 200); f.press("a"); f.wait_state([G_IDLE], 200)
 while f.state() != G_OUTCOME and f.fc < 40000:
     if f.state() == G_IDLE:
-        f.press("start")
+        f.end_turn()
     f.frames(1)
 ram2 = f.power_off()
 g = Emu(ram2)

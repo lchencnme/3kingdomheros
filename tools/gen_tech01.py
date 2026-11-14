@@ -486,7 +486,7 @@ def main():
         "events": [
             {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
              "code": [["TEXT", "P0001", "TXD_T01_OPEN_LIUBEI"], ["TEXT", "P0002", "TXD_T01_OPEN_GUANYU"],
-                      ["TEXT", "P0003", "TXD_T01_OPEN_ZHANGFEI"]]},
+                      ["TEXT", "P0003", "TXD_T01_OPEN_ZHANGFEI"], ["TEXT", "NARRATOR", "TXD_T01_GOAL"]]},
             {"id": 2, "trigger": "PHASE_START", "param": "ENEMY", "priority": 0, "once": True,
              "condition": {"leaf": "turn_cmp", "op": "eq", "n": 3},
              "code": [["TEXT", "NARRATOR", "TXD_T01_REINF"], ["SPAWN", 0, 30, 10], ["SPAWN", 1, 30, 14],

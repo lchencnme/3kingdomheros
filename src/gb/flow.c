@@ -73,6 +73,24 @@ static void load_ai_groups(void)
     ai_groups_init(buf, n);
 }
 
+/* 2.4 JOIN: the joiner's record, then its carried items written straight into SRAM (the VM runs deep in
+ * the event chain: no second 48 B record on the stack). 0 = no such joiner. */
+uint8_t join_officer(uint8_t j) BANKED
+{
+    const RosterInit *o;
+    uint8_t idx, s, v[2];
+    if (j >= N_JOINERS) return 0;
+    o = &join_defs[j];
+    if (roster_find(o->character) != 0xFF) return 1;            /* already in: nothing to do */
+    idx = roster_add(o->character, o->cls, o->level, o->str, o->intl, o->cmd);
+    if (idx == 0xFF) return 1;                                  /* roster full: the story goes on */
+    for (s = 0; s < 8u; s++) {
+        v[0] = o->items[s]; v[1] = o->items[s] == 0xFF ? 0xFF : 0;
+        sram_write(ROSTER_SRAM_BANK, (uint16_t)((uint16_t)idx * ROSTER_REC + 14u + 2u * s), v, 2);
+    }
+    return 1;
+}
+
 /* accessors for code outside bank 14 (vm_gb treasure hook, camp deploy rules) */
 uint8_t bd_treasure(uint8_t i, uint8_t *xyi) BANKED
 {
@@ -445,6 +463,7 @@ void load_camp_and_go(void) BANKED
         return;
     }
     gold = (uint16_t)ui.gold; options = ui.options;
+    camp_council_done = ui.presentation & 1u;  /* T-SAVE-01: 军议已毕 comes back with the save */
     unit_base_cache_clear();                   /* a different roster may have been loaded */
     cur_bt = (uint8_t)ui.battle_id; carry_round = 0; deploy.n = 0;
     DISPLAY_OFF;
@@ -453,6 +472,44 @@ void load_camp_and_go(void) BANKED
     camp_run(&gold, &deploy, CAMP_FULL, BD->next, BD->camp == 0xFF ? 0u : BD->camp);
     camp_finish();
     go_next(BD->next);
+}
+
+/* T-FLOW-01: the battle (with a camp) that leads into the current one, or 0xFF */
+uint8_t prev_camp_battle(void) BANKED
+{
+    uint8_t p;
+    for (p = 0; p < N_BATTLES; p++)
+        if (battle_defs[p].next == cur_bt && battle_defs[p].camp != 0xFF) return p;
+    return 0xFF;
+}
+
+/* T-FLOW-01 defeat -> back to the camp before this battle: the pre-battle snapshot comes back first (roster,
+ * flags, gold as they were when the army set out), then the camp opens with 军议 already held. Setting out
+ * again writes a new snapshot, so purchases made now count from then on. */
+void retry_to_camp(void) BANKED
+{
+    Battle sb;
+    SaveUi ui;
+    uint8_t dep[1 + 4 * SAVE_MAX_DEPLOY], k, target = cur_bt, p;
+    DISPLAY_OFF;
+    if (load_snapshot(&sb, &ui, dep) == SAVE_OK && ui.battle_id < N_BATTLES) {
+        target = (uint8_t)ui.battle_id; gold = (uint16_t)ui.gold;
+        deploy.n = dep[0] > CAMP_MAX_DEPLOY ? CAMP_MAX_DEPLOY : dep[0];
+        for (k = 0; k < deploy.n; k++) deploy.order[k] = dep[1 + 4 * k];
+        unit_base_cache_clear();
+        dbg_retries++;
+    }
+    cur_bt = target;
+    p = prev_camp_battle();
+    if (p == 0xFF) { start_battle(); mapview_init(&tech01_meta[0][0], tech01_terrain_pal); map_mode_restore(); return; }
+    cur_bt = p; carry_round = 0;
+    prize_clear();                             /* the lost battle's unclaimed spoils are gone with it */
+    camp_council_done = 1;
+    music_play(&song_camp);
+    camp_prepare();
+    camp_run(&gold, &deploy, CAMP_FULL, target, BD->camp);
+    camp_finish();
+    go_next(target);
 }
 
 /* 11.6 retry: restore the pre-battle snapshot (roster, flags, gold, deployment) and start again.

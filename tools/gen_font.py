@@ -211,6 +211,8 @@ def main():
           "extern const uint8_t glyph_rows_b[];    /* glyphs GLYPH_SPLIT .., bank TEXT_BANK_B */",
           "extern const uint8_t glyph_width[];",
           "extern const uint16_t text_pool[];", "extern const uint16_t text_offset[];",
+          "#define TEXT_POOL_BANK_B 25u", "extern const uint16_t text_pool_b[];   /* strings from text_split_id on */",
+          "extern const uint16_t text_split_id, text_split_off;",
           "extern const uint8_t digit_glyph[10];",
           "extern const uint16_t class_name_tx[];", "extern const uint16_t terrain_name_tx[];",
           "extern const uint16_t strat_name_tx[];", "extern const uint16_t item_name_tx[];", "#endif"]
@@ -230,8 +232,17 @@ def main():
     (ROOT / "src" / "gen" / "text_glyphs_b.c").write_text("\n".join(cb) + "\n", encoding="utf-8")
     if len(ids) > 2 * split:
         die("more than 1280 glyphs: add a third glyph bank")
-    pool_c = ["#pragma bank 16", "#include \"text_data.h\""] + arr("text_pool", "uint16_t", pool)
+    # the string pool is split over two asset banks at a string boundary (first id whose text no longer
+    # fits 7,600 words = 15.2 KiB in bank 16); offsets stay global, bank B is addressed from the cut
+    cut_id = next((i for i in range(len(offs)) if (offs[i + 1] if i + 1 < len(offs) else len(pool)) > 7600), len(offs))
+    cut = offs[cut_id] if cut_id < len(offs) else len(pool)
+    if len(pool) - cut > 7600:
+        die("string pool exceeds two banks: add a third")
+    pool_c = ["#pragma bank 16", "#include \"text_data.h\""] + arr("text_pool", "uint16_t", pool[:cut] or [0])
     (ROOT / "src" / "gen" / "text_pool.c").write_text("\n".join(pool_c) + "\n", encoding="utf-8")
+    pool_b = ["#pragma bank 25", "#include \"text_data.h\""] + arr("text_pool_b", "uint16_t", pool[cut:] or [0])
+    (ROOT / "src" / "gen" / "text_pool_b.c").write_text("\n".join(pool_b) + "\n", encoding="utf-8")
+    ci.append(f"const uint16_t text_split_id = {cut_id}u, text_split_off = {cut}u;")
     ci += arr("glyph_width", "uint8_t", widths, 32)
     ci += arr("text_offset", "uint16_t", offs + [len(pool)])
     ci.append("const uint8_t digit_glyph[10] = {" + ", ".join(str(reg["glyphs"][d]) for d in "0123456789") + "};")

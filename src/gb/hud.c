@@ -51,13 +51,20 @@ void hud_num(uint8_t line, uint16_t n)
 void hud_space(uint8_t line) { add(line, GLYPH_SPACE); }
 void hud_glyph(uint8_t line, uint16_t g) { add(line, g); }
 
+/* n glyph ids of string tx from its pool bank (the pool is split over two banks at text_split_id) */
+static void text_fetch(uint16_t *buf, uint16_t tx, uint16_t n)
+{
+    if (tx >= text_split_id) rom_copy(TEXT_POOL_BANK_B, buf, &text_pool_b[text_offset[tx] - text_split_off], (uint16_t)(n * 2u));
+    else rom_copy(TEXT_POOL_BANK, buf, &text_pool[text_offset[tx]], (uint16_t)(n * 2u));
+}
+
 void hud_tx(uint8_t line, uint16_t tx, uint16_t var)
 {
     uint16_t *buf = LINE_BUF;
     uint16_t n = (uint16_t)(text_offset[tx + 1] - text_offset[tx]);
     uint8_t i;
     if (n > LINE_GLYPHS + 1) n = LINE_GLYPHS + 1;           /* HUD lines never exceed 24 glyphs */
-    rom_copy(TEXT_POOL_BANK, buf, &text_pool[text_offset[tx]], (uint16_t)(n * 2u));
+    text_fetch(buf, tx, n);
     for (i = 0; i < n && buf[i] != TXC_END; i++) {
         if (buf[i] == TXC_VAR) hud_num(line, var);
         else if (buf[i] != TXC_NL) add(line, buf[i]);
@@ -93,7 +100,7 @@ uint8_t hud_tx_page(uint16_t tx, uint8_t page)
     uint16_t n = (uint16_t)(text_offset[tx + 1] - text_offset[tx]), i;
     uint8_t p = 0, line = 0;
     if (n > 64u) n = 64u;
-    rom_copy(TEXT_POOL_BANK, buf, &text_pool[text_offset[tx]], (uint16_t)(n * 2u));
+    text_fetch(buf, tx, n);
     for (i = 0; i < n && buf[i] != TXC_END; i++) {
         if (buf[i] == TXC_PAGE) { if (p == page) return 1; p++; line = 0; continue; }
         if (p != page) continue;

@@ -38,7 +38,7 @@ def G(i, mode, target=None, leash=3):
 # terrain digits: 0 plain 1 road 2 forest 3 village 4 fort 5 hill 6 shallow 7 deep 8 wall 9 bridge
 # ---------------------------------------------------------------- BT_01 涿郡破黄巾 (回目 1, tutorial)
 BT01 = {
-    "id": "BT_01", "map": [
+    "id": "BT_01", "goal": ("击退程远志", "方向键移动，A选择，B取消，START结束回合。"), "map": [
         "000000222000000000055500",
         "000002222200000000555550",
         "000000222000000000055500",
@@ -75,7 +75,7 @@ BT01 = {
 }
 # ---------------------------------------------------------------- BT_02 青州解围 (回目 1, ally / facility)
 BT02 = {
-    "id": "BT_02", "map": [
+    "id": "BT_02", "goal": ("全灭黄巾军", "城寨格子每回合恢复兵力。"), "map": [
         "00000000000000000000000000",
         "00222000000000000000022200",
         "02222200000000000000222220",
@@ -115,7 +115,7 @@ BT02 = {
 }
 # ---------------------------------------------------------------- BT_03 破张宝妖术 (回目 2, continuous)
 BT03 = {
-    "id": "BT_03", "map": [
+    "id": "BT_03", "goal": ("击退张宝", "连续战：兵力与士气不会恢复。"), "map": [
         "555550000000000000222000",
         "555500000002200002222200",
         "550000000022220000222000",
@@ -152,7 +152,7 @@ BT03 = {
 }
 # ---------------------------------------------------------------- BT_04 汜水关 (回目 5, duel)
 BT04 = {
-    "id": "BT_04", "map": [
+    "id": "BT_04", "goal": ("击退华雄", "关羽攻击华雄时会触发单挑。"), "map": [
         "55555555555555555588888888",
         "55500000000000005588444488",
         "50000000000000000088444488",
@@ -186,7 +186,7 @@ BT04 = {
 }
 # ---------------------------------------------------------------- BT_05 虎牢关 (回目 5, hold out / 三英战吕布)
 BT05 = {
-    "id": "BT_05", "map": [
+    "id": "BT_05", "goal": ("坚守到第12回合，或击退吕布", "张飞攻击吕布时会触发三英战吕布。"), "map": [
         "55555555558888888888555555",
         "55000000008444444448000055",
         "50000000008444444448000005",
@@ -207,7 +207,7 @@ BT05 = {
     "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD")],
     "items": [], "treasures": [(4, 4, 0x07)],
     "victory": ("SURVIVE", 12, 12), "protect": None,                # hold to round 12, or drive off 吕布
-    "turn_limit": 30, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 4, "forced": [0, 1, 2], "seed": 17,
+    "turn_limit": 12, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 4, "forced": [0, 1, 2], "seed": 17,
     "events": [
         {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
          "code": [["TEXT", "NARRATOR", "TXD_B05_OPEN_0"], ["TEXT", "P0003", "TXD_B05_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B05_GOAL"]]},
@@ -225,7 +225,7 @@ BT05 = {
 # ================================================================ Chapter 2 群雄（徐州） BT_06..BT_12
 # ---------------------------------------------------------------- BT_06 磐河之战 (回目 7, escort 公孙瓒 / 赵云)
 BT06 = {
-    "id": "BT_06", "map": [
+    "id": "BT_06", "goal": ("护送公孙瓒到西边的安全地带", ""), "map": [
         "55500000000000676000000555",
         "55000022000000676000000055",
         "50000222200000676000220005",
@@ -268,7 +268,7 @@ BT06 = {
 }
 # ---------------------------------------------------------------- BT_07 北海救孔融 (回目 11, 太史慈 ally)
 BT07 = {
-    "id": "BT_07", "map": [
+    "id": "BT_07", "goal": ("击退管亥", "关羽攻击管亥时会触发单挑。"), "map": [
         "00000000000000000000000000",
         "00222000000000000000000000",
         "02222200000088888888800000",
@@ -308,7 +308,7 @@ BT07 = {
 }
 # ---------------------------------------------------------------- BT_08 徐州解围 (回目 11, all enemies, 陶谦 protected)
 BT08 = {
-    "id": "BT_08", "map": [
+    "id": "BT_08", "goal": ("全灭曹军", ""), "map": [
         "55500000000000000000002220",
         "55000000000000000000022222",
         "50888888880000000000002220",
@@ -347,7 +347,7 @@ BT08 = {
 }
 # ---------------------------------------------------------------- BT_09 盱眙拒袁术 (回目 14, drive off 纪灵)
 BT09 = {
-    "id": "BT_09", "map": [
+    "id": "BT_09", "goal": ("击退纪灵", "关羽攻击荀正时会触发单挑。"), "map": [
         "00000000000000000005555555",
         "00002220000000000005500005",
         "00022222000000000000004440",
@@ -382,7 +382,7 @@ BT09 = {
 }
 # ---------------------------------------------------------------- BT_10 徐州夜袭 (回目 14, escape with the two ladies)
 BT10 = {
-    "id": "BT_10", "map": [
+    "id": "BT_10", "goal": ("护送甘夫人到西边出口", ""), "map": [
         "00000000000000000088888888",
         "00222000000000000084444448",
         "02222200000000000084000048",
@@ -421,7 +421,7 @@ BT10 = {
 }
 # ---------------------------------------------------------------- BT_11 辕门射戟 (回目 16, hold 小沛 until 吕布 steps in)
 BT11 = {
-    "id": "BT_11", "map": [
+    "id": "BT_11", "goal": ("坚守到第8回合", "连续战：兵力不会恢复。"), "map": [
         "55550000000000000000000000",
         "55000000000000000002220000",
         "50888880000000000022222000",
@@ -442,7 +442,7 @@ BT11 = {
     "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD")],
     "items": [(4, 1)], "treasures": [(3, 3, 0x02)],
     "victory": ("SURVIVE", None, 8), "protect": None,
-    "turn_limit": 20, "continuity": "NO_REPLENISH", "round_mode": "RESET", "deploy_max": 4, "forced": [0], "seed": 41,
+    "turn_limit": 8, "continuity": "NO_REPLENISH", "round_mode": "RESET", "deploy_max": 4, "forced": [0], "seed": 41,
     "events": [
         {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
          "code": [["TEXT", "NARRATOR", "TXD_B11_OPEN_0"], ["TEXT", "P0002", "TXD_B11_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B11_GOAL"]]},
@@ -456,7 +456,7 @@ BT11 = {
 }
 # ---------------------------------------------------------------- BT_12 下邳擒吕布 (回目 19, 曹军 allies, flood)
 BT12 = {
-    "id": "BT_12", "map": [
+    "id": "BT_12", "goal": ("击退吕布", "第5回合曹操会决水灌城。"), "map": [
         "0000000000000000000000000000",
         "0022200000000000000000000000",
         "0222220000000000888888888800",
@@ -504,7 +504,7 @@ def EV(i, trig, param, code, cond=None):
 WIN0 = {"leaf": "unit_alive", "unit": 0}
 # ---------------------------------------------------------------- BT_13 徐州斩车胄 (回目 21)
 BT13 = {
-    "id": "BT_13", "map": [
+    "id": "BT_13", "goal": ("击退车胄", "关羽攻击车胄时会触发单挑。"), "map": [
         "000000000000000088888888",
         "002220000000000084444448",
         "022222000000000084000048",
@@ -536,7 +536,7 @@ BT13 = {
 }
 # ---------------------------------------------------------------- BT_14 拒刘岱王忠 (回目 22)
 BT14 = {
-    "id": "BT_14", "map": [
+    "id": "BT_14", "goal": ("全灭曹军", ""), "map": [
         "00000000000000000000055500",
         "00222000000000000000555550",
         "02222200000000000000055500",
@@ -568,7 +568,7 @@ BT14 = {
 }
 # ---------------------------------------------------------------- BT_15 小沛之败 (回目 24, escape; 关羽 leaves)
 BT15 = {
-    "id": "BT_15", "map": [
+    "id": "BT_15", "goal": ("刘备到达西北角", "连续战：兵力不会恢复。"), "map": [
         "00000000002220000000000000",
         "00000000022222000000000000",
         "00000000002220000000000000",
@@ -600,7 +600,7 @@ BT15 = {
 }
 # ---------------------------------------------------------------- BT_16 古城会 (回目 28; 关羽 returns, 赵云 joins)
 BT16 = {
-    "id": "BT_16", "map": [
+    "id": "BT_16", "goal": ("击退蔡阳", "张飞攻击蔡阳时，关羽会出手单挑。"), "map": [
         "88888880000000000000000000",
         "84444480000000002220000000",
         "84000480000000022222000000",
@@ -637,7 +637,7 @@ BT16 = {
 }
 # ---------------------------------------------------------------- BT_17 汝南之战 (回目 31, hold then fall back)
 BT17 = {
-    "id": "BT_17", "map": [
+    "id": "BT_17", "goal": ("坚守到第6回合", ""), "map": [
         "55555000000000000000000000",
         "55500000000000000002220000",
         "50088888000000000022222000",
@@ -660,7 +660,7 @@ BT17 = {
     "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(2, "GUARD_POINT", [6, 6], 2)],
     "items": [(8, 2)], "treasures": [(4, 3, 0x05)],
     "victory": ("SURVIVE", None, 6), "protect": None,
-    "turn_limit": 20, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 5, "forced": [0], "seed": 67,
+    "turn_limit": 6, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 5, "forced": [0], "seed": 67,
     "events": [
         EV(1, "BATTLE_START", None, [["TEXT", "NARRATOR", "TXD_B17_OPEN_0"], ["TEXT", "P0001", "TXD_B17_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B17_GOAL"]]),
         EV(2, "PHASE_START", "PLAYER", [["TEXT", "NARRATOR", "TXD_B17_ROUND4"]], {"leaf": "turn_cmp", "op": "ge", "n": 4}),
@@ -669,7 +669,7 @@ BT17 = {
 }
 # ---------------------------------------------------------------- BT_18 江夏讨张武 (回目 34, 的卢)
 BT18 = {
-    "id": "BT_18", "map": [
+    "id": "BT_18", "goal": ("击退张武", ""), "map": [
         "00000000000000000000000000",
         "00222000000066600000222000",
         "02222200000066600002222200",
@@ -700,7 +700,7 @@ BT18 = {
 }
 # ---------------------------------------------------------------- BT_19 跃马檀溪 (回目 34, 刘备 alone; 徐庶 joins)
 BT19 = {
-    "id": "BT_19", "map": [
+    "id": "BT_19", "goal": ("刘备过檀溪，到达西岸", "本战只有刘备出阵。"), "map": [
         "000000077700000000005555",
         "000000077700000000055555",
         "000000077700000222000555",
@@ -732,7 +732,7 @@ BT19 = {
 }
 # ---------------------------------------------------------------- BT_20 新野破曹仁 (回目 36, 八门金锁阵; 徐庶 leaves)
 BT20 = {
-    "id": "BT_20", "map": [
+    "id": "BT_20", "goal": ("击退阵中央的掌旗鼓手（阵眼）", ""), "map": [
         "00000000000000000000000000",
         "00222000000000000000022200",
         "02222200000000000000222220",
@@ -827,6 +827,10 @@ def main():
             "/* GENERATED by tools/gen_campaign.py - do not edit */", '#include "campaign_data.h"', '#include "text_data.h"']
     asset = ["#pragma bank 15   /* asset bank: terrain of battles 2+ (read through the gateway) */", '#include "campaign_data.h"']
     rows = {}
+    ui_names = json.loads((ROOT / "content/text/ui_zh.json").read_text(encoding="utf-8"))
+    ch_name = {ch["id"]: ui_names[ch["name"]] for ch in chars}
+    goals = {"_comment": "GENERATED by tools/gen_campaign.py from the battle data (victory, protect, turn_limit): "
+                         "every condition that can lose the battle is on the opening conditions page (T-RULE-01). Do not edit."}
     for n, bid in enumerate(ids):
         if n == 0:
             continue
@@ -863,12 +867,30 @@ def main():
         bt_c.append(f"static const uint8_t {p}_ai[] = {{" + ", ".join(map(str, ai_recs(bt["ai_groups"], w))) + "};")
         bt_c.append(f"static const uint8_t {p}_tre[][3] = {{" + (", ".join(f"{{{x}, {y}, {i}}}" for x, y, i in bt["treasures"]) or "{0, 0, 0}") + "};")
         vk, vu, vr = bt["victory"]
+        # opening conditions page: built from the data so a hidden limit cannot exist
+        lose = "刘备"
+        if bt["protect"] is not None:
+            pch = bt["others"][bt["protect"] - len(bt["slots"])]["ch"]
+            if not pch:
+                die(f"{bid}: the protected unit must be a named character")
+            lose += "或" + ch_name[pch]
+        if vk == "REACH" and vu != 0 and vu != bt["protect"]:      # the escorted unit: its loss ends the battle
+            lose += "或" + ch_name[bt["others"][vu - len(bt["slots"])]["ch"]]
+        lose += "撤退"
+        if vk == "SURVIVE":
+            if bt["turn_limit"] != vr or f"第{vr}回合" not in bt["goal"][0]:
+                die(f"{bid}: SURVIVE needs turn_limit == hold round ({vr}) and the round in the goal text")
+        else:
+            lose += f"，或{bt['turn_limit']}回合内未取胜"
+        goals[f"TXD_B{bid[3:]}_GOAL"] = f"胜利条件：{bt['goal'][0]}。败北条件：{lose}。{bt['goal'][1]}"
         rect = bt.get("area", (0, 0, 0, 0))
         if vk == "REACH" and not (0 <= rect[0] <= rect[2] < w and 0 <= rect[1] <= rect[3] < h):
             die(f"{bid}: bad REACH area {rect}")
         rows[n] = (p, w, h, 15, len(units), len(ei), len(bt["ai_groups"]), len(bt["treasures"]), bt["turn_limit"],
                    CONT[bt["continuity"]], ROUND[bt["round_mode"]], bt["deploy_max"], sum(1 << k for k in bt["forced"]),
                    bt["seed"], VIC[vk], 0xFF if vu is None else vu, vr, 0xFF if bt["protect"] is None else bt["protect"]) + tuple(rect)
+
+    (ROOT / "content/text/goals_zh.json").write_text(json.dumps(goals, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
     def node(i):
         b = camp_list["battles"][i]
@@ -905,23 +927,27 @@ def main():
             die(f"{cid}: join {jn} is not a joiner")
         cd.append(f"{{{len(cj['shop'])}, camp{k}_shop, {len(cj['council'])}, camp{k}_council, {0xFF if jn is None else js.index(jn)}}}")
     camp_c.append(f"const CampDef camp_defs[N_CAMPS] = {{" + ", ".join(cd) + "};")
-    c.append("const RosterInit roster_init[N_ROSTER_INIT] = {")
+    bt_c.append("const RosterInit roster_init[N_ROSTER_INIT] = {")
     for o in roster:
         its = o["items"] + [0xFF] * (8 - len(o["items"]))
-        c.append(f"    {{{o['character']}, {o['class']}, {o['level']}, {o['base'][0]}, {o['base'][1]}, {o['base'][2]}, {o['name']}, "
+        bt_c.append(f"    {{{o['character']}, {o['class']}, {o['level']}, {o['base'][0]}, {o['base'][1]}, {o['base'][2]}, {o['name']}, "
                  "{" + ", ".join(map(str, its)) + "}},")
-    c.append("};")
+    bt_c.append("};")
     joiners = json.loads((ROOT / "content/roster.json").read_text(encoding="utf-8")).get("joiners", [])
     for o in joiners:
         if o["character"] not in char_ids:
             die(f"joiner {o['character']} not registered")
-    c.append("const RosterInit join_defs[N_JOINERS + 1] = {")      # +1: never an empty array
+    bt_c.append("const RosterInit join_defs[N_JOINERS + 1] = {")      # +1: never an empty array
     for o in joiners + [{"character": 0, "class": 0, "level": 1, "base": [0, 0, 0], "name": "0", "items": []}]:
         its = o["items"] + [0xFF] * (8 - len(o["items"]))
-        c.append(f"    {{{o['character']}, {o['class']}, {o['level']}, {o['base'][0]}, {o['base'][1]}, {o['base'][2]}, {o['name']}, "
+        bt_c.append(f"    {{{o['character']}, {o['class']}, {o['level']}, {o['base'][0]}, {o['base'][1]}, {o['base'][2]}, {o['name']}, "
                  "{" + ", ".join(map(str, its)) + "}},")
-    c.append("};")
-    c.append("const uint16_t char_name[N_CHARS][2] = {" + ", ".join(f"{{{ch['id']}, {ch['name']}}}" for ch in chars) + "};")
+    bt_c.append("};")
+    (ROOT / "src/gen/campaign_names.c").write_text("\n".join([
+        "#pragma bank 5   /* character names: read only by main.c (same bank); others call char_name_tx() */",
+        "/* GENERATED by tools/gen_campaign.py - do not edit */", '#include "campaign_data.h"', '#include "text_data.h"',
+        "const uint16_t char_name[N_CHARS][2] = {" + ", ".join(f"{{{ch['id']}, {ch['name']}}}" for ch in chars) + "};"]) + "\n",
+        encoding="utf-8")
     c.append("const uint16_t ending_pages[][2] = {" + ", ".join(f"{{{SPK[s]}, {t}}}" for s, t in camp_list["ending"]) + "};")
     h_ = ["/* GENERATED by tools/gen_campaign.py - do not edit */", "#ifndef CAMPAIGN_DATA_H", "#define CAMPAIGN_DATA_H",
           "#include <stdint.h>", '#include "tech01_data.h"',
@@ -945,15 +971,17 @@ def main():
           "typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; uint8_t join; } CampDef;   /* join: joiner index or FF */",
           "typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd; uint16_t name_tx; uint8_t items[8]; } RosterInit;",
           "extern const BattleDef battle_defs[N_BATTLES];   /* ROM bank 14 (flow.c only) */", "extern const CampDef camp_defs[N_CAMPS];          /* ROM bank 10 (camp.c only) */",
-          "extern const RosterInit roster_init[N_ROSTER_INIT];",
+          "extern const RosterInit roster_init[N_ROSTER_INIT];   /* ROM bank 14 (flow.c only) */",
           "extern const RosterInit join_defs[];             /* OP_JOIN table (content/roster.json joiners) */", "extern const uint16_t ending_pages[][2];",
-          "extern const uint16_t char_name[N_CHARS][2];   /* character id -> TX name */",
+          "extern const uint16_t char_name[N_CHARS][2];   /* character id -> TX name; ROM bank 5 (main.c only) */",
           "extern const uint8_t tech01_levels[];",
           "#ifdef __SDCC",
           "#include <gb/gb.h>",
           "/* flow.c (bank 14) accessors for code in other banks */",
           "uint8_t bd_treasure(uint8_t i, uint8_t *xyi) BANKED;            /* current battle: x, y, item */",
           "void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced) BANKED;",
+          "uint8_t join_officer(uint8_t joiner) BANKED;                    /* flow.c: OP_JOIN / camp join */",
+          "uint16_t char_name_tx(uint16_t character) BANKED;               /* main.c: TX name or 0 */",
           "#endif", "#endif"]
     (ROOT / "src/gen/campaign_data.h").write_text("\n".join(h_) + "\n", encoding="utf-8")
     (ROOT / "src/gen/campaign_data.c").write_text("\n".join(c) + "\n", encoding="utf-8")

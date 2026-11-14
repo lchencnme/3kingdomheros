@@ -27,11 +27,17 @@ static int8_t unit_at(uint8_t x, uint8_t y)
     return -1;
 }
 
+uint16_t char_name_tx(uint16_t character) BANKED    /* named characters (content/characters.json); 0 = none */
+{
+    uint8_t k;
+    for (k = 0; k < N_CHARS; k++) if (char_name[k][0] == character) return char_name[k][1];
+    return 0;
+}
+
 static uint16_t unit_name_tx(const ActiveUnit *u)
 {
-    uint8_t k;                                 /* named characters (content/characters.json), else the class */
-    for (k = 0; k < N_CHARS; k++) if (char_name[k][0] == u->character_id) return char_name[k][1];
-    return class_name_tx[u->class_id];
+    uint16_t t = char_name_tx(u->character_id);
+    return t ? t : class_name_tx[u->class_id];
 }
 
 /* units are composited into BG by mapview (design doc 12.2); OBJ only for the cursor and a "ghost"
@@ -143,7 +149,7 @@ static void hud_menu(void)
         hud_tx(ln, label[mitems[i]], 0);
         hud_space(ln);
     }
-    if (n_mitems <= 4) hud_tx(1, TX_MOVE_HINT, 0);
+    if (n_mitems <= 4) hud_tx(1, TX_MENU_HINT, 0);   /* T-UI-04: the hint of the current step only */
     hud_end();
     dbg_menu_item = mitems[menu];
 }
@@ -214,10 +220,28 @@ static void hud_ilist(uint16_t hint)
     uint8_t it = inv_get(sel, isel);
     hud_begin();
     hud_tx(0, TX_ARROW, 0);
-    if (it != ITEM_NONE) hud_tx(0, item_name_tx[it], 0);
-    hud_space(0); hud_num(0, inv_count(sel)); hud_glyph(0, GLYPH_SLASH); hud_num(0, INV_SLOTS);
-    hud_tx(1, hint, 0);
+    if (it != ITEM_NONE) { hud_tx(0, item_name_tx[it], 0); hud_space(0); hud_item_effect(0, it); }
+    hud_tx(1, (hint == TX_ITEM_HINT && it != ITEM_NONE && item_kind(it) >= IK_WEAPON) ? TX_NO_USE
+              : (hint == TX_ITEM_HINT ? TX_ILIST_HINT : hint), 0);
     hud_end();
+}
+
+/* T-UI-05: the effect of an item before it is used / bought (values straight from the item table) */
+void hud_item_effect(uint8_t line, uint8_t it) BANKED
+{
+    uint8_t k = item_kind(it);
+    uint16_t pw = item_field(it, 0);
+    if (k == IK_HP) { hud_tx(line, TX_HP, 0); hud_glyph(line, GLYPH_PLUS); hud_num(line, pw); }
+    else if (k == IK_MORALE) { hud_tx(line, TX_MORALE, 0); hud_glyph(line, GLYPH_PLUS); hud_num(line, pw); }
+    else if (k == IK_MP) { hud_tx(line, TX_MP, 0); hud_glyph(line, GLYPH_PLUS); hud_num(line, pw); }
+    else if (k == IK_CLEANSE) hud_tx(line, TX_FX_CLEANSE, 0);
+    else if (k == IK_FIRE) { hud_tx(line, TX_DMG, 0); hud_num(line, pw); hud_space(line); hud_tx(line, TX_RANGE, 0); hud_num(line, item_field(it, 2)); }
+    else if (k == IK_RAIN) hud_tx(line, TX_FX_RAIN, 0);
+    else if (k == IK_CLEAR) hud_tx(line, TX_FX_CLEAR, 0);
+    else if (k == IK_BOOK) hud_tx(line, TX_FX_BOOK, 0);
+    else if (k == IK_PROMOTE || k == IK_RECLASS) hud_tx(line, TX_FX_CLASS, 0);
+    else if (k == IK_PLOT) hud_tx(line, TX_FX_PLOT, 0);
+    else if (k >= IK_WEAPON) hud_tx(line, TX_FX_EQUIP, 0);
 }
 
 static uint8_t item_aim_check(void)
@@ -284,6 +308,7 @@ static void hud_aim(void)
     hud_end();
 }
 
+static void lv_panels_strat(void);
 void hud_strat_result(uint8_t sid, const StrategyResult *sr) BANKED
 {
     uint8_t i, any_hit = 0, any_kill = 0;
@@ -299,6 +324,7 @@ void hud_strat_result(uint8_t sid, const StrategyResult *sr) BANKED
     else if (any_hit) sfx_play(SFX_HIT);
     if (sr->levels) { hud_space(1); hud_tx(1, TX_LEVELUP, 0); }
     hud_end();
+    if (sr->levels) lv_panels_strat();
 }
 
 static void hud_target(void)
@@ -311,16 +337,69 @@ static void hud_target(void)
     hud_begin();
     hud_tx(0, unit_name_tx(&t), 0); hud_space(0);
     hud_tx(0, TX_HP, 0); hud_num(0, t.hp);
+    {   /* T-RULE-03: this attacker on this target starts a scripted duel / event */
+        VmFact f;
+        f.trigger = TR_PRE_ACTION; f.phase = B.phase; f.actor = sel; f.target = targets[tsel]; f.unit = targets[tsel];
+        if (vm_would_fire(&B, &f)) { hud_space(0); hud_tx(0, TX_DUEL_MARK, 0); }
+    }
     hud_tx(1, TX_HIT, 0); hud_num(1, p.hit_pct); hud_glyph(1, GLYPH_PERCENT); hud_space(1);
     hud_tx(1, TX_DMG, 0); hud_num(1, p.dmg);
     if (p.counter) { hud_space(1); hud_tx(1, TX_COUNTER, 0); hud_num(1, p.c_dmg); }
     hud_end();
 }
 
+/* T-UI-06 level-up panel: what changed, shown until A (tests: dbg_dialog_active = 1 while it waits) */
+static struct { uint8_t unit, level; uint16_t mhp, atk, def; } lv_old[2];
+
+static void frame_tick(void);
+
+void lv_mark(uint8_t slot, uint8_t unit) BANKED
+{
+    ActiveUnit a;
+    load(unit, &a);
+    lv_old[slot].unit = unit; lv_old[slot].level = a.level;
+    lv_old[slot].mhp = a.max_hp; lv_old[slot].atk = a.atk; lv_old[slot].def = a.def;
+}
+
+static void lv_show(uint8_t slot)
+{
+    ActiveUnit a;
+    load(lv_old[slot].unit, &a);
+    if (a.faction != FAC_PLAYER || a.level <= lv_old[slot].level || !unit_alive(&a)) return;
+    hud_begin();
+    hud_tx(0, unit_name_tx(&a), 0); hud_space(0); hud_tx(0, TX_LEVELUP, 0); hud_space(0);
+    hud_tx(0, TX_LV, 0); hud_num(0, lv_old[slot].level); hud_tx(0, TX_TO, 0); hud_num(0, a.level);
+    hud_tx(1, TX_MAXHP, 0); hud_glyph(1, GLYPH_PLUS); hud_num(1, (uint16_t)(a.max_hp - lv_old[slot].mhp));
+    if (a.atk > lv_old[slot].atk) { hud_space(1); hud_tx(1, TX_ATK, 0); hud_glyph(1, GLYPH_PLUS); hud_num(1, (uint16_t)(a.atk - lv_old[slot].atk)); }
+    if (a.def > lv_old[slot].def) { hud_space(1); hud_tx(1, TX_DEF_S, 0); hud_glyph(1, GLYPH_PLUS); hud_num(1, (uint16_t)(a.def - lv_old[slot].def)); }
+    hud_end();
+    lv_old[slot].level = a.level;
+    dbg_dialog_active = 1;
+    for (;;) { frame_tick(); if (in_pressed & J_A) break; }
+    dbg_dialog_active = 0;
+    sfx_play(SFX_CURSOR);
+}
+
+static void lv_panels_strat(void) { uint8_t n = 45; while (n--) frame_tick(); lv_show(0); }
+
+static void lv_panels(void)
+{
+    uint8_t n = 45;
+    while (n--) frame_tick();                 /* the result line stays readable first */
+    lv_show(0); lv_show(1);
+}
+
+static void hud_result_line(const AttackResult *r);
 void hud_result(const AttackResult *r) BANKED
 {
     if (r->killed || r->c_killed) sfx_play(SFX_RETREAT);
     else if (r->hit || r->c_hit) sfx_play(SFX_HIT);
+    hud_result_line(r);
+    if (r->levels || r->c_levels) { lv_panels(); hud_result_line(r); }
+}
+
+static void hud_result_line(const AttackResult *r)
+{
     hud_begin();
     if (r->hit) { hud_tx(0, TX_DMG, 0); hud_num(0, r->dmg); } else hud_tx(0, TX_MISS, 0);
     if (r->killed) { hud_space(0); hud_tx(0, TX_RETREAT, 0); }
@@ -428,6 +507,7 @@ void attack_and_present(uint8_t ai, uint8_t di, AttackResult *r) BANKED
     }
     side_of_unit(ai, &sa);
     side_of_unit(di, &sd);
+    lv_mark(0, ai); lv_mark(1, di);
     battle_attack(&B, ai, di, r);           /* logic sealed before any presentation (design doc 4.4) */
     fs_present(&sa, &sd, r);
     map_mode_restore();
@@ -622,6 +702,20 @@ static void do_exchange(void)
     } else { cur_x = tent_x; cur_y = tent_y; state = G_IDLE; hud_dirty = 1; after_action(); }
 }
 
+static uint8_t end_next;                       /* T-UI-01: last unit shown by "next unacted" */
+static void hud_end_ask(void)
+{
+    uint8_t i, n = 0;
+    units_snapshot(B.n_units);
+    for (i = 0; i < B.n_units && i < MAX_SHOWN; i++)
+        if (SNAP_ALIVE(i) && snap_fac[i] == FAC_PLAYER && !(snap_flags[i] & AF_ACTED)) n++;
+    hud_begin();
+    hud_tx(0, TX_END_ASK, 0);
+    hud_tx(1, TX_END_KEYS, 0);
+    if (n) { hud_space(1); hud_tx(1, TX_END_NEXT, 0); hud_num(1, n); }
+    hud_end();
+}
+
 static void logic_player(void)
 {
     int8_t u;
@@ -645,12 +739,27 @@ static void logic_player(void)
             SVBK_REG = WB_SCRATCH; memset(W7_DANGER, 0, 512); SVBK_REG = o;
             dz_i = 0; state = G_DANGER;
             hud_begin(); hud_tx(0, TX_DANGER_CALC, 0); hud_end();
-        } else if (in_pressed & J_START) {
-            begin_enemy_phase();               /* end turn */
+        } else if (in_pressed & J_START) {       /* T-UI-01: ending the turn needs a confirmation */
+            state = G_ENDTURN; danger_hide();
+            hud_end_ask();
         } else if (in_pressed & J_SELECT) {
             uint8_t r = do_suspend_save();     /* only in the stable player idle state (11.6) */
             hud_begin(); hud_tx(0, r == SAVE_OK ? TX_SAVED : TX_SAVE_FAIL, 0); hud_end();
             hud_settle = 90; hud_dirty = 1;    /* keep the message up for a moment */
+        }
+        break;
+    case G_ENDTURN:
+        if (in_pressed & J_A) { begin_enemy_phase(); }
+        else if (in_pressed & J_B) { state = G_IDLE; hud_dirty = 1; }
+        else if (in_dx || in_dy) {              /* jump to the next unit that can still act */
+            uint8_t k;
+            for (k = 0; k < B.n_units; k++) {
+                ActiveUnit a;
+                end_next = (uint8_t)((end_next + 1u) % B.n_units);
+                load(end_next, &a);
+                if (a.faction == FAC_PLAYER && battle_can_act(&a)) { cur_x = a.x; cur_y = a.y; sfx_play(SFX_CURSOR); break; }
+            }
+            state = G_IDLE; hud_dirty = 1;
         }
         break;
     case G_DANGER:
@@ -674,7 +783,10 @@ static void logic_player(void)
         }
         break;
     case G_MOVE:
-        if (in_pressed & J_B) {
+        if (in_pressed & J_START) {             /* T-UI-02: say why nothing happens */
+            sfx_play(SFX_ERROR);
+            hud_begin(); hud_tx(0, TX_MOVE_HINT, 0); hud_tx(1, TX_NO_END, 0); hud_end();
+        } else if (in_pressed & J_B) {
             ActiveUnit a;
             load(sel, &a);
             cur_x = a.x; cur_y = a.y;
@@ -748,6 +860,7 @@ static void logic_player(void)
             else if (commit_move_if_needed()) {    /* 4.3 confirm boundary */
                 StrategyResult sr;
                 uint8_t sid = SLIST[ssel], k;
+                lv_mark(0, sel);
                 strategy_cast(&B, sel, sid, aim_x, aim_y, &sr);
                 dbg_strat_casts++;
                 hud_strat_result(sid, &sr);
@@ -848,7 +961,13 @@ static void logic(void)
         state = G_OUTCOME;
         save_invalidate(SAVE_SLOT_SUSPEND);     /* never "continue" a finished battle */
         if (B.outcome == OUT_WIN) gold = (uint16_t)(gold + WIN_GOLD);
-        hud_begin(); hud_tx(0, B.outcome == OUT_WIN ? TX_WIN_CAMP : TX_LOSE, 0); hud_end();
+        hud_begin();
+        if (B.outcome == OUT_WIN) hud_tx(0, TX_WIN_CAMP, 0);
+        else {                                 /* T-FLOW-01: both ways restore the pre-battle snapshot */
+            hud_tx(0, TX_LOSE, 0); hud_tx(1, TX_LOSE_RETRY, 0);
+            if (prev_camp_battle() != 0xFF) { hud_space(1); hud_tx(1, TX_LOSE_CAMP, 0); }
+        }
+        hud_end();
         timer = 40;                            /* ignore presses still in flight from the last action */
         input_flush();
         publish_inv();
@@ -886,6 +1005,7 @@ static void logic(void)
         if (timer) { timer--; break; }
         if ((in_pressed & J_A) && B.outcome == OUT_WIN) battle_won();
         else if (in_pressed & J_A) retry_battle();   /* defeat: from the pre-battle snapshot (11.6) */
+        else if ((in_pressed & J_SELECT) && B.outcome == OUT_LOSE && prev_camp_battle() != 0xFF) retry_to_camp();
         break;
     case G_TITLE:
         if ((in_pressed & J_SELECT) && camp_save_ok) load_camp_and_go();

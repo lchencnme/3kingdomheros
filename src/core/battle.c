@@ -268,7 +268,10 @@ uint8_t battle_check_outcome(Battle *b, uint8_t round_end_checkpoint) CORE_API
         && (unit_state_bits(b->vic_unit) & (USB_ALIVE | USB_SPAWNED)) == USB_SPAWNED) {
         b->outcome = OUT_WIN; return b->outcome;                           /* the target general is gone */
     }
-    if (b->vic_kind == VIC_REACH && b->vic_unit < b->n_units && (unit_state_bits(b->vic_unit) & USB_ALIVE)) {
+    if (b->vic_kind == VIC_REACH && b->vic_unit < b->n_units && !(unit_state_bits(b->vic_unit) & USB_ALIVE)) {
+        b->outcome = OUT_LOSE; return b->outcome;                          /* the unit that must arrive is gone */
+    }
+    if (b->vic_kind == VIC_REACH && b->vic_unit < b->n_units) {
         uint8_t x, y;
         unit_xy(b->vic_unit, &x, &y);
         if (x >= b->vic_x0 && x <= b->vic_x1 && y >= b->vic_y0 && y <= b->vic_y1) { b->outcome = OUT_WIN; return b->outcome; }

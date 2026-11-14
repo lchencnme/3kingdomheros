@@ -35,12 +35,15 @@ enum { SC_MAIN, SC_EQUIP, SC_EXCH, SC_SHOP, SC_DEPLOY, SC_PRIZE };
 #define N_CMD 7u
 static const uint16_t cmd_tx[N_CMD] = {TX_CMD_COUNCIL, TX_CMD_EQUIP, TX_CMD_EXCH, TX_CMD_SHOP, TX_CMD_DEPART, TX_CMD_PRIZE, TX_CMD_SAVE};
 extern uint8_t cur_bt, camp_save_ok;
+#define MSG_EFFECT 0xFFFFu        /* shop line 8: what the item under the cursor does (T-UI-05) */
+uint8_t camp_council_done;                 /* set by a camp load / a return after defeat; consumed by camp_run */
+void hud_item_effect(uint8_t line, uint8_t it) BANKED;
 
 /* all camp state in one block (the C globals area is nearly full: this lives on the stack of camp_run) */
 typedef struct {
     uint16_t *gold;
     CampDeploy *dep;
-    uint8_t screen, cur, off, slot, pick, pick_off, pick_slot, sell, top, main_cur, council;
+    uint8_t screen, cur, off, slot, pick, pick_off, pick_slot, sell, top, main_cur, council, ask;
     uint16_t msg;                                       /* text id of the status line (0 = default hint) */
     uint8_t n_off, mode, next, deploy_max, forced, camp;
 } Camp;
@@ -50,14 +53,14 @@ static Camp *C;                                         /* 2 B global: points in
 
 /* no line may straddle tile ids 127/128: in LCDC.4 = 0 addressing they are not adjacent in VRAM
  * (0x97F0 vs 0x8800) and one 576 B GDMA would run on into the BG map at 0x9800 */
-/* officer name: the starting-roster table by character, else the class name */
+/* officer name by character (also officers who joined later), else the class name */
 static uint16_t name_tx(uint8_t o)
 {
     RosterRec r;
-    uint8_t k;
+    uint16_t t;
     roster_read(o, &r);
-    for (k = 0; k < N_ROSTER_INIT; k++) if (roster_init[k].character == r.character) return roster_init[k].name_tx;
-    return class_name_tx[r.cls];
+    t = char_name_tx(r.character);
+    return t ? t : class_name_tx[r.cls];
 }
 
 static uint8_t line_bank(uint8_t k) { return k < 6u ? 1u : 0u; }
@@ -145,7 +148,11 @@ static void compose(uint8_t k)
         } else if (k == 7) {
             hud_tx(0, C->sell ? TX_FROM : TX_GIVE, 0); hud_tx(0, name_tx(C->off), 0); hud_space(0);
             hud_num(0, inv_count(u)); hud_glyph(0, GLYPH_SLASH); hud_num(0, INV_SLOTS);
-        } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_SHOP_HINT2, 0);
+        } else if (k == 8) {
+            uint8_t it = C->sell ? inv_get(u, C->slot) : CD.shop[C->cur];
+            if (C->msg == MSG_EFFECT && it != ITEM_NONE) { hud_tx(0, item_name_tx[it], 0); hud_space(0); hud_item_effect(0, it); }
+            else hud_tx(0, (C->msg && C->msg != MSG_EFFECT) ? C->msg : TX_SHOP_HINT2, 0);
+        }
         break;
     case SC_DEPLOY:
         if (k == 0) { hud_tx(0, TX_CMD_DEPART, 0); hud_space(0); hud_num(0, C->dep->n); hud_glyph(0, GLYPH_SLASH); hud_num(0, C->deploy_max); }
@@ -273,6 +280,7 @@ static uint8_t step(uint8_t pressed)
                 for (o = 0; o < C->n_off; o++) roster_sync(o, o);
                 memset(&ui, 0, sizeof ui);
                 ui.battle_id = cur_bt; ui.gold = *C->gold; ui.options = 1;
+                ui.presentation = C->council;            /* T-SAVE-01: bit0 = 军议已毕 */
                 if (save_camp(SAVE_SLOT_NORMAL0, &ui) == SAVE_OK) { camp_save_ok = 1; say(TX_CAMP_SAVED); }
                 else say(TX_SAVE_FAIL);
                 dbg_saves++;
@@ -326,7 +334,7 @@ static uint8_t step(uint8_t pressed)
             else { C->cur = (uint8_t)(up ? (C->cur + CD.n_shop - 1u) % CD.n_shop : (C->cur + 1u) % CD.n_shop); shop_scroll(C->cur, CD.n_shop); now = C->cur; }
             if (C->top != top0) { uint8_t k; for (k = 1; k <= 6; k++) draw(k); }   /* scrolled */
             else { draw((uint8_t)(old - C->top + 1u)); draw((uint8_t)(now - C->top + 1u)); }
-            if (C->msg) { C->msg = 0; draw(8); }
+            C->msg = MSG_EFFECT; draw(8);
         } else if (pressed & J_B) enter(SC_MAIN);
         else if ((pressed & J_A) && !C->sell) {           /* 7.3: check gold and a free slot, then pay and give */
             uint8_t it = CD.shop[C->cur];
@@ -355,13 +363,22 @@ static uint8_t step(uint8_t pressed)
         if (!n) { enter(SC_MAIN); break; }
         if (left || right) {
             C->off = (uint8_t)(left ? (C->off + N_OFF - 1u) % N_OFF : (C->off + 1u) % N_OFF);
-            C->msg = 0; draw(7); draw(8);
+            C->msg = 0; C->ask = 0; draw(7); draw(8);
         } else if (up || down) {
             C->cur = (uint8_t)(up ? (C->cur + n - 1u) % n : (C->cur + 1u) % n);
             shop_scroll(C->cur, n);
+            C->msg = 0; C->ask = 0;
             draw_all(0);
         } else if (pressed & (J_A | J_B | J_SELECT)) {
             uint8_t it = prize_get(C->cur), ok = 0;
+            /* T-UI-03: selling or discarding needs the same key twice; anything else cancels */
+            uint8_t want = (pressed & J_B) ? 1u : ((pressed & J_SELECT) ? 2u : 0u);
+            if (want && C->ask != want && (want == 1u ? item_kind(it) != IK_PLOT : item_sell_price(it) != 0)) {
+                C->ask = want; sfx_play(SFX_CURSOR);
+                say(item_kind(it) >= IK_WEAPON ? TX_ASK_RARE : (want == 1u ? TX_ASK_DISCARD : TX_ASK_SELL));
+                break;
+            }
+            C->ask = 0;
             if (pressed & J_A) {
                 if (inv_count(u) >= INV_SLOTS) say(TX_BAG_FULL);
                 else { inv_add(u, it); ok = 1; C->msg = 0; }
@@ -426,8 +443,9 @@ void camp_run(uint16_t *gold, CampDeploy *dep, uint8_t mode, uint8_t next_bt, ui
     memset(&camp, 0, sizeof camp);
     camp.gold = gold; camp.dep = dep; camp.pick = 0xFF; camp.mode = mode; camp.next = next_bt;
     camp.camp = camp_idx < N_CAMPS ? camp_idx : 0u;
-    if (mode == CAMP_FULL && camp_defs[camp.camp].join != 0xFFu) vm_join(camp_defs[camp.camp].join);   /* e.g. 三顾茅庐 (2.4 JOIN) */
+    if (mode == CAMP_FULL && camp_defs[camp.camp].join != 0xFFu) join_officer(camp_defs[camp.camp].join);   /* e.g. 三顾茅庐 (2.4 JOIN) */
     camp.n_off = roster_count() < 7u ? roster_count() : 7u;   /* deployment list: lines 1..7 */
+    camp.council = camp_council_done; camp_council_done = 0;   /* loaded save / back from a defeat */
     camp.deploy_max = 4; camp.forced = 1;                   /* no next battle (ending) */
     bd_deploy_rule(next_bt, &camp.deploy_max, &camp.forced);   /* battle tables: bank 14 */
     if (camp.deploy_max > CAMP_MAX_DEPLOY) camp.deploy_max = CAMP_MAX_DEPLOY;

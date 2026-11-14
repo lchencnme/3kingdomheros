@@ -1778,6 +1778,11 @@
      "TEXT",
      "P0003",
      "TXD_T01_OPEN_ZHANGFEI"
+    ],
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_T01_GOAL"
     ]
    ]
   },
