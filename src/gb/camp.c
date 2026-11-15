@@ -192,6 +192,11 @@ static void draw_all(uint8_t lcd_off)
     for (k = 0; k < N_LINES; k++) { compose(k); upload(k, lcd_off); }
 }
 
+/* 回纹 border down both sides of the camp pages (the dialogue divider turned upright; bank0 tile 120 is free:
+ * the text lines use bank0 1..108) */
+static const uint8_t fret_v[16] = {0, 1, 0, 253, 0, 133, 0, 181, 0, 165, 0, 189, 0, 129, 0, 255};
+#define FRET_ID 120u
+
 static void screen_init(void)
 {
     uint8_t r, c, ids[20], at[20];
@@ -203,10 +208,11 @@ static void screen_init(void)
     LCDC_REG &= (uint8_t)~LCDCF_BG9C00;
     memset(ids, 0, 16);
     VBK_REG = 0; set_bkg_data(0, 1, ids);
+    set_bkg_data(FRET_ID, 1, fret_v);
     for (r = 0; r < 18; r++) {
         uint8_t k = (uint8_t)(r >> 1);
         for (c = 0; c < 20; c++) {
-            if (c == 0 || c == 19) { ids[c] = 0; at[c] = PAL_TEXT; continue; }
+            if (c == 0 || c == 19) { ids[c] = FRET_ID; at[c] = (uint8_t)(PAL_TEXT | (c ? 0x20u : 0u)); continue; }
             ids[c] = (uint8_t)(line_id(k) + (r & 1u) * 18u + (c - 1u));
             at[c] = (uint8_t)(PAL_TEXT | (line_bank(k) ? 0x08u : 0u));
         }
