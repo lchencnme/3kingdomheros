@@ -1,5 +1,6 @@
 #pragma bank 5   /* game logic, HUD and map view: code bank 5 (design doc 11.3) */
 #include "game.h"
+#include "dialog.h"
 
 Battle B;
 uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
@@ -982,17 +983,24 @@ static void logic(void)
         state = G_OUTCOME;
         save_invalidate(SAVE_SLOT_SUSPEND);     /* never "continue" a finished battle */
         if (B.outcome == OUT_WIN) gold = (uint16_t)(gold + WIN_GOLD);
-        hud_begin();
-        if (B.outcome == OUT_WIN) hud_tx(0, TX_WIN_CAMP, 0);
-        else {                                 /* T-FLOW-01: both ways restore the pre-battle snapshot */
-            hud_tx(0, TX_LOSE, 0); hud_lose_reason(); hud_tx(1, TX_LOSE_RETRY, 0);
-            if (prev_camp_battle() != 0xFF) { hud_space(1); hud_tx(1, TX_LOSE_CAMP, 0); }
-        }
-        hud_end();
         music_play_id(B.outcome == OUT_WIN ? MUS_VICTORY : MUS_DEFEAT);
-        timer = 40;                            /* ignore presses still in flight from the last action */
-        input_flush();
         publish_inv();
+        dbg_outcome = B.outcome; dbg_gold = gold;
+        {   /* the result page (landscape, 胜 / 败 seal, title, result, keys); 40-frame guard inside */
+            uint8_t win = B.outcome == OUT_WIN, sel_ok = !win && prev_camp_battle() != 0xFF, k;
+            result_open(win ? TX_RES_SEAL_WIN : TX_RES_SEAL_LOSE);
+            hud_begin();
+            hud_tx(2, bd_title(cur_bt), 0);
+            if (win) { hud_tx(0, TX_RES_WIN, B.round); hud_tx(1, TX_RES_GOLD, WIN_GOLD); }
+            else {                             /* T-FLOW-01: both ways restore the pre-battle snapshot */
+                hud_tx(0, TX_LOSE, 0); hud_lose_reason(); hud_tx(1, TX_LOSE_RETRY, 0);
+                if (sel_ok) { hud_space(1); hud_tx(1, TX_LOSE_CAMP, 0); }
+            }
+            k = result_wait(sel_ok);
+            if (win) battle_won();
+            else if (k == J_SELECT) retry_to_camp();
+            else retry_battle();
+        }
         return;
     }
     if (autosave_pending && state == G_BANNER) {

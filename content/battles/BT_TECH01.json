@@ -1766,6 +1766,11 @@
    "code": [
     [
      "TEXT",
+     "NARRATOR",
+     "TXD_CH1_CARD"
+    ],
+    [
+     "TEXT",
      "P0001",
      "TXD_T01_OPEN_LIUBEI"
     ],

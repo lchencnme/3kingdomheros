@@ -546,8 +546,8 @@ void retry_battle(void) BANKED
         unit_base_cache_clear();
         dbg_retries++;
     }
-    start_battle(); mapview_init(&tech01_meta[0][0], tech01_terrain_pal);
-    DISPLAY_ON;
+    start_battle();
+    map_mode_restore();                        /* the result page replaced the map's tiles and palettes */
 }
 
 /* 11.6 pre-battle snapshot (SRAM13/14). Called from logic() just before BATTLE_START fires, at the top

@@ -1359,7 +1359,7 @@ def battle_json(bt):
         "templates": [], "units": [{"template": None, "x": o["x"], "y": o["y"], "faction": o["fac"], "class": o["cls"],
                                     "character": o["ch"] or "ANON", "ai_group": o["ai"], "level": o["lv"], "hp": "max", "status": []}
                                    for o in bt["others"]],
-        "ai_groups": bt["ai_groups"], "reinforcements": tpls, "events": bt["events"],
+        "ai_groups": bt["ai_groups"], "reinforcements": tpls, "events": chapter_card(bt["id"], bt["events"]),
         "victory": {"kind": bt["victory"][0], "unit": bt["victory"][1], "round": bt["victory"][2]},
         "protect": bt["protect"],
         "turn_limit": bt["turn_limit"], "round_mode": bt["round_mode"], "continuity": bt["continuity"],
@@ -1374,6 +1374,20 @@ def ai_recs(groups, w):
         tgt = 0xFFFF if t is None else (t[1] * w + t[0] if isinstance(t, list) else t)
         recs += [g["id"], AI_MODES[g["mode"]], tgt & 0xFF, tgt >> 8, g["leash"]]
     return recs
+
+
+# the first battle of each chapter opens on a title card (narration over the chapter's landscape)
+CHAPTER_START = {"BT_06": 2, "BT_13": 3, "BT_21": 4, "BT_26": 5, "BT_37": 6, "BT_42": 7}
+
+
+def chapter_card(bid, events):
+    k = CHAPTER_START.get(bid)
+    if not k:
+        return events
+    ev = [json.loads(json.dumps(e)) for e in events]
+    start = next(e for e in ev if e["trigger"] == "BATTLE_START")
+    start["code"] = [["TEXT", "NARRATOR", f"TXD_CH{k}_CARD"]] + start["code"]
+    return ev
 
 
 def main():

@@ -491,7 +491,7 @@ def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
                hp_ok=hp_ok, canary=em.canary_ok(), stack_free=em.stack_free(), state=em.state(),
                fs_count=em.r8("_dbg_fs_count"), fs_ly_max=em.r8("_dbg_fs_ly_max"),
                fs_chunk_max=em.r16("_dbg_fs_bytes_max"), fs_skipped=em.r8("_dbg_fs_skipped"),
-               bg_ok=view_mismatches(em) == 0, vm_err=em.r8("_dbg_vm_err"), vram_late=em.r8("_dbg_vram_late"),
+               result_page=em.m[0, 0x9800 + 1 * 32 + 15] == 169, vm_err=em.r8("_dbg_vm_err"), vram_late=em.r8("_dbg_vram_late"),
                alive=[bool(em.m[1, 0xD000 + 40 * i + 34] & 0x18) for i in range(N_UNITS)])
     if shots:
         em.frames(10)
@@ -520,6 +520,8 @@ def play_battle(shots=False, max_frames=60 * 60 * 20, skip_presentations=False):
         em.press("a"); em.frames(10); em.press("start")
     em.wait_state([G_IDLE], 200)
     res["restart_ok"] = em.state() == G_IDLE and em.r16("_dbg_round") == 1 and em.unit(0) == (4, 12)
+    em.frames(30)
+    res["bg_ok"] = view_mismatches(em) == 0      # the map comes back whole after the result page
     em.pb.stop(save=False)
     return res
 
@@ -538,7 +540,8 @@ check("restart from outcome resets the battle", r1["restart_ok"])
 check(f"fullscreen presentations ran ({r1['fs_count']})", r1["fs_count"] >= 3)
 check(f"all fullscreen GDMA end inside VBlank (max LY {r1['fs_ly_max']} <= 152)", 144 <= r1["fs_ly_max"] <= 152)
 check(f"fullscreen upload chunk <= 1024 B ({r1['fs_chunk_max']})", 0 < r1["fs_chunk_max"] <= 1024)
-check("map consistent after the last presentation", r1["bg_ok"])
+check("result page shows the 胜/败 seal", r1["result_page"])
+check("map consistent after the result page and the restart", r1["bg_ok"])
 # PyBoy occasionally reports one map tile write ending at LY 0..2 in mode 3 although the tile (40 M-cycles
 # + a 16 B GDMA, under DI, started on LY <= 150) cannot take 6 lines on hardware; scrolling (above) stays 0.
 check(f"VRAM writes outside VBlank in a full battle stay rare ({r1['vram_late']}, {r2['vram_late']} <= 3)",
@@ -583,7 +586,7 @@ v.png(ROM.parent / "shot_dialog_open.png")
 pages = 0
 while v.r8("_dbg_dialog_active") == 1 and pages < 20:
     v.press("a", after=14); pages += 1
-check(f"opening dialogue: 3 speakers + the conditions text (2 pages), 6 pages ({v.r8('_dbg_dialog_pages')})", v.r8("_dbg_dialog_pages") == 6)
+check(f"opening dialogue: chapter card + 3 speakers + the conditions text (2 pages), 7 pages ({v.r8('_dbg_dialog_pages')})", v.r8("_dbg_dialog_pages") == 7)
 v.wait_state([G_IDLE], 200)
 check("map restored after dialogue", view_mismatches(v) == 0 and v.state() == G_IDLE)
 # 刘备 walks into the village (7,10) over two turns: one-shot supply event on POST_MOVE

@@ -132,7 +132,18 @@ def main():
 
     def paginate(s, max_px=144, lines_per_page=2):
         """design doc 10.4: greedy lines <= 144 px; closing punctuation never starts a line and opening
-        brackets never end one (back off one character); 2 lines per page"""
+        brackets never end one (back off one character); 2 lines per page. A text whose last line would be a
+        stub (<= 48 px: "振！" alone, or a whole page for "急。") is broken again with the narrowest width
+        that keeps the same number of lines, so the lines come out even"""
+        lines = break_lines(s, max_px)
+        if len(lines) > 1 and sum(width(c) for c in lines[-1]) <= 48:
+            px = max_px
+            while px > 48 and len(break_lines(s, px - 6)) == len(lines):
+                px -= 6
+            lines = break_lines(s, px)
+        return [lines[i:i + lines_per_page] for i in range(0, len(lines), lines_per_page)]
+
+    def break_lines(s, max_px):
         lines, cur, px = [], [], 0
         for ch in s:
             w = width(ch)
@@ -152,7 +163,7 @@ def main():
         for ln in lines:
             if sum(width(c) for c in ln) > max_px:
                 die(f"line too wide after breaking: {ln}")
-        return [lines[i:i + lines_per_page] for i in range(0, len(lines), lines_per_page)]
+        return lines
 
     def encode(s, key=""):
         if key.startswith("TXD_"):

@@ -192,9 +192,9 @@ static void draw_all(uint8_t lcd_off)
     for (k = 0; k < N_LINES; k++) { compose(k); upload(k, lcd_off); }
 }
 
-/* 回纹 border down both sides of the camp pages (the dialogue divider turned upright; bank0 tile 120 is free:
+/* 回纹 border down both sides of the camp pages (bank0 tile 120 is free:
  * the text lines use bank0 1..108) */
-static const uint8_t fret_v[16] = {0, 1, 0, 253, 0, 133, 0, 181, 0, 165, 0, 189, 0, 129, 0, 255};
+static const uint8_t fret_v[16] = {0, 248, 0, 8, 0, 232, 0, 168, 0, 136, 0, 248, 0, 128, 0, 128};   /* 5 px key fret, 3 px clear of the text */
 #define FRET_ID 120u
 
 static void screen_init(void)
