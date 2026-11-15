@@ -402,6 +402,17 @@ e.frames(16)
 e.png(ROM.parent / "shot_preview_guanyu.png")
 e.press("b")
 check("B cancels preview, cursor back on unit", e.state() == G_IDLE and e.cur() == (5, 11))
+# the range is erased by a background sweep: scrolling the camera while it runs must not leave a row or
+# column of stale corner ticks behind (the sweep used to count rows from the moving camera)
+ghost = []
+for btn, n in (("down", 28), ("right", 28)):                # a 1-3 row / column scroll mid-sweep (old: 56 / 2 stale)
+    e.press("a"); e.wait_state([G_MOVE], 30); e.frames(90)
+    e.press("b", after=6)
+    e.hold(btn, n)
+    e.frames(150)
+    ghost.append(view_mismatches(e))
+    e.goto(5, 11)
+check(f"range erased completely while the camera scrolled ({ghost} stale tiles)", ghost == [0, 0] and e.state() == G_IDLE)
 
 # scrolling to the far corner and back
 e.hold("right", 420)

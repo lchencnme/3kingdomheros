@@ -30,8 +30,24 @@ STYLES = {
     "gallop": (lambda r: " ".join(f"{tr(r, 3, s)}:6 -:6" for s in (0, 12, 7, 12, 0, 12, 7, 12)),
                lambda r: " ".join(f"{tr(r, 2, s)}:12" for s in (0, 7, 0, 7, 0, 7, 0, 12)), "K3:12 K2:12 K2:12 K3:12 K2:12 K2:12 K3:12 K2:12"),
 }
-INST = {"lead": {"duty": 1, "volume": 10, "env_down": 0, "gate": 0.85}, "pluck": {"duty": 0, "volume": 6, "env_down": 2, "gate": 1.0},
+# lead and pluck on 50% duty: 12.5% / 25% pulses held on high notes read as a squeal on the speaker
+INST = {"lead": {"duty": 2, "volume": 8, "env_down": 3, "gate": 0.85}, "pluck": {"duty": 2, "volume": 6, "env_down": 2, "gate": 1.0},
         "bass": {"wave": "soft", "volume": 2, "gate": 0.9}, "drum": {"noise": 85, "env_down": 1, "gate": 1.0}}
+
+
+def pitch(tok):
+    return (int(tok[2:] if tok[1] == "#" else tok[1:]) - 2) * 12 + SEMI[tok[0]] + (tok[1] == "#")
+
+
+TOP = pitch("E5")                        # melody ceiling: a bar reaching above E5 is played an octave lower
+
+
+def cap_bar(bar):
+    toks = bar.split()
+    if max((pitch(x.split(":")[0]) for x in toks if not x.startswith("-")), default=0) <= TOP:
+        return bar
+    return " ".join(x if x.startswith("-") else tr(x.split(":")[0][:-1], int(x.split(":")[0][-1]) - 1, 0) + ":" + x.split(":")[1]
+                    for x in toks)
 
 
 def song(fname, sid, name, comment, bpm, style, bars, roots, lead=None):
@@ -40,6 +56,10 @@ def song(fname, sid, name, comment, bpm, style, bars, roots, lead=None):
     inst = json.loads(json.dumps(INST))
     if lead:
         inst["lead"].update(lead)
+    inst["lead"]["duty"] = 2
+    inst["lead"]["volume"] = min(inst["lead"]["volume"], 8)
+    inst["lead"]["env_down"] = 5 if bpm < 80 else (3 if bpm < 120 else 2)   # slow airs ring, fast ones are crisp
+    bars = [cap_bar(b) for b in bars]
     s = {"_comment": comment, "id": sid, "name": name, "bpm": bpm, "ticks_per_bar": 96,
          "channels": {"ch1": {"inst": "lead", "notes": " | ".join(bars)},
                       "ch2": {"inst": "pluck", "notes": " | ".join(pl(r) for r in roots)},

@@ -29,19 +29,21 @@ typedef struct {
 typedef struct { uint8_t ch, prio, ticks, r1, r2, r3, r4; } Sfx;
 static const Sfx sfx_tab[] = {
     {1, 20, 3, 0x80, 0x61, 0x00, 0x87},   /* cursor: CH2 short high blip */
-    {1, 40, 6, 0x80, 0x82, 0x9D, 0x87},   /* confirm: CH2 two-step */
+    {1, 40, 6, 0x80, 0x82, 0x6B, 0x87},   /* confirm: CH2 ~880 Hz (was 1.3 kHz: shrill) */
     {1, 20, 10, 0x40, 0x92, 0x0A, 0x84},  /* error: CH2 low buzz */
     {3, 60, 8, 0x00, 0x92, 0x52, 0x80},   /* hit: CH4 noise */
     {3, 80, 16, 0x00, 0xF3, 0x63, 0x80},  /* retreat: CH4 longer noise */
 };
 
+/* silence a channel without switching its DAC off: a DAC on/off step is an audible pop on every rest.
+ * NRx2 = 0x08 keeps the DAC on at volume 0; the wave channel is muted with its output level instead. */
 static void ch_off(uint8_t c)
 {
     switch (c) {
-    case 0: NR12_REG = 0; break;
-    case 1: NR22_REG = 0; break;
-    case 2: NR30_REG = 0; break;
-    default: NR42_REG = 0; break;
+    case 0: NR12_REG = 0x08; NR14_REG = 0x80; break;
+    case 1: NR22_REG = 0x08; NR24_REG = 0x80; break;
+    case 2: NR32_REG = 0; break;
+    default: NR42_REG = 0x08; NR44_REG = 0x80; break;
     }
 }
 
@@ -85,7 +87,7 @@ static void step(void)
             if (x->gate && --x->gate == 0 && !sfx_left[c]) ch_off(c);
             if (x->left) continue;
         }
-        if (*x->p == MUS_END) x->p = x->start;
+        if (*x->p == MUS_EOT) x->p = x->start;
         {
             uint8_t n = x->p[0];
             x->left = x->p[1];
@@ -117,7 +119,7 @@ static void audio_isr(void) NONBANKED
 void audio_init(void)
 {
     uint8_t i;
-    NR52_REG = 0x80; NR50_REG = 0x77; NR51_REG = 0xFF;
+    NR52_REG = 0x80; NR50_REG = 0x66; NR51_REG = 0xFF;
     NR30_REG = 0;                             /* load the wave only with the DAC off */
     for (i = 0; i < 16; i++) (&AUD3WAVE[0])[i] = mus_wave_soft[i];
     song = 0;

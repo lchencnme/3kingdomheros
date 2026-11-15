@@ -26,11 +26,11 @@
   "lead": {
    "duty": 2,
    "volume": 8,
-   "env_down": 0,
+   "env_down": 5,
    "gate": 0.85
   },
   "pluck": {
-   "duty": 0,
+   "duty": 2,
    "volume": 6,
    "env_down": 2,
    "gate": 1.0

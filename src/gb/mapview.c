@@ -26,8 +26,12 @@ uint16_t cam_x, cam_y;
 static int16_t tox, toy;               /* loaded hw-tile origin = floor(cam/8)-1 */
 static const uint8_t *meta;            /* [terrain][4] */
 static const uint8_t *tpal;
-static uint8_t hl_on, hl_row, hl_half; /* highlight repaint sweep: rows 0..15 x 2 half rows, 16 = idle */
+static uint8_t hl_on, hl_row;          /* repaint sweep (range / danger / overflow): cache row 0..15, 16 = idle */
 static int16_t hb_x0, hb_x1, hb_y0, hb_y1;   /* hw-position box the sweep must recompose (old + new range) */
+static int16_t hd_x0, hd_y0, hd_x1, hd_y1;   /* range box drawn now (valid while hd_on) */
+static uint8_t hd_on;
+static int16_t sw_x;                  /* next world column of the sweep row (SW_ROW_START: from the box's left) */
+#define SW_ROW_START (-32000)
 
 #define BLANK_ID_SLOT 0xFFFFu
 #define CACHE_W 22
@@ -281,7 +285,7 @@ void mapview_init(const uint8_t *meta4, const uint8_t *terrain_pal) BANKED
     int16_t x, y;
     uint8_t buf[16], i;
     meta = meta4; tpal = terrain_pal;
-    hl_on = 0; dz_on = 0; hl_row = CACHE_H; hl_half = 0; n_done = 0; q_overflow = 0; edge_kind = 0; n_tiles = 0;
+    hl_on = 0; hd_on = 0; dz_on = 0; hl_row = CACHE_H; sw_x = SW_ROW_START; n_done = 0; q_overflow = 0; edge_kind = 0; n_tiles = 0;
     n_units_seen = MAXU;                       /* every record; empty ones (hp 0) are invisible */
     have_gen = 0;
     if (cam_x > max_cam_x()) cam_x = max_cam_x();
@@ -344,25 +348,49 @@ void mapview_danger(uint8_t on) BANKED
     if (on == dz_on) return;
     dz_on = on;
     hb_x0 = tox; hb_x1 = tox + CACHE_W - 1; hb_y0 = toy; hb_y1 = toy + CACHE_H - 1;   /* whole cache */
-    hl_row = 0; hl_half = 0;
+    hl_row = 0; sw_x = SW_ROW_START;
 }
 
 void mapview_highlight(uint8_t on) BANKED
 {
-    /* the sweep recomposes the union of the previous and the current range boxes (MR box, cells) */
-    int16_t x0, y0, o = SVBK_REG;
+    /* the sweep recomposes the union of the range box drawn so far and the current one. Boxes are the tight
+     * bounds of the reachable cells (a short move repaints a few rows, not the whole 19x19 search box).
+     * The drawn box is remembered: by the time the range is switched off, W7_MR may already hold another
+     * unit's range, and cells outside that box would keep the old marks */
+    int16_t x0, y0, x1, y1;
+    uint8_t lx, ly, o = SVBK_REG;
+    const uint8_t *d;
     SVBK_REG = WB_SCRATCH;
-    x0 = (int16_t)W7_MR->bx * 2; y0 = (int16_t)W7_MR->by * 2;
-    SVBK_REG = (uint8_t)o;
-    if (hl_row >= CACHE_H) { hb_x0 = x0; hb_y0 = y0; hb_x1 = x0 + 2 * MR_DIM - 1; hb_y1 = y0 + 2 * MR_DIM - 1; }
+    d = W7_MR->dist;
+    x0 = MR_DIM; y0 = MR_DIM; x1 = -1; y1 = -1;
+    for (ly = 0; ly < MR_DIM; ly++)
+        for (lx = 0; lx < MR_DIM; lx++, d++)
+            if (*d != MR_INF) {
+                if ((int16_t)lx < x0) x0 = lx;
+                if ((int16_t)lx > x1) x1 = lx;
+                if ((int16_t)ly < y0) y0 = ly;
+                y1 = ly;
+            }
+    if (x1 < 0) { x0 = y0 = 0; x1 = y1 = 0; }
+    x0 = ((int16_t)W7_MR->bx + x0) * 2; x1 = ((int16_t)W7_MR->bx + x1) * 2 + 1;
+    y0 = ((int16_t)W7_MR->by + y0) * 2; y1 = ((int16_t)W7_MR->by + y1) * 2 + 1;
+    SVBK_REG = o;
+    if (hl_row >= CACHE_H) { hb_x0 = x0; hb_y0 = y0; hb_x1 = x1; hb_y1 = y1; }
     else {
         if (x0 < hb_x0) hb_x0 = x0;
         if (y0 < hb_y0) hb_y0 = y0;
-        if (x0 + 2 * MR_DIM - 1 > hb_x1) hb_x1 = x0 + 2 * MR_DIM - 1;
-        if (y0 + 2 * MR_DIM - 1 > hb_y1) hb_y1 = y0 + 2 * MR_DIM - 1;
+        if (x1 > hb_x1) hb_x1 = x1;
+        if (y1 > hb_y1) hb_y1 = y1;
     }
+    if (hd_on) {
+        if (hd_x0 < hb_x0) hb_x0 = hd_x0;
+        if (hd_y0 < hb_y0) hb_y0 = hd_y0;
+        if (hd_x1 > hb_x1) hb_x1 = hd_x1;
+        if (hd_y1 > hb_y1) hb_y1 = hd_y1;
+    }
+    hd_on = on; hd_x0 = x0; hd_y0 = y0; hd_x1 = x1; hd_y1 = y1;
     hl_on = on;
-    hl_row = 0; hl_half = 0;
+    hl_row = 0; sw_x = SW_ROW_START;
 }
 
 void mapview_camera_follow(uint8_t cx, uint8_t cy) BANKED
@@ -407,6 +435,12 @@ void mapview_camera_follow(uint8_t cx, uint8_t cy) BANKED
             uint8_t i;
             edge_kind = 2; edge_half = 0;
             edge_pos = ntoy > toy ? ntoy + CACHE_H - 1 : ntoy;
+            /* a sweep in progress counts rows from toy: keep it on the same world row, or the row that
+             * slides under its index is never recomposed and keeps the old range / danger marks */
+            if (hl_row < CACHE_H) {
+                if (ntoy > toy) { if (hl_row) hl_row--; else sw_x = SW_ROW_START; }
+                else if (++hl_row >= CACHE_H) hl_row = CACHE_H;
+            }
             toy = ntoy;
             refresh_units();
             filter_units(tox, tox + CACHE_W - 1, edge_pos, edge_pos);
@@ -467,7 +501,7 @@ void mapview_prepare(void) BANKED
         RS->nq = 0;
         SVBK_REG = o;
         hb_x0 = tox; hb_x1 = tox + CACHE_W - 1; hb_y0 = toy; hb_y1 = toy + CACHE_H - 1;
-        hl_row = 0; hl_half = 0;
+        hl_row = 0; sw_x = SW_ROW_START;
         goto attrs;
     }
     /* stage up to 12 dirty positions (2 B queue entries are wx, wy & 0xFF; wy fits since maps <= 64 rows) */
@@ -485,15 +519,23 @@ void mapview_prepare(void) BANKED
         if (n) return;
     }
 attrs:
-    while (hl_row < CACHE_H) {                 /* range sweep: one half row (11 positions) per frame */
-        int16_t wy = toy + hl_row, x0 = tox + (int16_t)hl_half * 11;
-        uint8_t hit = wy >= hb_y0 && wy <= hb_y1 && x0 + 10 >= hb_x0 && x0 <= hb_x1;
-        if (++hl_half == 2) { hl_half = 0; hl_row++; }
-        if (!hit) continue;                    /* outside both boxes: nothing changes there */
-        filter_units(x0, x0 + 10, wy, wy);
-        for (i = 0; i < 11; i++) stage_tile(x0 + i, wy);
+    /* repaint sweep: up to 16 positions per frame (the staging capacity), row by row, only inside the box.
+     * Rows count from toy (camera_follow keeps hl_row on the same world row when the cache scrolls); the
+     * column cursor is a world column, so a horizontal scroll skips nothing; positions outside the cache are
+     * never staged (their slots belong to the new edge, staged with the current state) */
+    while (hl_row < CACHE_H && n_tiles < 16u) {
+        int16_t wy = toy + hl_row, xa = hb_x0, xb = hb_x1;
+        if (xa < tox) xa = tox;
+        if (xb > tox + CACHE_W - 1) xb = tox + CACHE_W - 1;
+        if (sw_x < xa) sw_x = xa;
+        if (wy < hb_y0 || wy > hb_y1 || sw_x > xb) { hl_row++; sw_x = SW_ROW_START; continue; }
+        {
+            int16_t xe = sw_x + (int16_t)(16u - n_tiles) - 1;
+            if (xe > xb) xe = xb;
+            filter_units(sw_x, xe, wy, wy);
+            for (; sw_x <= xe; sw_x++) stage_tile(sw_x, wy);
+        }
         contiguous = 0;
-        break;
     }
 }
 

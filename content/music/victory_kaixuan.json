@@ -7,7 +7,7 @@
  "channels": {
   "ch1": {
    "inst": "lead",
-   "notes": "G4:12 G4:12 A4:24 C5:24 D5:24 | E5:48 D5:24 C5:24 | D5:12 E5:12 G5:24 E5:24 D5:24 | C5:72 -:24 | A4:12 C5:12 D5:24 E5:24 G5:24 | A5:48 G5:24 E5:24 | D5:24 E5:24 D5:24 C5:24 | C5:96"
+   "notes": "G4:12 G4:12 A4:24 C5:24 D5:24 | E5:48 D5:24 C5:24 | D4:12 E4:12 G4:24 E4:24 D4:24 | C5:72 -:24 | A3:12 C4:12 D4:24 E4:24 G4:24 | A4:48 G4:24 E4:24 | D5:24 E5:24 D5:24 C5:24 | C5:96"
   },
   "ch2": {
    "inst": "pluck",
@@ -24,13 +24,13 @@
  },
  "instruments": {
   "lead": {
-   "duty": 1,
-   "volume": 10,
-   "env_down": 0,
+   "duty": 2,
+   "volume": 8,
+   "env_down": 2,
    "gate": 0.85
   },
   "pluck": {
-   "duty": 0,
+   "duty": 2,
    "volume": 6,
    "env_down": 2,
    "gate": 1.0

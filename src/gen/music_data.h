@@ -3,7 +3,7 @@
 #define MUSIC_DATA_H
 #include <stdint.h>
 #define MUS_REST 0xFEu
-#define MUS_END 0xFFu
+#define MUS_EOT 0xFFu
 typedef struct { uint8_t bpm; const uint8_t *ch[4]; uint8_t duty1, vol1, env1, duty2, vol2, env2, vol3, noise4, env4; } Song;
 extern const uint16_t mus_pulse_reg[96];
 extern const uint16_t mus_wave_reg[96];
