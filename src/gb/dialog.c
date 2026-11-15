@@ -42,6 +42,8 @@ static void put_text_map(void)
 
 /* the 青绿山水 scroll beside the portrait (tiles 68..167) and the 回纹 divider under both (tile 168):
  * own palette 1; staged through the HUD line buffer at C800 like the frame tiles */
+uint8_t scroll_sel = 0xFF;          /* 0xFF = by the current battle's chapter; flow.c sets SCROLL_END_x for endings */
+extern uint8_t cur_bt;
 static void scroll_panel(void)
 {
     uint8_t ids[20], at[20];
@@ -49,7 +51,13 @@ static void scroll_panel(void)
     rom_copy(SCROLL_BANK, pal, scroll_pal, sizeof pal);
     set_bkg_palette(1, 1, pal);
     VBK_REG = 0;
-    rom_set_bkg_data(SCROLL_BANK, 68, SCROLL_TILES, scroll_tiles);
+    {   /* the chapter's landscape (or the ending's, when flow.c has set scroll_sel) */
+        uint8_t k = scroll_sel;
+        const uint8_t *src;
+        if (k >= SCROLL_PICS) rom_copy(SCROLL_BANK, &k, &scroll_of_battle[cur_bt], 1);
+        rom_copy(SCROLL_BANK, &src, &scroll_ptr[k], sizeof src);
+        rom_set_bkg_data(SCROLL_BANK, 68, SCROLL_TILES, src);
+    }
     rom_set_bkg_data(SCROLL_BANK, 168, 1, scroll_fret);
     memset(at, 1, 20);
     memset(ids, 168, 20);

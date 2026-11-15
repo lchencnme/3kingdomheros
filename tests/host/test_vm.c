@@ -33,6 +33,7 @@ uint8_t vm_template(uint8_t i, VmTemplate *t) PLATFORM_API { if (i >= 4) return 
 void vm_gold(uint16_t a) PLATFORM_API { gold += a; }
 static uint8_t duels;
 void vm_duel(uint8_t w, uint8_t l, uint8_t r) PLATFORM_API { (void)w; (void)l; (void)r; duels++; }
+void vm_bgm(uint8_t s) PLATFORM_API { (void)s; }
 static int joins;
 uint8_t vm_join(uint8_t j) PLATFORM_API { if (j >= 2) return 0; joins++; roster_add((uint16_t)(40u + j), 0, 1, 50, 50, 50); return 1; }
 

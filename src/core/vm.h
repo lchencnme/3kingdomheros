@@ -52,6 +52,7 @@
 #define OP_JOIN 0x0Fu         /* joiner u8: officer from the join table enters the roster (no-op if already in) */
 #define OP_FATE 0x10u         /* character u16, fate u8 (FATE_OWNED / FATE_LEFT): party leave / return */
 #define OP_HP_CAP 0x11u       /* unit u8, value u16: hp = min(hp, value) - scripted damage (fire, flood) */
+#define OP_BGM 0x12u          /* song u8: the battle's music changes (a general arrives, an ambush springs) */
 #define OP_FACTION_SET 0x0Cu  /* unit u8, faction u8: clears the unit's action for this phase (9.3) */
 
 #define SCOPE_GLOBAL 0u
@@ -89,7 +90,8 @@ uint8_t vm_template(uint8_t idx, VmTemplate *t) PLATFORM_API;      /* 0 = no suc
 void vm_gold(uint16_t amount) PLATFORM_API;
 
 void vm_duel(uint8_t winner, uint8_t loser, uint8_t loser_retreated) PLATFORM_API;   /* before the change */
-uint8_t vm_join(uint8_t joiner) PLATFORM_API;           /* 0 = no such joiner; already in the roster = 1 */
+uint8_t vm_join(uint8_t joiner) PLATFORM_API;
+void vm_bgm(uint8_t song) PLATFORM_API;                  /* presentation only: no game state */           /* 0 = no such joiner; already in the roster = 1 */
 
 /* how many events would run for this fact (matching, condition true, once unused); no side effects */
 uint8_t vm_would_fire(const Battle *b, const VmFact *f) CORE_API;

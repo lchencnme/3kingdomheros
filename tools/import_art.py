@@ -184,6 +184,15 @@ def terrain(name, mode):
     save(q, name)
 
 
+def scroll(name):
+    """chapter landscapes for the dialogue page: the whole square drawing at 76x76 (the generator adds the
+    frame), bold lines kept by line coverage with a soft wash where strokes are sparse"""
+    L = load(SRC / name, 608)
+    y0, y1, x0, x1 = bbox(L, 0.7, 0.03)
+    q = line_reduce(fit(L, y0, y1, x0, x1, 76, 76), 76, 76, 0.22, 0.08, 0.93)
+    save(q, name)
+
+
 TERRAIN = {"terrain_plain.png": "texture", "terrain_road.png": "texture", "terrain_river_shallow.png": "texture",
            "terrain_river_deep.png": "texture", "terrain_forest.png": "object", "terrain_hill.png": "object",
            "terrain_cliff.png": "object", "terrain_village.png": "object", "terrain_fort_wall.png": "texture",
@@ -198,6 +207,8 @@ def main():
             portrait(n, 64, 64, 512)
         elif n.endswith("_card.png"):
             portrait(n, 144, 112, 576)
+        elif n.startswith("scroll_"):
+            scroll(n)
         elif n.startswith("unit_"):
             sprite(n, 16, 21, line=True, pad_bottom=3)
         elif n.startswith("actor_"):

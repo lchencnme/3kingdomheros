@@ -1,0 +1,1 @@
+{"_comment": "汉中王府。", "id": "CAMP_C7_HANZHONG", "commands": ["COUNCIL", "EQUIP", "EXCHANGE", "SHOP", "DEPLOY"], "council": [["NARRATOR", "TXD_C7A_1"], ["NARRATOR", "TXD_C7A_2"], ["GUANYU", "TXD_C7A_3"], ["LIUBEI", "TXD_C7A_4"]], "shop": [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 17, 19, 25, 48, 49, 50, 51, 52, 53, 54, 55, 71, 82, 83, 99], "deploy": {"max_count": 7, "forced": ["CH_LIUBEI"]}}

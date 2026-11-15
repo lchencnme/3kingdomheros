@@ -4,7 +4,11 @@
 #include <stdint.h>
 #define SCROLL_BANK 27u
 #define SCROLL_TILES 100u   /* 10 x 10, row-major */
-extern const uint8_t scroll_tiles[];
+#define SCROLL_PICS 9u   /* ch1 ch2 ch3 ch4 ch5 ch6 ch7 end_a end_b */
+#define SCROLL_END_A 7u
+#define SCROLL_END_B 8u
+extern const uint8_t *const scroll_ptr[SCROLL_PICS];   /* all in SCROLL_BANK */
+extern const uint8_t scroll_of_battle[];               /* battle index -> picture */
 extern const uint8_t scroll_fret[16];
 extern const uint16_t scroll_pal[4];
 #endif

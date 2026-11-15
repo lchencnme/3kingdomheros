@@ -75,12 +75,12 @@ def main():
     for y in range(7, H - 7):
         img[y][7] = img[y][W - 8] = 3
     text(img, 11, 10, "三国豪杰传", 2)
-    # 朱文印: a vermilion seal with the era cut out in paper, right of the title
+    # 朱文印「桃园」: where the oath was sworn; cut out in paper on a vermilion field, right of the title
     for y in range(10, 34):
         for x in range(137, 151):
             img[y][x] = 2
     seal = [[0] * W for _ in range(H)]
-    text(seal, 138, 10, "汉", 1); text(seal, 138, 22, "末", 1)
+    text(seal, 138, 10, "桃", 1); text(seal, 138, 22, "园", 1)
     for y in range(10, 34):
         for x in range(137, 151):
             if seal[y][x]:

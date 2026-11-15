@@ -28,6 +28,11 @@ def die(m):
     sys.exit("gen_campaign: " + m)
 
 
+MUS = {json.loads(p.read_text(encoding="utf-8"))["id"][5:]: k
+       for k, p in enumerate(sorted((ROOT / "content" / "music").glob("*.json")))}
+BOSS_BATTLES = {5, 12, 20, 25, 30, 36}       # the big set pieces get 《鏖战》
+
+
 def U(cls, x, y, ai=0, lv=1, ch=0, fac="ENEMY"):
     return {"cls": cls, "x": x, "y": y, "ai": ai, "lv": lv, "ch": ch, "fac": fac}
 
@@ -449,7 +454,7 @@ BT11 = {
          "code": [["TEXT", "NARRATOR", "TXD_B11_OPEN_0"], ["TEXT", "P0002", "TXD_B11_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B11_GOAL"]]},
         {"id": 2, "trigger": "PHASE_START", "param": "ENEMY", "priority": 0, "once": True,
          "condition": {"leaf": "turn_cmp", "op": "ge", "n": 8},
-         "code": [["TEXT", "NARRATOR", "TXD_B11_JI_1"], ["TEXT", "NARRATOR", "TXD_B11_JI_2"], ["TEXT", "NARRATOR", "TXD_B11_JI_3"],
+         "code": [["TEXT", "NARRATOR", "TXD_B11_JI_1"], ["TEXT", "lvbu", "TXD_B11_JI_2"], ["TEXT", "NARRATOR", "TXD_B11_JI_3"],
                   ["OUTCOME", "WIN"]]},
         {"id": 3, "trigger": "BATTLE_END", "param": None, "priority": 0, "once": True, "condition": {"leaf": "unit_alive", "unit": 0},
          "code": [["TEXT", "P0003", "TXD_B11_WIN_1"], ["TEXT", "P0001", "TXD_B11_WIN_2"], ["GIVE_GOLD", 600]]},
@@ -760,7 +765,7 @@ BT20 = {
     "victory": ("DEFEAT", 6, 0), "protect": None,
     "turn_limit": 25, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 6, "forced": [0], "seed": 79,
     "events": [
-        EV(1, "BATTLE_START", None, [["TEXT", "NARRATOR", "TXD_B20_OPEN_0"], ["TEXT", "NARRATOR", "TXD_B20_OPEN_1"], ["TEXT", "P0001", "TXD_B20_OPEN_2"],
+        EV(1, "BATTLE_START", None, [["TEXT", "NARRATOR", "TXD_B20_OPEN_0"], ["TEXT", "xushu", "TXD_B20_OPEN_1"], ["TEXT", "P0001", "TXD_B20_OPEN_2"],
                                      ["TEXT", "NARRATOR", "TXD_B20_GOAL"]]),
         EV(2, "UNIT_RETREAT", 15, [["TEXT", "NARRATOR", "TXD_B20_CAOREN"]]),
         EV(3, "BATTLE_END", None, [["TEXT", "NARRATOR", "TXD_B20_WIN_1"], ["TEXT", "NARRATOR", "TXD_B20_WIN_2"], ["TEXT", "P0001", "TXD_B20_WIN_3"],
@@ -942,6 +947,395 @@ BT25 = {
 EXTRA = [BT01, BT02, BT03, BT04, BT05, BT06, BT07, BT08, BT09, BT10, BT11, BT12, BT13, BT14, BT15, BT16, BT17, BT18, BT19, BT20,
          BT21, BT22, BT23, BT24, BT25]
 
+# ---------------------------------------------------------------- map builder for chapters 5+
+def M(w, h, *feats):
+    """battle map from a short feature list (terrain digits as in the hand-drawn maps):
+    ("road", y) / ("roadv", x)            a road across the map
+    ("river", x, bridge_y[, width])       a north-south river (shallow banks, deep middle) with a bridge row
+    ("riverh", y, bridge_x)               an east-west river with a bridge column
+    ("wood", cx, cy, r) / ("hill", cx, cy, r) / ("lake", cx, cy, r)   blobs
+    ("fort", x0, y0, x1, y1, gate)        walls with a fort-floor ring, plain inside; gate "W"/"E"/"N"/"S"
+    ("village", x, y) / ("camp", x0, y0, x1, y1)   a village cell / a block of fort floor
+    ("cliff", x0, y0, x1, y1)             impassable rock (wall)
+    later features overwrite earlier ones; roads and bridges are laid last"""
+    g = [[0] * w for _ in range(h)]
+
+    def put(x, y, v):
+        if 0 <= x < w and 0 <= y < h:
+            g[y][x] = v
+    late = []
+    for f in feats:
+        k = f[0]
+        if k in ("wood", "hill", "lake"):
+            _, cx, cy, r = f
+            for y in range(cy - r, cy + r + 1):
+                for x in range(cx - r - 1, cx + r + 2):
+                    d = abs(x - cx) * 0.8 + abs(y - cy)
+                    if d <= r + 0.3:
+                        put(x, y, {"wood": 2, "hill": 5, "lake": 7 if d < r - 0.5 else 6}[k])
+        elif k == "river":
+            x, by = f[1], f[2]
+            wd = f[3] if len(f) > 3 else 3
+            for y in range(h):
+                for i in range(wd):
+                    put(x + i, y, 7 if 0 < i < wd - 1 else 6)
+            late.append(("bridge_h", x, by, wd))
+        elif k == "riverh":
+            y, bx = f[1], f[2]
+            for x in range(w):
+                put(x, y, 6); put(x, y + 1, 7); put(x, y + 2, 6)
+            late.append(("bridge_v", bx, y))
+        elif k == "fort":
+            _, x0, y0, x1, y1, gate = f
+            for y in range(y0, y1 + 1):
+                for x in range(x0, x1 + 1):
+                    edge = x in (x0, x1) or y in (y0, y1)
+                    ring = x in (x0 + 1, x1 - 1) or y in (y0 + 1, y1 - 1)
+                    put(x, y, 8 if edge else (4 if ring else 0))
+            my, mx = (y0 + y1) // 2, (x0 + x1) // 2
+            gx, gy = {"W": (x0, my), "E": (x1, my), "N": (mx, y0), "S": (mx, y1)}[gate]
+            late.append(("gate", gx, gy, gate))
+        elif k == "village":
+            put(f[1], f[2], 3)
+        elif k == "camp":
+            for y in range(f[2], f[4] + 1):
+                for x in range(f[1], f[3] + 1):
+                    put(x, y, 4)
+        elif k == "cliff":
+            for y in range(f[2], f[4] + 1):
+                for x in range(f[1], f[3] + 1):
+                    put(x, y, 8)
+        elif k in ("road", "roadv"):
+            late.append(f)
+        else:
+            die(f"M: unknown feature {k}")
+    for f in late:
+        k = f[0]
+        if k == "road":
+            for x in range(w):
+                if g[f[1]][x] in (0, 2, 5):
+                    g[f[1]][x] = 1
+        elif k == "roadv":
+            for y in range(h):
+                if g[y][f[1]] in (0, 2, 5):
+                    g[y][f[1]] = 1
+        elif k == "bridge_h":
+            for i in range(f[3]):
+                put(f[1] + i, f[2], 9)
+        elif k == "bridge_v":
+            for i in range(3):
+                put(f[1], f[2] + i, 9)
+        elif k == "gate":
+            _, gx, gy, side = f
+            put(gx, gy, 1)
+            dx, dy = {"W": (1, 0), "E": (-1, 0), "N": (0, 1), "S": (0, -1)}[side]
+            put(gx + dx, gy + dy, 1)
+    return ["".join(str(v) for v in r) for r in g]
+
+
+def SLOTS(x, y, n=10, dx=1):
+    """n player cells in a compact block around (x, y), 3 rows deep, advancing by dx per column"""
+    out = []
+    for k in range(n):
+        out.append((x - dx * (k // 3), y - 1 + k % 3))
+    return out
+
+
+# ================================================================ Chapter 5 荆益 BT_26..BT_36
+# 10 player entries from here on (roster: 刘 关 张 简 赵 徐庶(离队) 诸葛 黄忠 魏延 马超)
+def BT(n, goal, hint, m, slots, others, vic, limit, deploy, events, protect=None, area=None, cont="NORMAL", forced=(0,),
+       groups=None, items=(), tre=(), templates=None):
+    d = {"id": f"BT_{n}", "goal": (goal, hint), "map": m, "slots": slots, "others": others,
+         "ai_groups": groups or [G(0, "AGGRESSIVE"), G(1, "HOLD")], "items": list(items), "treasures": list(tre),
+         "victory": vic, "protect": protect, "turn_limit": limit, "continuity": cont, "round_mode": "RESET",
+         "deploy_max": deploy, "forced": list(forced), "seed": (100 + n * 7) % 251, "events": events}
+    if area:
+        d["area"] = area
+    if templates:
+        d["templates"] = templates
+    return d
+
+
+def OPEN(n, *lines):
+    return EV(1, "BATTLE_START", None, [["TEXT", s, f"TXD_B{n}_OPEN_{k}"] for k, s in enumerate(lines)] + [["TEXT", "NARRATOR", f"TXD_B{n}_GOAL"]])
+
+
+def END(n, i, *lines, extra=()):
+    return EV(i, "BATTLE_END", None, [["TEXT", s, f"TXD_B{n}_WIN_{k + 1}"] for k, s in enumerate(lines)] + [list(x) for x in extra], WIN0)
+
+
+BT26 = BT(26, "刘备进入南郡城内", "周瑜正与曹仁交战，是友军。城门在西面。",
+          M(26, 14, ("wood", 4, 2, 2), ("hill", 5, 11, 2), ("fort", 15, 2, 24, 11, "W"), ("road", 6), ("village", 10, 11)),
+          SLOTS(3, 6),
+          [U(7, 20, 6, ai=1, lv=19, ch=45), U(1, 17, 5, ai=1, lv=17), U(1, 17, 7, ai=1, lv=17), U(4, 19, 4, ai=1, lv=17),
+           U(4, 19, 8, ai=1, lv=17), U(7, 12, 4, lv=17), U(7, 12, 8, lv=17), U(1, 13, 6, lv=17),
+           U(10, 8, 2, ai=0, lv=18, ch=51, fac="ALLY"), U(1, 9, 3, ai=0, lv=17, fac="ALLY")],
+          ("REACH", 0, 0), 25, 6,
+          [OPEN(26, "NARRATOR", "zhugeliang", "zhaoyun"),
+           END(26, 2, "NARRATOR", "zhouyu", "zhugeliang", extra=[("GIVE_GOLD", 800)])],
+          area=(18, 4, 21, 9), items=[(0, 2)], tre=[(10, 11, 0x02)])
+BT27 = BT(27, "击退刘度", "邢道荣会先冲过来。",
+          M(26, 14, ("wood", 8, 3, 2), ("wood", 9, 10, 2), ("hill", 14, 6, 1), ("camp", 20, 5, 23, 8), ("road", 6)),
+          SLOTS(3, 6),
+          [U(9, 22, 6, ai=1, lv=17, ch=57), U(2, 15, 6, ai=0, lv=19, ch=58), U(1, 17, 4, lv=17), U(1, 17, 8, lv=17),
+           U(4, 20, 4, ai=1, lv=17), U(4, 20, 9, ai=1, lv=17), U(7, 13, 3, lv=17), U(7, 13, 9, lv=17)],
+          ("DEFEAT", 10, 0), 25, 6,
+          [OPEN(27, "NARRATOR", "zhugeliang"),
+           EV(2, "UNIT_RETREAT", 11, [["TEXT", "P0003", "TXD_B27_XING"]]),
+           END(27, 3, "NARRATOR", "P0001", extra=[("GIVE_GOLD", 700)])],
+          items=[(1, 1)], tre=[(9, 10, 0x1B)])
+BT28 = BT(28, "击退赵范", "赵云攻击陈应时会触发单挑。",
+          M(26, 14, ("hill", 6, 3, 2), ("wood", 12, 10, 2), ("fort", 17, 3, 24, 10, "W"), ("road", 6)),
+          SLOTS(3, 6),
+          [U(9, 21, 6, ai=1, lv=18, ch=59), U(7, 13, 6, ai=0, lv=19, ch=60), U(2, 15, 4, ai=0, lv=19, ch=61),
+           U(1, 15, 8, lv=18), U(4, 19, 5, ai=1, lv=18), U(4, 19, 8, ai=1, lv=18), U(7, 11, 3, lv=18), U(1, 18, 6, ai=1, lv=18)],
+          ("DEFEAT", 10, 0), 25, 6,
+          [OPEN(28, "NARRATOR", "zhaoyun"),
+           {"id": 2, "trigger": "PRE_ACTION", "param": 4, "priority": 0, "once": True, "condition": {"leaf": "target_eq", "unit": 11},
+            "code": [["TEXT", "zhaoyun", "TXD_B28_DUEL_1"], ["DUEL", 4, 11, 0], ["TEXT", "NARRATOR", "TXD_B28_DUEL_2"]]},
+           END(28, 3, "NARRATOR", "zhaoyun", extra=[("GIVE_GOLD", 700)])],
+          items=[(1, 2)])
+BT29 = BT(29, "击退金旋", "连续战：兵力不会恢复。第3回合城中有变。",
+          M(26, 14, ("wood", 5, 10, 2), ("hill", 10, 3, 2), ("fort", 16, 3, 24, 10, "W"), ("road", 6)),
+          SLOTS(3, 6),
+          [U(7, 13, 6, ai=0, lv=20, ch=62), U(9, 20, 6, ai=1, lv=18, ch=63), U(1, 12, 4, lv=18), U(1, 12, 8, lv=18),
+           U(4, 18, 5, ai=1, lv=18), U(4, 18, 8, ai=1, lv=18), U(7, 10, 8, lv=18)],
+          ("DEFEAT", 10, 0), 25, 6,
+          [OPEN(29, "NARRATOR", "P0003"),
+           EV(2, "PHASE_START", "PLAYER", [["TEXT", "gongzhi", "TXD_B29_TURN_1"], ["FACTION_SET", 11, "ALLY"], ["FACTION_SET", 14, "ALLY"],
+                                           ["FACTION_SET", 15, "ALLY"], ["TEXT", "NARRATOR", "TXD_B29_TURN_2"]],
+              {"leaf": "turn_cmp", "op": "ge", "n": 3}),
+           END(29, 3, "NARRATOR", "P0001", extra=[("GIVE_GOLD", 700)])],
+          cont="NO_REPLENISH", forced=(0, 2))
+BT30 = BT(30, "击退韩玄", "关羽攻击黄忠时会触发单挑。",
+          M(26, 14, ("wood", 6, 2, 2), ("lake", 9, 11, 2), ("fort", 16, 2, 24, 11, "W"), ("road", 6)),
+          SLOTS(3, 6),
+          [U(9, 21, 6, ai=1, lv=19, ch=64), U(4, 14, 6, ai=0, lv=22, ch=65), U(1, 18, 5, ai=1, lv=20, ch=66),
+           U(1, 13, 4, lv=19), U(1, 13, 8, lv=19), U(4, 18, 8, ai=1, lv=19), U(7, 11, 5, lv=19), U(7, 11, 7, lv=19)],
+          ("DEFEAT", 10, 0), 25, 6,
+          [OPEN(30, "NARRATOR", "P0002"),
+           {"id": 2, "trigger": "PRE_ACTION", "param": 1, "priority": 0, "once": True, "condition": {"leaf": "target_eq", "unit": 11},
+            "code": [["TEXT", "P0002", "TXD_B30_DUEL_1"], ["DUEL", 1, 11, 180], ["TEXT", "huangzhong", "TXD_B30_DUEL_2"],
+                     ["TEXT", "NARRATOR", "TXD_B30_DUEL_3"]]},
+           END(30, 3, "weiyan", "huangzhong", "P0001", extra=[("JOIN", 65), ("JOIN", 66), ("GIVE_GOLD", 900)])],
+          forced=(0, 1), items=[(1, 2)])
+BT31 = BT(31, "击退杨怀", "高沛守在关前。",
+          M(26, 14, ("hill", 4, 2, 2), ("hill", 5, 11, 2), ("cliff", 14, 0, 16, 4), ("cliff", 14, 9, 16, 13), ("camp", 19, 5, 22, 8), ("road", 6)),
+          SLOTS(3, 6),
+          [U(7, 21, 6, ai=1, lv=21, ch=70), U(2, 15, 6, ai=1, lv=21, ch=71), U(1, 15, 5, ai=1, lv=20), U(1, 15, 8, ai=1, lv=20),
+           U(4, 18, 5, lv=20), U(4, 18, 8, lv=20), U(7, 11, 5, lv=20), U(7, 11, 7, lv=20), U(1, 12, 6, lv=20)],
+          ("DEFEAT", 10, 0), 25, 6,
+          [OPEN(31, "NARRATOR", "pangtong"),
+           END(31, 2, "NARRATOR", "P0001", extra=[("GIVE_GOLD", 800)])],
+          items=[(0, 2), (1, 1)], tre=[(5, 11, 0x1D)])
+BT32 = BT(32, "击退严颜", "张飞必须出阵。",
+          M(26, 14, ("wood", 7, 3, 2), ("wood", 8, 10, 2), ("hill", 13, 2, 1), ("fort", 17, 3, 24, 10, "W"), ("road", 6)),
+          SLOTS(3, 6),
+          [U(4, 21, 6, ai=1, lv=23, ch=72), U(1, 18, 5, ai=1, lv=21), U(1, 18, 8, ai=1, lv=21), U(4, 19, 4, ai=1, lv=21),
+           U(4, 19, 9, ai=1, lv=21), U(7, 13, 5, lv=21), U(7, 13, 8, lv=21), U(1, 14, 6, lv=21), U(2, 12, 6, lv=21)],
+          ("DEFEAT", 10, 0), 25, 6,
+          [OPEN(32, "NARRATOR", "P0003"),
+           END(32, 2, "yanyan", "P0003", "NARRATOR", extra=[("GIVE_GOLD", 800)])],
+          forced=(0, 2), items=[(0, 2)])
+BT33 = BT(33, "坚守到第6回合", "庞统是友军。落凤坡地势险恶。",
+          M(26, 14, ("cliff", 0, 0, 25, 1), ("cliff", 0, 12, 25, 13), ("wood", 9, 4, 2), ("wood", 13, 9, 2), ("hill", 18, 5, 2), ("road", 6)),
+          SLOTS(3, 6),
+          [U(10, 6, 6, ai=2, lv=20, ch=67, fac="ALLY"),
+           U(7, 20, 6, ai=0, lv=23, ch=73), U(4, 15, 3, lv=21), U(4, 15, 10, lv=21), U(4, 18, 4, lv=21), U(4, 18, 9, lv=21),
+           U(1, 16, 6, lv=21), U(7, 22, 5, lv=21), U(7, 22, 7, lv=21), U(1, 13, 6, lv=21)],
+          ("SURVIVE", None, 6), 6, 6,
+          [OPEN(33, "NARRATOR", "pangtong", "P0001"),
+           EV(2, "PHASE_START", "ENEMY", [["BGM", "SAD"], ["TEXT", "zhangren", "TXD_B33_AMBUSH_1"], ["TEXT", "NARRATOR", "TXD_B33_AMBUSH_2"], ["RETREAT", 10],
+                                          ["TEXT", "P0001", "TXD_B33_AMBUSH_3"]], {"leaf": "turn_cmp", "op": "ge", "n": 3}),
+           END(33, 3, "NARRATOR", "P0001")],
+          groups=[G(0, "AGGRESSIVE"), G(1, "HOLD"), G(2, "ESCORT", 0, 2)])
+BT34 = BT(34, "击退张任", "连续战：兵力不会恢复。诸葛亮已从荆州赶到。",
+          M(26, 14, ("riverh", 9, 12), ("wood", 5, 3, 2), ("hill", 20, 3, 2), ("camp", 18, 5, 21, 7), ("road", 6), ("roadv", 12)),
+          SLOTS(3, 6),
+          [U(7, 19, 6, ai=0, lv=24, ch=73), U(1, 15, 5, lv=22), U(1, 15, 7, lv=22), U(4, 17, 4, ai=1, lv=22), U(4, 17, 8, ai=1, lv=22),
+           U(7, 21, 5, lv=22), U(7, 21, 7, lv=22), U(2, 13, 6, lv=22), U(10, 20, 6, ai=1, lv=22)],
+          ("DEFEAT", 10, 0), 25, 6,
+          [OPEN(34, "NARRATOR", "zhugeliang"),
+           END(34, 2, "zhangren", "zhugeliang", "P0001", extra=[("GIVE_GOLD", 900)])],
+          cont="NO_REPLENISH", items=[(0, 2)])
+BT35 = BT(35, "坚守到第8回合", "张飞攻击马超时会触发单挑。",
+          M(26, 14, ("cliff", 0, 0, 8, 2), ("cliff", 0, 11, 8, 13), ("fort", 1, 3, 7, 10, "E"), ("hill", 14, 3, 2), ("wood", 15, 10, 2), ("road", 6)),
+          [(5, 6), (5, 5), (5, 7), (4, 5), (4, 6), (4, 7), (3, 5), (3, 6), (3, 7), (6, 6)],
+          [U(8, 18, 6, ai=0, lv=25, ch=74), U(7, 19, 5, ai=0, lv=22, ch=75), U(7, 19, 7, lv=22), U(7, 21, 4, lv=22), U(7, 21, 8, lv=22),
+           U(4, 16, 4, lv=22), U(4, 16, 8, lv=22), U(1, 14, 6, lv=22), U(1, 22, 6, lv=22)],
+          ("SURVIVE", None, 8), 8, 6,
+          [OPEN(35, "NARRATOR", "P0003", "zhugeliang"),
+           {"id": 2, "trigger": "PRE_ACTION", "param": 2, "priority": 0, "once": True, "condition": {"leaf": "target_eq", "unit": 10},
+            "code": [["TEXT", "P0003", "TXD_B35_DUEL_1"], ["DUEL", 2, 10, 300], ["TEXT", "machao", "TXD_B35_DUEL_2"],
+                     ["TEXT", "NARRATOR", "TXD_B35_DUEL_3"]]},
+           END(35, 3, "NARRATOR", "P0001", extra=[("GIVE_GOLD", 900)])],
+          forced=(0, 2), items=[(0, 2)])
+BT36 = BT(36, "刘备进入成都城内", "马超已归顺，在城下助战。",
+          M(28, 16, ("wood", 5, 3, 2), ("hill", 6, 12, 2), ("fort", 15, 3, 25, 12, "W"), ("road", 7), ("village", 10, 3), ("village", 10, 12)),
+          SLOTS(3, 7),
+          [U(9, 22, 7, ai=1, lv=20, ch=69), U(10, 20, 6, ai=1, lv=23, ch=78), U(2, 17, 6, ai=1, lv=23), U(2, 17, 8, ai=1, lv=23),
+           U(4, 19, 5, ai=1, lv=23), U(4, 19, 10, ai=1, lv=23), U(1, 13, 6, lv=23), U(1, 13, 8, lv=23), U(7, 12, 4, lv=23), U(7, 12, 10, lv=23)],
+          ("REACH", 0, 0), 25, 7,
+          [OPEN(36, "NARRATOR", "machao", "P0001"),
+           END(36, 2, "liuzhang", "P0001", "zhugeliang", extra=[("GIVE_GOLD", 1500), ("GIVE_ITEM", 0x45)])],
+          area=(18, 5, 22, 10), items=[(1, 2)], tre=[(10, 12, 0x02)])
+EXTRA += [BT26, BT27, BT28, BT29, BT30, BT31, BT32, BT33, BT34, BT35, BT36]
+# ================================================================ Chapter 6 汉中 BT_37..BT_41
+BT37 = BT(37, "击退张郃", "山路狭窄。张飞必须出阵。",
+          M(26, 14, ("hill", 6, 2, 2), ("hill", 7, 11, 2), ("cliff", 12, 0, 13, 4), ("cliff", 12, 9, 13, 13), ("wood", 17, 3, 2), ("camp", 20, 5, 23, 8), ("road", 6)),
+          SLOTS(3, 6),
+          [U(8, 21, 6, ai=1, lv=27, ch=79), U(2, 14, 6, ai=1, lv=25), U(2, 15, 5, ai=1, lv=25), U(2, 15, 8, ai=1, lv=25),
+           U(5, 19, 4, ai=1, lv=25), U(5, 19, 9, ai=1, lv=25), U(8, 17, 6, lv=25), U(8, 18, 8, lv=25), U(2, 22, 6, ai=1, lv=25)],
+          ("DEFEAT", 10, 0), 25, 7,
+          [OPEN(37, "NARRATOR", "P0003"), END(37, 2, "NARRATOR", "P0003", extra=[("GIVE_GOLD", 1000)])],
+          forced=(0, 2), items=[(0, 2)])
+BT38 = BT(38, "击退夏侯德", "天荡山是曹军屯粮之所。",
+          M(26, 14, ("hill", 5, 3, 2), ("wood", 6, 10, 2), ("hill", 13, 9, 2), ("hill", 14, 3, 2), ("camp", 19, 4, 23, 9), ("village", 21, 6), ("road", 6)),
+          SLOTS(3, 6),
+          [U(2, 21, 7, ai=1, lv=26, ch=80), U(2, 17, 5, ai=1, lv=25), U(2, 17, 8, ai=1, lv=25), U(5, 20, 5, ai=1, lv=25),
+           U(5, 20, 8, ai=1, lv=25), U(8, 13, 6, lv=25), U(8, 15, 6, lv=25), U(11, 22, 5, ai=1, lv=25)],
+          ("DEFEAT", 10, 0), 25, 7,
+          [OPEN(38, "NARRATOR", "huangzhong"), END(38, 2, "NARRATOR", "huangzhong", extra=[("GIVE_GOLD", 1000)])],
+          cont="NO_REPLENISH", items=[(0, 2)], tre=[(21, 6, 0x02)])
+BT39 = BT(39, "击退夏侯渊", "黄忠攻击夏侯渊时会触发单挑。",
+          M(26, 14, ("hill", 12, 6, 3), ("wood", 5, 2, 2), ("wood", 6, 11, 2), ("camp", 19, 4, 23, 9), ("road", 6)),
+          SLOTS(3, 6),
+          [U(8, 20, 6, ai=0, lv=29, ch=81), U(8, 18, 4, lv=26, ch=79), U(2, 16, 5, lv=26), U(2, 16, 8, lv=26),
+           U(5, 21, 4, ai=1, lv=26), U(5, 21, 9, ai=1, lv=26), U(8, 22, 6, lv=26), U(2, 19, 8, ai=1, lv=26), U(11, 22, 8, ai=1, lv=26)],
+          ("DEFEAT", 10, 0), 25, 7,
+          [OPEN(39, "NARRATOR", "fazheng", "huangzhong"),
+           {"id": 2, "trigger": "PRE_ACTION", "param": 7, "priority": 0, "once": True, "condition": {"leaf": "target_eq", "unit": 10},
+            "code": [["TEXT", "huangzhong", "TXD_B39_DUEL_1"], ["DUEL", 7, 10, 0], ["TEXT", "NARRATOR", "TXD_B39_DUEL_2"]]},
+           END(39, 3, "NARRATOR", "P0001", extra=[("GIVE_GOLD", 1500), ("GIVE_ITEM", 0x46)])],
+          items=[(0, 2), (1, 2)])
+BT39["bgm"] = "BOSS"
+BT40 = BT(40, "坚守到第8回合", "赵云守营。第4回合曹军生疑。",
+          M(26, 14, ("river", 12, 6), ("fort", 2, 3, 9, 10, "E"), ("wood", 18, 3, 2), ("hill", 19, 10, 2), ("road", 6)),
+          [(6, 6), (6, 5), (6, 7), (5, 5), (5, 6), (5, 7), (4, 5), (4, 6), (4, 7), (7, 6)],
+          [U(8, 20, 6, ai=0, lv=27, ch=82), U(8, 18, 5, lv=27, ch=79), U(8, 18, 7, lv=26), U(2, 16, 6, lv=26), U(2, 17, 4, lv=26),
+           U(2, 17, 8, lv=26), U(5, 21, 4, lv=26), U(5, 21, 8, lv=26), U(8, 22, 6, lv=26)],
+          ("SURVIVE", None, 8), 8, 7,
+          [OPEN(40, "NARRATOR", "zhaoyun"),
+           EV(2, "PHASE_START", "ENEMY", [["TEXT", "zhaoyun", "TXD_B40_EMPTY_1"], ["TEXT", "NARRATOR", "TXD_B40_EMPTY_2"],
+                                          ["SET_AI", "G0", "HOLD", None, 3]], {"leaf": "turn_cmp", "op": "ge", "n": 4}),
+           END(40, 3, "NARRATOR", "P0001", extra=[("GIVE_GOLD", 1000)])],
+          items=[(0, 2)])
+BT41 = BT(41, "击退曹操", "曹操亲率大军守阳平关。",
+          M(28, 16, ("cliff", 17, 0, 19, 5), ("cliff", 17, 10, 19, 15), ("fort", 20, 3, 27, 12, "W"), ("wood", 6, 3, 2), ("hill", 8, 12, 2), ("road", 7)),
+          SLOTS(3, 7),
+          [U(8, 24, 7, ai=1, lv=30, ch=27), U(8, 18, 7, ai=1, lv=28, ch=82), U(8, 15, 6, lv=28, ch=79), U(2, 14, 8, lv=27),
+           U(2, 16, 9, lv=27), U(5, 22, 5, ai=1, lv=27), U(5, 22, 10, ai=1, lv=27), U(8, 12, 5, lv=27), U(8, 12, 9, lv=27), U(11, 23, 8, ai=1, lv=27)],
+          ("DEFEAT", 10, 0), 30, 7,
+          [OPEN(41, "NARRATOR", "zhugeliang", "P0001"), END(41, 2, "NARRATOR", "zhugeliang", "P0001", extra=[("GIVE_GOLD", 2000), ("GIVE_ITEM", 0x44)])],
+          items=[(0, 2), (1, 2)])
+BT41["bgm"] = "BOSS"
+# ================================================================ Chapter 7 分歧 BT_42..BT_51
+BT42 = BT(42, "击退于禁", "关羽必须出阵。大雨不止，第3回合汉水暴涨。",
+          M(26, 14, ("river", 4, 6), ("lake", 15, 3, 2), ("lake", 16, 10, 2), ("camp", 19, 5, 23, 8), ("road", 6)),
+          SLOTS(10, 6, 10, -1),
+          [U(8, 21, 6, ai=1, lv=28, ch=32), U(8, 17, 6, ai=0, lv=30, ch=85), U(2, 15, 6, lv=27), U(2, 18, 4, lv=27), U(2, 18, 9, lv=27),
+           U(5, 20, 5, ai=1, lv=27), U(5, 20, 8, ai=1, lv=27), U(8, 22, 5, lv=27), U(8, 22, 8, lv=27)],
+          ("DEFEAT", 10, 0), 25, 7,
+          [EV(1, "BATTLE_START", None, [["TEXT", "NARRATOR", "TXD_B42_OPEN_0"], ["WEATHER", "RAIN"], ["TEXT", "P0002", "TXD_B42_OPEN_1"],
+                                        ["TEXT", "NARRATOR", "TXD_B42_GOAL"]]),
+           EV(2, "PHASE_START", "PLAYER", [["TEXT", "NARRATOR", "TXD_B42_FLOOD"], ["HP_CAP", 10, 260], ["HP_CAP", 12, 200], ["HP_CAP", 13, 200],
+                                           ["HP_CAP", 14, 200], ["HP_CAP", 15, 180], ["HP_CAP", 16, 180]], {"leaf": "turn_cmp", "op": "ge", "n": 3}),
+           EV(3, "UNIT_RETREAT", 11, [["TEXT", "pangde", "TXD_B42_PANGDE"]]),
+           END(42, 4, "NARRATOR", "P0002", extra=[("LEAVE", 2), ("GIVE_GOLD", 1500)])],
+          forced=(0, 1), items=[(0, 2), (1, 2)])
+BT42["bgm"] = "BOSS"
+BT43 = BT(43, "击退吕蒙", "关羽被困麦城。若关羽撤退，战斗仍会继续，但历史不再改变。",
+          M(26, 14, ("fort", 15, 3, 23, 10, "W"), ("wood", 6, 2, 2), ("wood", 7, 11, 2), ("hill", 11, 5, 1), ("road", 6)),
+          SLOTS(3, 6),
+          [U(8, 19, 6, ai=1, lv=30, ch=2, fac="ALLY"),                 # 10 关羽 holds 麦城
+           U(11, 21, 2, ai=1, lv=30, ch=83),                           # 11 吕蒙
+           U(10, 22, 11, ai=1, lv=28, ch=84),                          # 12 陆逊
+           U(2, 14, 5, ai=3, lv=28), U(2, 14, 8, ai=3, lv=28), U(8, 13, 3, ai=3, lv=28), U(8, 13, 10, ai=3, lv=28),
+           U(5, 18, 1, ai=3, lv=28), U(5, 18, 12, ai=3, lv=28), U(2, 12, 6, lv=28)],
+          ("DEFEAT", 11, 0), 14, 7,
+          [OPEN(43, "NARRATOR", "P0001", "zhugeliang"),
+           EV(2, "UNIT_RETREAT", 10, [["BGM", "SAD"], ["TEXT", "P0002", "TXD_B43_FALL_1"], ["TEXT", "NARRATOR", "TXD_B43_FALL_2"]]),
+           EV(3, "BATTLE_END", None,
+              [["IF", {"leaf": "unit_alive", "unit": 10},
+                [["TEXT", "P0002", "TXD_B43_SAVED_1"], ["TEXT", "P0001", "TXD_B43_SAVED_2"], ["SET_FLAG", "GLOBAL", 17, 1], ["RETURN", 2]]],
+               ["IF", {"not": {"leaf": "unit_alive", "unit": 10}},
+                [["TEXT", "NARRATOR", "TXD_B43_LOST_1"], ["TEXT", "P0001", "TXD_B43_LOST_2"]]],
+               ["GIVE_GOLD", 1500]], WIN0)],
+          groups=[G(0, "AGGRESSIVE"), G(1, "HOLD"), G(3, "AGGRESSIVE", 10)])
+BT43["bgm"] = "TENSE"
+# ---- 史实线
+BT44 = BT(44, "坚守到第6回合", "七百里连营。第4回合陆逊火攻。",
+          M(26, 14, ("wood", 5, 3, 3), ("wood", 6, 10, 3), ("wood", 12, 6, 2), ("camp", 2, 5, 5, 8), ("river", 20, 6), ("road", 6)),
+          [(4, 6), (4, 5), (4, 7), (5, 5), (5, 7), (3, 6), (3, 5), (3, 7), (2, 6), (5, 6)],
+          [U(10, 23, 6, ai=1, lv=30, ch=84), U(8, 17, 5, lv=29), U(8, 17, 7, lv=29), U(2, 15, 6, lv=29), U(5, 18, 3, lv=29),
+           U(5, 18, 10, lv=29), U(2, 16, 4, lv=29), U(2, 16, 9, lv=29), U(8, 14, 2, lv=29), U(8, 14, 11, lv=29)],
+          ("SURVIVE", None, 6), 6, 7,
+          [OPEN(44, "NARRATOR", "P0001"),
+           EV(2, "PHASE_START", "PLAYER", [["BGM", "SAD"], ["TEXT", "luxun", "TXD_B44_FIRE_1"], ["TEXT", "NARRATOR", "TXD_B44_FIRE_2"]]
+              + [["HP_CAP", k, 160] for k in range(1, 10)], {"leaf": "turn_cmp", "op": "ge", "n": 4}),
+           END(44, 3, "NARRATOR", "P0001")],
+          cont="NORMAL")
+BT45 = BT(45, "刘备到达西边的白帝城", "连续战：兵力不会恢复。赵云在西面接应。",
+          M(26, 14, ("riverh", 10, 6), ("cliff", 0, 0, 3, 3), ("fort", 0, 4, 5, 8, "E"), ("wood", 13, 3, 2), ("hill", 17, 6, 2), ("road", 6)),
+          SLOTS(20, 6, 10, -1),
+          [U(8, 24, 6, ai=3, lv=30), U(8, 24, 4, ai=3, lv=29), U(8, 24, 8, ai=3, lv=29), U(2, 22, 3, lv=29), U(2, 22, 9, lv=29),
+           U(5, 25, 5, lv=29), U(5, 25, 7, lv=29), U(8, 10, 2, lv=29), U(2, 11, 7, ai=1, lv=29)],
+          ("REACH", 0, 0), 14, 7,
+          [OPEN(45, "NARRATOR", "zhaoyun"), END(45, 2, "NARRATOR", "P0001", "zhugeliang")],
+          area=(2, 5, 4, 7), cont="NO_REPLENISH", groups=[G(0, "AGGRESSIVE"), G(1, "HOLD"), G(3, "AGGRESSIVE", 0)])
+# ---- 假想线
+BT46 = BT(46, "击退曹仁", "关羽已归队。北伐自宛城始。",
+          M(26, 14, ("fort", 16, 3, 24, 10, "W"), ("wood", 6, 3, 2), ("hill", 7, 11, 2), ("river", 11, 6), ("road", 6)),
+          SLOTS(3, 6),
+          [U(8, 21, 6, ai=1, lv=30, ch=45), U(2, 18, 5, ai=1, lv=29), U(2, 18, 8, ai=1, lv=29), U(5, 19, 4, ai=1, lv=29), U(5, 19, 9, ai=1, lv=29),
+           U(8, 14, 5, lv=29), U(8, 14, 8, lv=29), U(2, 15, 6, lv=29), U(11, 22, 7, ai=1, lv=29)],
+          ("DEFEAT", 10, 0), 25, 7,
+          [OPEN(46, "NARRATOR", "P0002", "zhugeliang"), END(46, 2, "NARRATOR", "P0001", extra=[("GIVE_GOLD", 2000)])],
+          items=[(0, 2)])
+BT47 = BT(47, "击退徐晃", "洛阳，汉家旧都。",
+          M(28, 16, ("riverh", 12, 14), ("fort", 17, 2, 26, 10, "W"), ("wood", 6, 4, 2), ("hill", 10, 9, 1), ("road", 6), ("roadv", 14)),
+          SLOTS(3, 6),
+          [U(8, 22, 6, ai=1, lv=31, ch=82), U(8, 15, 6, ai=0, lv=30, ch=79), U(2, 19, 5, ai=1, lv=30), U(2, 19, 7, ai=1, lv=30),
+           U(5, 21, 4, ai=1, lv=30), U(5, 21, 8, ai=1, lv=30), U(8, 13, 4, lv=30), U(8, 13, 8, lv=30), U(11, 23, 6, ai=1, lv=30)],
+          ("DEFEAT", 10, 0), 25, 7,
+          [OPEN(47, "NARRATOR", "P0001"), END(47, 2, "NARRATOR", "P0001", extra=[("GIVE_GOLD", 2000)])],
+          items=[(0, 2), (1, 2)])
+BT48 = BT(48, "击退张辽", "许昌外城。",
+          M(26, 14, ("fort", 15, 2, 24, 11, "W"), ("wood", 5, 3, 2), ("wood", 6, 10, 2), ("road", 6)),
+          SLOTS(3, 6),
+          [U(8, 14, 6, ai=0, lv=32, ch=26), U(8, 19, 6, ai=1, lv=30, ch=46), U(2, 17, 5, ai=1, lv=30), U(2, 17, 8, ai=1, lv=30),
+           U(5, 19, 3, ai=1, lv=30), U(5, 19, 10, ai=1, lv=30), U(8, 12, 4, lv=30), U(8, 12, 8, lv=30), U(2, 13, 6, lv=30)],
+          ("DEFEAT", 10, 0), 25, 7,
+          [OPEN(48, "NARRATOR", "P0002"), END(48, 2, "zhangliao", "P0002", extra=[("GIVE_GOLD", 2000)])],
+          items=[(0, 2)])
+BT49 = BT(49, "刘备进入许昌宫城", "连续战：兵力不会恢复。",
+          M(26, 14, ("fort", 13, 1, 24, 12, "W"), ("camp", 18, 5, 21, 8), ("wood", 5, 3, 2), ("road", 6)),
+          SLOTS(3, 6),
+          [U(11, 20, 6, ai=1, lv=31, ch=86), U(2, 15, 5, ai=1, lv=31), U(2, 15, 8, ai=1, lv=31), U(2, 17, 6, ai=1, lv=31),
+           U(5, 16, 3, ai=1, lv=31), U(5, 16, 10, ai=1, lv=31), U(8, 10, 5, lv=31), U(8, 10, 8, lv=31), U(8, 11, 6, lv=31)],
+          ("REACH", 0, 0), 25, 7,
+          [OPEN(49, "NARRATOR", "zhugeliang"), END(49, 2, "NARRATOR", "P0001", extra=[("GIVE_GOLD", 2500), ("GIVE_ITEM", 0x70)])],
+          area=(18, 5, 21, 8), cont="NO_REPLENISH")
+BT50 = BT(50, "击退司马懿", "邺城外，司马懿设下重重营垒。",
+          M(28, 16, ("river", 9, 7), ("camp", 15, 3, 18, 6), ("camp", 15, 9, 18, 12), ("fort", 21, 4, 27, 11, "W"), ("wood", 4, 3, 2), ("road", 7)),
+          SLOTS(3, 7),
+          [U(11, 24, 7, ai=1, lv=33, ch=86), U(8, 16, 4, ai=1, lv=32, ch=82), U(8, 16, 10, ai=1, lv=32, ch=79), U(2, 13, 7, lv=31),
+           U(2, 14, 5, lv=31), U(2, 14, 9, lv=31), U(5, 17, 5, ai=1, lv=31), U(5, 17, 11, ai=1, lv=31), U(8, 20, 7, lv=31), U(11, 23, 9, ai=1, lv=31)],
+          ("DEFEAT", 10, 0), 30, 8,
+          [OPEN(50, "NARRATOR", "simayi", "zhugeliang"), END(50, 2, "simayi", "zhugeliang", extra=[("GIVE_GOLD", 2500)])],
+          items=[(0, 2), (1, 2), (2, 2)])
+BT50["bgm"] = "BOSS"
+BT51 = BT(51, "击退曹丕", "连续战：兵力不会恢复。最后一战。",
+          M(28, 16, ("fort", 12, 1, 26, 14, "W"), ("camp", 19, 5, 23, 10), ("road", 7)),
+          SLOTS(3, 7),
+          [U(11, 21, 7, ai=1, lv=33, ch=87), U(8, 18, 7, ai=1, lv=33, ch=85), U(2, 15, 6, ai=1, lv=32), U(2, 15, 8, ai=1, lv=32),
+           U(2, 17, 4, ai=1, lv=32), U(2, 17, 10, ai=1, lv=32), U(5, 20, 4, ai=1, lv=32), U(5, 20, 11, ai=1, lv=32), U(8, 10, 5, lv=32), U(8, 10, 9, lv=32)],
+          ("DEFEAT", 10, 0), 30, 8,
+          [OPEN(51, "NARRATOR", "caopi", "P0001"), END(51, 2, "caopi", "P0001")],
+          cont="NO_REPLENISH", items=[(0, 2), (1, 2)])
+BT51["bgm"] = "BOSS"
+EXTRA += [BT37, BT38, BT39, BT40, BT41, BT42, BT43, BT44, BT45, BT46, BT47, BT48, BT49, BT50, BT51]
+
 
 def battle_json(bt):
     h, w = len(bt["map"]), len(bt["map"][0])
@@ -993,10 +1387,13 @@ def main():
     extra = {bt["id"]: bt for bt in EXTRA}
     camp_ids = []
     for b in camp_list["battles"]:
-        if b["camp"] and b["camp"] not in camp_ids:
-            camp_ids.append(b["camp"])
+        for cid_ in (b["camp"], (b.get("alt") or {}).get("camp")):
+            if cid_ and cid_ not in camp_ids:
+                camp_ids.append(cid_)
     char_ids = {c["id"] for c in chars}
     c = ["/* GENERATED by tools/gen_campaign.py - do not edit */", '#include "campaign_data.h"', '#include "text_data.h"']
+    un_c = ["#pragma bank 1   /* unit and level lists of the battles: flow.c reads them through the rom.c gateway */",
+            "/* GENERATED by tools/gen_campaign.py - do not edit */", '#include "campaign_data.h"']
     bt_c = ["#pragma bank 14   /* battle tables: read only by flow.c (same bank); others use its BANKED accessors */",
             "/* GENERATED by tools/gen_campaign.py - do not edit */", '#include "campaign_data.h"', '#include "text_data.h"']
     asset = ["#pragma bank 15   /* asset bank: terrain of battles 1..20 (read through the gateway) */", '#include "campaign_data.h"']
@@ -1030,8 +1427,9 @@ def main():
             if t["character"] not in char_ids:
                 die(f"{bid}: template character {t['character']} not registered")
         bt_c.append(f"extern const uint8_t {p}_terrain[];")
-        bt_c.append(f"static const Tech01Unit {p}_units[] = {{" + ", ".join("{%d, %d, %d, %d, %d, %d}" % u for u in units) + "};")
-        bt_c.append(f"static const uint8_t {p}_levels[] = {{" + ", ".join(["1"] * len(bt["slots"]) + [str(o["lv"]) for o in bt["others"]]) + "};")
+        un_c.append(f"const Tech01Unit {p}_units[] = {{" + ", ".join("{%d, %d, %d, %d, %d, %d}" % u for u in units) + "};")
+        un_c.append(f"const uint8_t {p}_levels[] = {{" + ", ".join(["1"] * len(bt["slots"]) + [str(o["lv"]) for o in bt["others"]]) + "};")
+        bt_c.append(f"extern const Tech01Unit {p}_units[]; extern const uint8_t {p}_levels[];")
         ei = [(len(bt["slots"]) + k, it) for k, it in bt["items"]]
         for _, it in ei:
             if it not in items:
@@ -1062,28 +1460,39 @@ def main():
         rect = bt.get("area", (0, 0, 0, 0))
         if vk == "REACH" and not (0 <= rect[0] <= rect[2] < w and 0 <= rect[1] <= rect[3] < h):
             die(f"{bid}: bad REACH area {rect}")
+        num = int(bid[3:])
+        bgm = bt.get("bgm") or ("BOSS" if num in BOSS_BATTLES else "TENSE" if bt["victory"][0] in ("REACH", "SURVIVE")
+                                 else "MARCH" if num >= 21 else "BATTLE")
+        if bgm not in MUS:
+            die(f"{bid}: unknown bgm {bgm}")
         rows[n] = (p, w, h, tbank, len(units), len(ei), len(bt["ai_groups"]), len(bt["treasures"]), bt["turn_limit"],
                    CONT[bt["continuity"]], ROUND[bt["round_mode"]], bt["deploy_max"], sum(1 << k for k in bt["forced"]),
-                   bt["seed"], VIC[vk], 0xFF if vu is None else vu, vr, 0xFF if bt["protect"] is None else bt["protect"]) + tuple(rect)
+                   bt["seed"], VIC[vk], 0xFF if vu is None else vu, vr, 0xFF if bt["protect"] is None else bt["protect"]) + tuple(rect) + (MUS[bgm],)
 
     (ROOT / "content/text/goals_zh.json").write_text(json.dumps(goals, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+
+    end_ids = list(camp_list["endings"])
 
     def node(i):
         b = camp_list["battles"][i]
         camp = "0xFF" if b["camp"] is None else str(camp_ids.index(b["camp"]))
         nxt = "0xFF" if b["next"] is None else str(ids.index(b["next"]))
-        return camp, nxt, b["title"]
+        alt = b.get("alt")                      # {"flag": global flag, "camp": .., "next": ..}: taken when the flag is set
+        tail = (f"{alt['flag']}, " + ("0xFF" if alt["camp"] is None else str(camp_ids.index(alt["camp"]))) + f", {ids.index(alt['next'])}"
+                if alt else "0xFF, 0xFF, 0xFF") + f", {end_ids.index(b.get('ending', end_ids[0]))}"
+        return camp, nxt, b["title"] + ", " + tail
     defs = ["const BattleDef battle_defs[N_BATTLES] = {"]
     cp, nx, ti = node(0)
     defs.append("    {TECH01_W, TECH01_H, TECH01_BANK, tech01_terrain, TECH01_UNITS, tech01_units, tech01_levels, TECH01_START_ITEMS, "
                 "tech01_start_items, TECH01_AI_GROUPS, tech01_ai_groups, TECH01_TREASURES, tech01_treasures, 30, 0, 0, "
-                f"TECH01_DEPLOY_MAX, 1, 1, {cp}, {nx}, {ti}, 0, 0xFF, 0, 0xFF, 0, 0, 0, 0}},")
+                f"TECH01_DEPLOY_MAX, 1, 1, {cp}, {nx}, {ti}, 0, 0xFF, 0, 0xFF, 0, 0, 0, 0, {MUS['BATTLE']}}},")
+    defs[-1] = defs[-1].replace("TECH01_DEPLOY_MAX, 1, 1, " + f"{cp}, {nx}, {ti}", "TECH01_DEPLOY_MAX, 1, 1, " + f"{cp}, {nx}, {ti}")
     for n in range(1, len(ids)):
         r = rows[n]
         cp, nx, ti = node(n)
         defs.append(f"    {{{r[1]}, {r[2]}, {r[3]}, {r[0]}_terrain, {r[4]}, {r[0]}_units, {r[0]}_levels, {r[5]}, {r[0]}_items, {r[6]}, "
                     f"{r[0]}_ai, {r[7]}, {r[0]}_tre, {r[8]}, {r[9]}, {r[10]}, {r[11]}, {r[12]}, {r[13]}, {cp}, {nx}, {ti}, "
-                    f"{r[14]}, {r[15]}, {r[16]}, {r[17]}, {r[18]}, {r[19]}, {r[20]}, {r[21]}}},")
+                    f"{r[14]}, {r[15]}, {r[16]}, {r[17]}, {r[18]}, {r[19]}, {r[20]}, {r[21]}, {r[22]}}},")
     defs.append("};")
     bt_c += defs
     # camps (2.2, C.4): bank 10 with camp.c, their only reader
@@ -1124,31 +1533,37 @@ def main():
         "/* GENERATED by tools/gen_campaign.py - do not edit */", '#include "campaign_data.h"', '#include "text_data.h"',
         "const uint16_t char_name[N_CHARS][2] = {" + ", ".join(f"{{{ch['id']}, {ch['name']}}}" for ch in chars) + "};"]) + "\n",
         encoding="utf-8")
-    c.append("const uint16_t ending_pages[][2] = {" + ", ".join(f"{{{SPK[s]}, {t}}}" for s, t in camp_list["ending"]) + "};")
+    for k, e in enumerate(end_ids):
+        bt_c.append(f"static const uint16_t ending_{k}[][2] = {{" + ", ".join(f"{{{SPK[s]}, {t}}}" for s, t in camp_list["endings"][e]) + "};")
+    bt_c.append("const uint16_t (*const ending_pages[N_ENDINGS])[2] = {" + ", ".join(f"ending_{k}" for k in range(len(end_ids))) + "};")
+    bt_c.append("const uint8_t ending_len[N_ENDINGS] = {" + ", ".join(str(len(camp_list["endings"][e])) for e in end_ids) + "};")
     h_ = ["/* GENERATED by tools/gen_campaign.py - do not edit */", "#ifndef CAMPAIGN_DATA_H", "#define CAMPAIGN_DATA_H",
           "#include <stdint.h>", '#include "tech01_data.h"',
           f"#define N_BATTLES {len(ids)}u", f"#define N_CAMPS {len(camp_ids)}u", f"#define N_ROSTER_INIT {len(roster)}u",
           f"#define N_CHARS {len(chars)}u",
-          f"#define N_JOINERS {len(json.loads((ROOT / 'content/roster.json').read_text(encoding='utf-8')).get('joiners', []))}u", f"#define N_ENDING_PAGES {len(camp_list['ending'])}u",
+          f"#define N_JOINERS {len(json.loads((ROOT / 'content/roster.json').read_text(encoding='utf-8')).get('joiners', []))}u", f"#define N_ENDINGS {len(camp_list['endings'])}u   /* " + " ".join(camp_list["endings"]) + " */",
+          "#define BD_UNITS_BANK 1u   /* units / levels of battles 1+ (battle 0's are in bank 0: any bank reads them) */",
           "#define CONT_NORMAL 0u\n#define CONT_NO_REPLENISH 1u\n#define ROUND_RESET 0u\n#define ROUND_CARRY 1u",
           "typedef struct {",
           "    uint8_t w, h, tbank;                 /* terrain in ROM bank tbank */",
           "    const uint8_t *terrain;",
-          "    uint8_t n_units; const Tech01Unit *units; const uint8_t *levels;   /* player slots first */",
+          "    uint8_t n_units; const Tech01Unit *units; const uint8_t *levels;   /* player slots first; in BD_UNITS_BANK */",
           "    uint8_t n_items; const uint8_t (*items)[2];                      /* start items (unit, item) */",
           "    uint8_t n_ai; const uint8_t *ai;                                 /* AI groups, 5 B each */",
           "    uint8_t n_tre; const uint8_t (*tre)[3];                          /* treasures (x, y, item) */",
           "    uint16_t turn_limit;",
           "    uint8_t continuity, round_mode, deploy_max, forced, seed;        /* forced: bit k = officer k */",
           "    uint8_t camp, next, title_tx;                                    /* 0xFF: continuous / ending */",
+          "    uint8_t alt_flag, alt_camp, alt_next, ending;                    /* branch: global flag set -> the alt edge */",
           "    uint8_t vic_kind, vic_unit, vic_round, protect;                  /* 6.6 objectives (VIC_*) */",
           "    uint8_t vic_x0, vic_y0, vic_x1, vic_y1;                          /* VIC_REACH area */",
+          "    uint8_t bgm;                                                     /* MUS_* (music_data.h) */",
           "} BattleDef;",
           "typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; uint8_t join; } CampDef;   /* join: joiner index or FF */",
           "typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd; uint16_t name_tx; uint8_t items[8]; } RosterInit;",
           "extern const BattleDef battle_defs[N_BATTLES];   /* ROM bank 14 (flow.c only) */", "extern const CampDef camp_defs[N_CAMPS];          /* ROM bank 10 (camp.c only) */",
           "extern const RosterInit roster_init[N_ROSTER_INIT];   /* ROM bank 14 (flow.c only) */",
-          "extern const RosterInit join_defs[];             /* OP_JOIN table (content/roster.json joiners) */", "extern const uint16_t ending_pages[][2];",
+          "extern const RosterInit join_defs[];             /* OP_JOIN table (content/roster.json joiners) */", "extern const uint16_t (*const ending_pages[N_ENDINGS])[2];   /* ROM bank 14 */", "extern const uint8_t ending_len[N_ENDINGS];",
           "extern const uint16_t char_name[N_CHARS][2];   /* character id -> TX name; ROM bank 5 (main.c only) */",
           "extern const uint8_t tech01_levels[];",
           "#ifdef __SDCC",
@@ -1163,6 +1578,7 @@ def main():
     (ROOT / "src/gen/campaign_data.h").write_text("\n".join(h_) + "\n", encoding="utf-8")
     (ROOT / "src/gen/campaign_data.c").write_text("\n".join(c) + "\n", encoding="utf-8")
     (ROOT / "src/gen/campaign_camps.c").write_text("\n".join(camp_c) + "\n", encoding="utf-8")
+    (ROOT / "src/gen/campaign_units.c").write_text("\n".join(un_c) + "\n", encoding="utf-8")
     (ROOT / "src/gen/campaign_battles.c").write_text("\n".join(bt_c) + "\n", encoding="utf-8")
     (ROOT / "src/gen/campaign_assets.c").write_text("\n".join(asset) + "\n", encoding="utf-8")
     (ROOT / "src/gen/campaign_assets_b.c").write_text("\n".join(asset_b) + "\n", encoding="utf-8")

@@ -129,6 +129,9 @@ void audio_init(void)
     set_interrupts(VBL_IFLAG | TIM_IFLAG);
 }
 
+uint8_t cur_bgm;                         /* the current battle's music (BattleDef.bgm or a script's BGM) */
+void music_play_id(uint8_t id) { if (id < MUS_COUNT) music_play(mus_songs[id]); }
+
 void music_play(const Song *s)
 {
     uint8_t c;

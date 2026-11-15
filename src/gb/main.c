@@ -460,7 +460,9 @@ static void play_duel(void)
     sl.cls = d->l_cls; sl.fac = d->l_fac; sl.hp = d->l_hp;
     memset(&r, 0, sizeof r);
     r.hit = 1; r.dmg = (uint16_t)(d->l_hp - u.hp); r.killed = d->retreated;
+    music_play_id(MUS_DUEL);                   /* the duel has its own theme; the battle's music returns after */
     fs_present(&sw, &sl, &r);
+    music_play_id(cur_bgm);
 }
 
 void play_queue(void) BANKED
@@ -987,6 +989,7 @@ static void logic(void)
             if (prev_camp_battle() != 0xFF) { hud_space(1); hud_tx(1, TX_LOSE_CAMP, 0); }
         }
         hud_end();
+        music_play_id(B.outcome == OUT_WIN ? MUS_VICTORY : MUS_DEFEAT);
         timer = 40;                            /* ignore presses still in flight from the last action */
         input_flush();
         publish_inv();
@@ -1033,7 +1036,7 @@ static void logic(void)
                 DISPLAY_OFF;                   /* GBDK waits for VBlank itself; vb_wait lives in bank 10 */
                 state = G_IDLE; hud_dirty = 1;
                 map_mode_restore();
-                music_play(&song_battle);
+                music_play_id(cur_bgm);
             } else { hud_begin(); hud_tx(0, TX_LOAD_FAIL, 0); hud_end(); new_game(); }
         } else if (in_pressed & J_B) {
             show_help();                       /* T-RULE-02: the rules, then the cover again */
@@ -1041,6 +1044,7 @@ static void logic(void)
             DISPLAY_OFF;                   /* GBDK waits for VBlank itself; vb_wait lives in bank 10 */
             new_game();
             map_mode_restore();
+            music_play_id(cur_bgm);            /* the cover's theme gives way to the battle's */
         }
         break;
     default:
@@ -1111,7 +1115,6 @@ void game_run(void) BANKED
     input_init();
     audio_init();
     audio_ready = 1;
-    music_play(&song_battle);
     SPRITES_8x16;
     SHOW_BKG; SHOW_WIN; SHOW_SPRITES;
     show_title();                              /* the game always opens on the cover */

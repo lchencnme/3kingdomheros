@@ -1,5 +1,5 @@
 {
-  "_comment": "战役顺序（设计文档 2.1、2.4、15.2 第一至三章）。camp = 战后进入的营地（null = 连续战：只先分配战利品，直接进入下一关）；next = null 表示本章结局。",
+  "_comment": "战役顺序（设计文档 2.1、2.4、15.2 全七章）。camp = 战后进入的营地（null = 连续战）；next = null 表示结局（ending）；alt = 全局旗标成立时走的另一条路（麦城分歧）。",
   "start": "BT_TECH01",
   "battles": [
     {
@@ -155,22 +155,217 @@
     {
       "id": "BT_25",
       "title": "TX_BT_TITLE_27",
+      "camp": "CAMP_C4_JIANGLING",
+      "next": "BT_26"
+    },
+    {
+      "id": "BT_26",
+      "title": "TX_BT_TITLE_28",
+      "camp": "CAMP_C5_NANJUN",
+      "next": "BT_27"
+    },
+    {
+      "id": "BT_27",
+      "title": "TX_BT_TITLE_29",
+      "camp": "CAMP_C5_LINGLING",
+      "next": "BT_28"
+    },
+    {
+      "id": "BT_28",
+      "title": "TX_BT_TITLE_30",
       "camp": null,
-      "next": null
+      "next": "BT_29"
+    },
+    {
+      "id": "BT_29",
+      "title": "TX_BT_TITLE_31",
+      "camp": "CAMP_C5_WULING",
+      "next": "BT_30"
+    },
+    {
+      "id": "BT_30",
+      "title": "TX_BT_TITLE_32",
+      "camp": "CAMP_C5_CHANGSHA",
+      "next": "BT_31"
+    },
+    {
+      "id": "BT_31",
+      "title": "TX_BT_TITLE_33",
+      "camp": "CAMP_C5_FUGUAN",
+      "next": "BT_32"
+    },
+    {
+      "id": "BT_32",
+      "title": "TX_BT_TITLE_34",
+      "camp": "CAMP_C5_BAJUN",
+      "next": "BT_33"
+    },
+    {
+      "id": "BT_33",
+      "title": "TX_BT_TITLE_35",
+      "camp": null,
+      "next": "BT_34"
+    },
+    {
+      "id": "BT_34",
+      "title": "TX_BT_TITLE_36",
+      "camp": "CAMP_C5_LUOCHENG",
+      "next": "BT_35"
+    },
+    {
+      "id": "BT_35",
+      "title": "TX_BT_TITLE_37",
+      "camp": "CAMP_C5_JIAMENG",
+      "next": "BT_36"
+    },
+    {
+      "id": "BT_36",
+      "title": "TX_BT_TITLE_38",
+      "camp": "CAMP_C6_CHENGDU",
+      "next": "BT_37"
+    },
+    {
+      "id": "BT_37",
+      "title": "TX_BT_TITLE_39",
+      "camp": "CAMP_C6_WAKOU",
+      "next": "BT_38"
+    },
+    {
+      "id": "BT_38",
+      "title": "TX_BT_TITLE_40",
+      "camp": null,
+      "next": "BT_39"
+    },
+    {
+      "id": "BT_39",
+      "title": "TX_BT_TITLE_41",
+      "camp": "CAMP_C6_DINGJUN",
+      "next": "BT_40"
+    },
+    {
+      "id": "BT_40",
+      "title": "TX_BT_TITLE_42",
+      "camp": "CAMP_C6_HANSHUI",
+      "next": "BT_41"
+    },
+    {
+      "id": "BT_41",
+      "title": "TX_BT_TITLE_43",
+      "camp": "CAMP_C7_HANZHONG",
+      "next": "BT_42"
+    },
+    {
+      "id": "BT_42",
+      "title": "TX_BT_TITLE_44",
+      "camp": "CAMP_C7_XIANGFAN",
+      "next": "BT_43"
+    },
+    {
+      "id": "BT_43",
+      "title": "TX_BT_TITLE_45",
+      "camp": "CAMP_C7_SHU",
+      "next": "BT_44",
+      "alt": {
+        "flag": 17,
+        "camp": "CAMP_C7_JINGZHOU",
+        "next": "BT_46"
+      }
+    },
+    {
+      "id": "BT_44",
+      "title": "TX_BT_TITLE_46",
+      "camp": null,
+      "next": "BT_45"
+    },
+    {
+      "id": "BT_45",
+      "title": "TX_BT_TITLE_47",
+      "camp": null,
+      "next": null,
+      "ending": "A"
+    },
+    {
+      "id": "BT_46",
+      "title": "TX_BT_TITLE_48",
+      "camp": "CAMP_C7_WANCHENG",
+      "next": "BT_47"
+    },
+    {
+      "id": "BT_47",
+      "title": "TX_BT_TITLE_49",
+      "camp": "CAMP_C7_LUOYANG",
+      "next": "BT_48"
+    },
+    {
+      "id": "BT_48",
+      "title": "TX_BT_TITLE_50",
+      "camp": null,
+      "next": "BT_49"
+    },
+    {
+      "id": "BT_49",
+      "title": "TX_BT_TITLE_51",
+      "camp": "CAMP_C7_XUCHANG",
+      "next": "BT_50"
+    },
+    {
+      "id": "BT_50",
+      "title": "TX_BT_TITLE_52",
+      "camp": null,
+      "next": "BT_51"
+    },
+    {
+      "id": "BT_51",
+      "title": "TX_BT_TITLE_53",
+      "camp": null,
+      "next": null,
+      "ending": "B"
     }
   ],
-  "ending": [
-    [
-      "LIUBEI",
-      "TXD_END_1"
+  "endings": {
+    "A": [
+      [
+        "NARRATOR",
+        "TXD_ENDA_1"
+      ],
+      [
+        "LIUBEI",
+        "TXD_ENDA_2"
+      ],
+      [
+        "ZHUGELIANG",
+        "TXD_ENDA_3"
+      ],
+      [
+        "LIUBEI",
+        "TXD_ENDA_4"
+      ],
+      [
+        "NARRATOR",
+        "TXD_ENDA_5"
+      ]
     ],
-    [
-      "NARRATOR",
-      "TXD_END_2"
-    ],
-    [
-      "NARRATOR",
-      "TXD_END_3"
+    "B": [
+      [
+        "NARRATOR",
+        "TXD_ENDB_1"
+      ],
+      [
+        "ZHANGFEI",
+        "TXD_ENDB_2"
+      ],
+      [
+        "GUANYU",
+        "TXD_ENDB_3"
+      ],
+      [
+        "LIUBEI",
+        "TXD_ENDB_4"
+      ],
+      [
+        "NARRATOR",
+        "TXD_ENDB_5"
+      ]
     ]
-  ]
+  }
 }

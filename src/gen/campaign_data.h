@@ -3,12 +3,13 @@
 #define CAMPAIGN_DATA_H
 #include <stdint.h>
 #include "tech01_data.h"
-#define N_BATTLES 26u
-#define N_CAMPS 20u
+#define N_BATTLES 52u
+#define N_CAMPS 40u
 #define N_ROSTER_INIT 4u
 #define N_CHARS 80u
-#define N_JOINERS 3u
-#define N_ENDING_PAGES 3u
+#define N_JOINERS 6u
+#define N_ENDINGS 2u   /* A B */
+#define BD_UNITS_BANK 1u   /* units / levels of battles 1+ (battle 0's are in bank 0: any bank reads them) */
 #define CONT_NORMAL 0u
 #define CONT_NO_REPLENISH 1u
 #define ROUND_RESET 0u
@@ -16,15 +17,17 @@
 typedef struct {
     uint8_t w, h, tbank;                 /* terrain in ROM bank tbank */
     const uint8_t *terrain;
-    uint8_t n_units; const Tech01Unit *units; const uint8_t *levels;   /* player slots first */
+    uint8_t n_units; const Tech01Unit *units; const uint8_t *levels;   /* player slots first; in BD_UNITS_BANK */
     uint8_t n_items; const uint8_t (*items)[2];                      /* start items (unit, item) */
     uint8_t n_ai; const uint8_t *ai;                                 /* AI groups, 5 B each */
     uint8_t n_tre; const uint8_t (*tre)[3];                          /* treasures (x, y, item) */
     uint16_t turn_limit;
     uint8_t continuity, round_mode, deploy_max, forced, seed;        /* forced: bit k = officer k */
     uint8_t camp, next, title_tx;                                    /* 0xFF: continuous / ending */
+    uint8_t alt_flag, alt_camp, alt_next, ending;                    /* branch: global flag set -> the alt edge */
     uint8_t vic_kind, vic_unit, vic_round, protect;                  /* 6.6 objectives (VIC_*) */
     uint8_t vic_x0, vic_y0, vic_x1, vic_y1;                          /* VIC_REACH area */
+    uint8_t bgm;                                                     /* MUS_* (music_data.h) */
 } BattleDef;
 typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; uint8_t join; } CampDef;   /* join: joiner index or FF */
 typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd; uint16_t name_tx; uint8_t items[8]; } RosterInit;
@@ -32,7 +35,8 @@ extern const BattleDef battle_defs[N_BATTLES];   /* ROM bank 14 (flow.c only) */
 extern const CampDef camp_defs[N_CAMPS];          /* ROM bank 10 (camp.c only) */
 extern const RosterInit roster_init[N_ROSTER_INIT];   /* ROM bank 14 (flow.c only) */
 extern const RosterInit join_defs[];             /* OP_JOIN table (content/roster.json joiners) */
-extern const uint16_t ending_pages[][2];
+extern const uint16_t (*const ending_pages[N_ENDINGS])[2];   /* ROM bank 14 */
+extern const uint8_t ending_len[N_ENDINGS];
 extern const uint16_t char_name[N_CHARS][2];   /* character id -> TX name; ROM bank 5 (main.c only) */
 extern const uint8_t tech01_levels[];
 #ifdef __SDCC

@@ -185,6 +185,7 @@ _MAPS = []
 for _bt in _CAMPAIGN["battles"]:
     _bj = _json.load(open(ROM.resolve().parents[2] / f"content/battles/{_bt['id']}.json"))
     _MAPS.append((_bj["map"]["width"], _bj["map"]["height"], _bj["map"]["terrain"], [tuple(x) for x in _bj.get("treasures", [])]))
+_MUS = {_json.load(open(_p))["id"][5:]: _k for _k, _p in enumerate(sorted((ROM.resolve().parents[2] / "content/music").glob("*.json")))}
 _IDX = (ROM.resolve().parents[2] / "src/gen/tech01_index.c").read_text()
 _META = [list(map(int, m.split(","))) for m in _re.findall(r"\{(\d+, \d+, \d+, \d+)\}",
          _re.search(r"tech01_meta\[12\]\[4\] = \{(.*?)\};", _IDX).group(1))]
@@ -1262,7 +1263,121 @@ check("BT_25 map consistent", view_mismatches(it) == 0)
 win_now(it, [7])                                          # 张辽
 check("BT_25 won by driving off 张辽", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
 it.press("a", after=16)
-check("BT_25: the spoils first, then the ending", camp_wait(it, 25, 300))
+through_camp(it)                                          # 荆州 camp
+
+# ------------------------------------------------------------------ Chapter 5 荆益 (BT_26..BT_36)
+def hold_to(em, rnd):
+    """SURVIVE battles: jump to the hold round and let it end"""
+    em.m[SYMS["_B"] + 8] = rnd; em.m[SYMS["_B"] + 9] = 0
+    end_turn_outcome(em)
+
+def expect(em, n, name):
+    check(f"BT_{n} {name} ({em.r8('_dbg_battle')})", em.r8("_dbg_battle") == n and em.state() == G_IDLE)
+    em.frames(60)
+    check(f"BT_{n} map consistent", view_mismatches(em) == 0)
+
+expect(it, 26, "南郡")
+check(f"music: 南郡 (reach the city) plays the tense theme (bgm {it.m[SYMS['_cur_bgm']]})", it.m[SYMS["_cur_bgm"]] == _MUS["TENSE"])
+put(it, 0, 19, 6)
+end_turn_outcome(it)
+check(f"BT_26: 刘备 inside the city wins (outcome {it.r8('_dbg_outcome')})", it.r8("_dbg_outcome") == 1)
+it.press("a", after=16); through_camp(it)
+expect(it, 27, "零陵"); win_now(it, [10]); it.press("a", after=16); through_camp(it)
+expect(it, 28, "桂阳"); win_now(it, [10]); it.press("a", after=16); through_camp(it, deploy=False)
+expect(it, 29, "武陵")
+it.m[SYMS["_B"] + 8] = 3; it.m[SYMS["_B"] + 9] = 0
+it.end_turn(); it.wait_state([G_IDLE, G_OUTCOME], 4000)
+check(f"BT_29: 巩志 changes sides (unit 11 side {it.m[1, 0xD000 + 40 * 11 + 3]}, vm {it.r8('_dbg_vm_err')})",
+      it.m[1, 0xD000 + 40 * 11 + 3] == 1 and it.r8("_dbg_vm_err") == 0)
+win_now(it, [10]); it.press("a", after=16); through_camp(it)
+expect(it, 30, "长沙")
+n_ro = sram(it, 12, 7890)
+win_now(it, [10]); it.press("a", after=16)
+check(f"长沙: 黄忠 and 魏延 join (roster {n_ro} -> {sram(it, 12, 7890)})",
+      sram(it, 12, 7890) == n_ro + 2 and sram(it, 12, n_ro * 48) == 65 and sram(it, 12, (n_ro + 1) * 48) == 66)
+through_camp(it)
+expect(it, 31, "涪关"); win_now(it, [10]); it.press("a", after=16); through_camp(it)
+expect(it, 32, "巴郡"); win_now(it, [10]); it.press("a", after=16); through_camp(it)
+expect(it, 33, "落凤坡")
+hold_to(it, 6)
+check(f"BT_33: held to round 6; 庞统 fell at 落凤坡 (outcome {it.r8('_dbg_outcome')}, 庞统 hp {it.hp(10)}, bgm {it.m[SYMS['_cur_bgm']]})",
+      it.r8("_dbg_outcome") == 1 and it.hp(10) == 0 and it.m[SYMS["_cur_bgm"]] == _MUS["SAD"])
+it.press("a", after=16); through_camp(it, deploy=False)
+expect(it, 34, "雒城"); win_now(it, [10]); it.press("a", after=16); through_camp(it)
+expect(it, 35, "葭萌关")
+hold_to(it, 8)
+check(f"BT_35: held to round 8 (outcome {it.r8('_dbg_outcome')})", it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it)
+check(f"葭萌关 camp: 马超 joined (roster {sram(it, 12, 7890)}, last character {sram(it, 12, (sram(it, 12, 7890) - 1) * 48)})",
+      sram(it, 12, (sram(it, 12, 7890) - 1) * 48) == 74)
+expect(it, 36, "成都")
+put(it, 0, 20, 7)
+end_turn_outcome(it)
+check(f"BT_36: 刘备 inside 成都 wins (outcome {it.r8('_dbg_outcome')})", it.r8("_dbg_outcome") == 1)
+it.press("a", after=16)
+through_camp(it)                                          # 成都 camp
+
+# ------------------------------------------------------------------ Chapter 6 汉中 (BT_37..BT_41)
+expect(it, 37, "瓦口隘"); win_now(it, [10]); it.press("a", after=16); through_camp(it)
+expect(it, 38, "天荡山"); win_now(it, [10]); it.press("a", after=16); through_camp(it, deploy=False)
+expect(it, 39, "定军山")
+check(f"music: 定军山 plays the big-battle theme (bgm {it.m[SYMS['_cur_bgm']]})", it.m[SYMS["_cur_bgm"]] == _MUS["BOSS"])
+win_now(it, [10]); it.press("a", after=16); through_camp(it)
+expect(it, 40, "汉水"); hold_to(it, 8)
+check(f"BT_40: held to round 8 (outcome {it.r8('_dbg_outcome')})", it.r8("_dbg_outcome") == 1)
+it.press("a", after=16); through_camp(it)
+expect(it, 41, "阳平关"); win_now(it, [10]); it.press("a", after=16); through_camp(it)
+
+# ------------------------------------------------------------------ Chapter 7 分歧 (BT_42, BT_43 and the two routes)
+expect(it, 42, "水淹七军")
+check(f"BT_42: it rains (weather {it.m[SYMS['_B'] + 13]})", it.m[SYMS["_B"] + 13] == 1)
+win_now(it, [10]); it.press("a", after=16)
+check(f"after 襄樊 关羽 stays in 荆州 (fate {sram(it, 12, 48 + 2)})", sram(it, 12, 48 + 2) == 2)
+through_camp(it)
+expect(it, 43, "麦城")
+check(f"BT_43: 关羽 holds 麦城 as an ally (unit 10 character {it.m[1, 0xD000 + 400]}, side {it.m[1, 0xD000 + 403]})",
+      it.m[1, 0xD000 + 400] == 2 and it.m[1, 0xD000 + 403] == 1)
+with open(ROM.parent / "bt43.state", "wb") as _f:
+    it.pb.save_state(_f)
+# the route of history: 关羽 falls, then 吕蒙 is driven off -> 夷陵 -> 白帝城 -> ending A
+hi = Emu()
+with open(ROM.parent / "bt43.state", "rb") as _f:
+    hi.pb.load_state(_f)
+hi.frames(10)
+win_now(hi, [10, 11])
+check(f"麦城 without 关羽: still a victory (outcome {hi.r8('_dbg_outcome')})", hi.r8("_dbg_outcome") == 1)
+hi.press("a", after=16); through_camp(hi)
+check(f"history route: 关羽 lost -> BT_44 夷陵 ({hi.r8('_dbg_battle')})", hi.r8("_dbg_battle") == 44 and hi.state() == G_IDLE)
+hold_to(hi, 6)
+hi.press("a", after=16); through_camp(hi, deploy=False)
+check(f"BT_45 白帝城 follows directly ({hi.r8('_dbg_battle')})", hi.r8("_dbg_battle") == 45 and hi.state() == G_IDLE)
+put(hi, 0, 3, 6)
+end_turn_outcome(hi)
+hi.press("a", after=16)
+for _ in range(3000):
+    if hi.state() == G_TITLE and hi.r8("_dbg_dialog_active") == 0:
+        break
+    hi.frames(1)
+check(f"ending A 白帝托孤 -> title (state {hi.state()})", hi.state() == G_TITLE)
+hi.pb.stop(save=False)
+# the other route: 关羽 saved (吕蒙 driven off with 关羽 alive) -> 北伐 -> ending B
+win_now(it, [11])
+check("麦城 with 关羽 alive: victory", it.r8("_dbg_outcome") == 1 and it.hp(10) > 0)
+it.press("a", after=16)
+check(f"关羽 returns to the party (fate {sram(it, 12, 48 + 2)})", sram(it, 12, 48 + 2) == 1)
+through_camp(it)
+expect(it, 46, "宛城")
+check("route: 关羽 saved -> the northern campaign (BT_46, 关羽 deployed)", it.hp(1) > 0)
+win_now(it, [10]); it.press("a", after=16); through_camp(it)
+expect(it, 47, "洛阳"); win_now(it, [10]); it.press("a", after=16); through_camp(it)
+expect(it, 48, "许昌"); win_now(it, [10]); it.press("a", after=16); through_camp(it, deploy=False)
+expect(it, 49, "许昌宫城")
+put(it, 0, 19, 6)
+end_turn_outcome(it)
+it.press("a", after=16); through_camp(it)
+expect(it, 50, "邺城"); win_now(it, [10]); it.press("a", after=16); through_camp(it, deploy=False)
+expect(it, 51, "铜雀台"); win_now(it, [10]); it.press("a", after=16)
 for k in range(48):
     if it.state() != 25:
         break
@@ -1271,7 +1386,7 @@ for _ in range(1500):                                     # the ending pages run
     if it.state() == G_TITLE and it.r8("_dbg_dialog_active") == 0:
         break
     it.frames(1)
-check(f"chapter 4 won -> ending -> title (state {it.state()})", it.state() == G_TITLE)
+check(f"ending B 兴复汉室 -> title (state {it.state()})", it.state() == G_TITLE)
 it.frames(10); it.png(ROM.parent / "shot_title.png")
 ram_end = it.power_off()
 # cold boot: the camp save is offered at the title (SELECT)

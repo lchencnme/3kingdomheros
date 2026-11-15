@@ -202,6 +202,11 @@ static uint8_t run_code(Battle *b, const VmFact *f, uint16_t off, uint16_t len)
                 if (unit_alive(&u) && rd16(a + 1) && u.hp > rd16(a + 1)) { u.hp = rd16(a + 1); unit_store(a[0], &u); }
             }
             break;
+        case OP_BGM:
+            vm_read((uint16_t)(off + 1u), a, 1);
+            off += 2;
+            vm_bgm(a[0]);
+            break;
         case OP_GIVE_ITEM:
             vm_read((uint16_t)(off + 1u), a, 1);
             off += 2;

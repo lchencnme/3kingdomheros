@@ -159,11 +159,11 @@ static void compose(uint8_t k)
         break;
     case SC_DEPLOY:
         if (k == 0) { hud_tx(0, TX_CMD_DEPART, 0); hud_space(0); hud_num(0, C->dep->n); hud_glyph(0, GLYPH_SLASH); hud_num(0, C->deploy_max); }
-        else if (k >= 1 && k <= N_OFF) {
-            uint8_t o = (uint8_t)(k - 1u), d = dep_index(o);
+        else if (k >= 1 && k <= 7 && (uint8_t)(C->top + k - 1u) < N_OFF) {
+            uint8_t o = (uint8_t)(C->top + k - 1u), d = dep_index(o);
             arrow(C->cur == o); hud_tx(0, name_tx(o), 0); hud_space(0);
             if (d != 0xFF) { hud_tx(0, TX_DEP_MARK, 0); hud_num(0, (uint16_t)(d + 1u)); }
-            if (C->forced & (1u << o)) { hud_space(0); hud_tx(0, TX_FORCED, 0); }
+            if (o < 8u && (C->forced & (1u << o))) { hud_space(0); hud_tx(0, TX_FORCED, 0); }
         } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_DEPLOY_HINT, 0);
         break;
     case SC_PRIZE:                                         /* 7.4: distribute / sell / discard every prize */
@@ -408,9 +408,12 @@ static uint8_t step(uint8_t pressed)
     }
     case SC_DEPLOY:
         if (up || down) {
-            uint8_t old = C->cur;
+            uint8_t old = C->cur, top0 = C->top;
             C->cur = (uint8_t)(up ? (C->cur + N_OFF - 1u) % N_OFF : (C->cur + 1u) % N_OFF);
-            draw((uint8_t)(old + 1u)); draw((uint8_t)(C->cur + 1u));
+            if (C->cur < C->top) C->top = C->cur;                    /* 7 lines: keep the cursor in view */
+            else if (C->cur >= C->top + 7u) C->top = (uint8_t)(C->cur - 6u);
+            if (C->top != top0) { uint8_t k; for (k = 1; k <= 7; k++) draw(k); }
+            else { draw((uint8_t)(old - C->top + 1u)); draw((uint8_t)(C->cur - C->top + 1u)); }
         } else if (pressed & J_A) {
             uint8_t d = dep_index(C->cur), k;
             if (d != 0xFF) {
@@ -447,7 +450,7 @@ void camp_run(uint16_t *gold, CampDeploy *dep, uint8_t mode, uint8_t next_bt, ui
     camp.gold = gold; camp.dep = dep; camp.pick = 0xFF; camp.mode = mode; camp.next = next_bt;
     camp.camp = camp_idx < N_CAMPS ? camp_idx : 0u;
     if (mode == CAMP_FULL && camp_defs[camp.camp].join != 0xFFu) join_officer(camp_defs[camp.camp].join);   /* e.g. 三顾茅庐 (2.4 JOIN) */
-    camp.n_off = roster_count() < 7u ? roster_count() : 7u;   /* deployment list: lines 1..7 */
+    camp.n_off = roster_count() < CAMP_MAX_OFF ? roster_count() : CAMP_MAX_OFF;   /* the deployment list scrolls */
     camp.council = camp_council_done; camp_council_done = 0;   /* loaded save / back from a defeat */
     camp.deploy_max = 4; camp.forced = 1;                   /* no next battle (ending) */
     bd_deploy_rule(next_bt, &camp.deploy_max, &camp.forced);   /* battle tables: bank 14 */

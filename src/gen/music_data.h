@@ -10,6 +10,27 @@ extern const uint16_t mus_wave_reg[96];
 extern const uint8_t mus_wave_soft[16];
 #define MUSIC_BANK 17u   /* songs live in ROM bank 17; the audio ISR maps it while it reads */
 extern const Song song_battle;   /* 旌旗缓行 */
+#define MUS_BATTLE 0u
+extern const Song song_boss;   /* 鏖战 */
+#define MUS_BOSS 1u
 extern const Song song_camp;   /* 营火 */
+#define MUS_CAMP 2u
+extern const Song song_defeat;   /* 败走 */
+#define MUS_DEFEAT 3u
+extern const Song song_duel;   /* 单挑 */
+#define MUS_DUEL 4u
 extern const Song song_end;   /* 归营 */
+#define MUS_END 5u
+extern const Song song_march;   /* 长驱 */
+#define MUS_MARCH 6u
+extern const Song song_sad;   /* 悲歌 */
+#define MUS_SAD 7u
+extern const Song song_tense;   /* 危局 */
+#define MUS_TENSE 8u
+extern const Song song_title;   /* 桃园 */
+#define MUS_TITLE 9u
+extern const Song song_victory;   /* 凯旋 */
+#define MUS_VICTORY 10u
+#define MUS_COUNT 11u
+extern const Song *const mus_songs[MUS_COUNT];   /* by MUS_* id (scripts, battle definitions) */
 #endif

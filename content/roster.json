@@ -111,6 +111,51 @@
         6,
         17
       ]
+    },
+    {
+      "character": 65,
+      "tag": "CH_HUANGZHONG",
+      "name": "TX_NAME_HUANGZHONG",
+      "class": 4,
+      "level": 20,
+      "base": [
+        84,
+        60,
+        76
+      ],
+      "items": [
+        1
+      ]
+    },
+    {
+      "character": 66,
+      "tag": "CH_WEIYAN",
+      "name": "TX_NAME_WEIYAN",
+      "class": 1,
+      "level": 20,
+      "base": [
+        82,
+        48,
+        72
+      ],
+      "items": [
+        0
+      ]
+    },
+    {
+      "character": 74,
+      "tag": "CH_MACHAO",
+      "name": "TX_NAME_MACHAO",
+      "class": 7,
+      "level": 22,
+      "base": [
+        88,
+        44,
+        78
+      ],
+      "items": [
+        1
+      ]
     }
   ]
 }

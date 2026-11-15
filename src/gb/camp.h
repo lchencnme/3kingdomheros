@@ -5,6 +5,7 @@
 #include <gb/gb.h>
 
 #define CAMP_DBG_STATE 20u        /* dbg_state = 20 + screen while the camp is open (tests) */
+#define CAMP_MAX_OFF 12u     /* officers the camp handles (unit instances 0..11 while the camp is open) */
 #define CAMP_MAX_DEPLOY 8u   /* = SAVE_MAX_DEPLOY: buffers of deploy orders (2.3) */
 
 /* deployment result: officer indices (0 刘备, 1 关羽, 2 张飞, 3 简雍) in slot order */

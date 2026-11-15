@@ -12,6 +12,8 @@
 
 void audio_init(void);
 void music_play(const Song *s);
+void music_play_id(uint8_t id);          /* MUS_* (src/gen/music_data.h) */
+extern uint8_t cur_bgm;                  /* the battle's music: restored after a duel / presentation */
 void music_stop(void);
 void sfx_play(uint8_t id);
 #endif

@@ -1,5 +1,7 @@
 #pragma bank 14   /* game flow: battle setup, enemy phase, campaign transitions (split from main.c) */
 #include "../gen/title_data.h"
+#include "../gen/scroll_data.h"
+extern uint8_t scroll_sel;
 #include <string.h>
 #include "game.h"
 
@@ -16,7 +18,7 @@ static void prewarm_next(void);
 static void sync_officers(void);
 static void camp_prepare(void);
 static void camp_finish(void);
-static void play_pages(const uint16_t (*pages)[2], uint8_t n);
+void play_pages(const uint16_t (*pages)[2], uint8_t n) BANKED;
 static void go_next(uint8_t next);
 
 /* ---------------------------------------------------------------- save (design doc 11.6) */
@@ -47,6 +49,7 @@ uint8_t do_suspend_load(void) BANKED
     B.turn_limit = BD->turn_limit;              /* from the battle definition, not the save */
     B.vic_kind = BD->vic_kind; B.vic_unit = BD->vic_unit; B.vic_round = BD->vic_round; B.protect = BD->protect;
     B.vic_x0 = BD->vic_x0; B.vic_y0 = BD->vic_y0; B.vic_x1 = BD->vic_x1; B.vic_y1 = BD->vic_y1;
+    cur_bgm = BD->bgm;
     options = ui.options;
     gold = (uint16_t)ui.gold;
     cam_x = ui.cam_x; cam_y = ui.cam_y; cur_x = ui.cur_x; cur_y = ui.cur_y;
@@ -57,12 +60,17 @@ uint8_t do_suspend_load(void) BANKED
     return SAVE_OK;
 }
 
+/* unit record i / level i of the current battle: the lists live in BD_UNITS_BANK (6 KiB for 52 battles) */
+static Tech01Unit bdu;
+static const Tech01Unit *bd_unit(uint8_t i) { rom_copy(BD_UNITS_BANK, &bdu, &BD->units[i], sizeof bdu); return &bdu; }
+static uint8_t bd_level(uint8_t i) { uint8_t v; rom_copy(BD_UNITS_BANK, &v, &BD->levels[i], 1); return v; }
+
 /* instance of roster officer o in the current battle: the o-th PLAYER entry of the unit list (2.3) */
 static uint8_t officer_slot(uint8_t o)
 {
     uint8_t i, k = 0;
     for (i = 0; i < BD->n_units; i++)
-        if (BD->units[i].faction == FAC_PLAYER) { if (k == o) return i; k++; }
+        if (bd_unit(i)->faction == FAC_PLAYER) { if (k == o) return i; k++; }
     return 0xFF;
 }
 
@@ -111,6 +119,8 @@ void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced) BANKED
 void start_battle(void) BANKED
 {
     uint8_t i;
+    cur_bgm = BD->bgm;                         /* every battle starts its own music (also after a camp / retry) */
+    if (audio_ready && state != G_TITLE) music_play_id(cur_bgm);
     danger_hide();
     memset(&B, 0, sizeof B);
     rng_seed(&B.rng, BD->seed);
@@ -140,7 +150,10 @@ void start_battle(void) BANKED
             if (inst == 0xFF || sk == 0xFF || !roster_available(o)) continue;   /* left the party (2.4) */
             sram_read(ROSTER_SRAM_BANK, (uint16_t)((uint16_t)o * ROSTER_REC + 45u), &fl, 1);   /* reserved[0] */
             if (BD->continuity == CONT_NO_REPLENISH && (fl & ROSTER_RETREATED)) continue;   /* 2.4 */
-            roster_deploy(&B, o, inst, BD->units[sk].x, BD->units[sk].y, BD->continuity == CONT_NORMAL);
+            {
+                const Tech01Unit *cell = bd_unit(sk);
+                roster_deploy(&B, o, inst, cell->x, cell->y, BD->continuity == CONT_NORMAL);
+            }
         }
         /* 11.6 pre-battle snapshot: written from the main loop before BATTLE_START (write_snapshot) */
         snap_deploy.n = n;
@@ -148,10 +161,10 @@ void start_battle(void) BANKED
         deploy.n = 0;                          /* the next camp starts from everyone again */
     }
     for (i = 0; i < BD->n_units; i++) {
-        const Tech01Unit *t = &BD->units[i];
+        const Tech01Unit *t = bd_unit(i);
         ActiveUnit u;
         if (t->faction == FAC_PLAYER) continue;
-        battle_spawn(&B, i, t->ch ? (uint16_t)t->ch : ANON_CHARACTER, t->cls, t->faction, BD->levels[i], t->x, t->y);
+        battle_spawn(&B, i, t->ch ? (uint16_t)t->ch : ANON_CHARACTER, t->cls, t->faction, bd_level(i), t->x, t->y);
         load(i, &u); u.ai_id = t->ai; unit_store(i, &u);
     }
     for (i = 0; i < BD->n_items; i++) { inv_add(BD->items[i][0], BD->items[i][1]); item_rederive(BD->items[i][0]); }
@@ -162,7 +175,7 @@ void start_battle(void) BANKED
 
     {
         uint8_t s0 = officer_slot(0);
-        cur_x = BD->units[s0].x; cur_y = BD->units[s0].y;
+        cur_x = bd_unit(s0)->x; cur_y = bd_unit(s0)->y;
     }
     battle_phase_start(&B, FAC_PLAYER);
     state = G_BANNER; timer = 45; next_state = G_IDLE;
@@ -191,7 +204,6 @@ void new_game(void) BANKED
         campaign_write(224u, z, 32);
     }
     gold = 0; cur_bt = 0; carry_round = 0; deploy.n = 0;
-    if (audio_ready) music_play(&song_battle);
     start_battle();
 }
 
@@ -400,16 +412,16 @@ static void camp_prepare(void)
     uint8_t o;
     units_clear();
     inv_clear_all();
-    for (o = 0; o < roster_count() && o < 8u; o++) roster_deploy(&B, o, o, 0, 0, 0);
+    for (o = 0; o < roster_count() && o < CAMP_MAX_OFF; o++) roster_deploy(&B, o, o, 0, 0, 0);
 }
 
 static void camp_finish(void)
 {
     uint8_t o;
-    for (o = 0; o < roster_count() && o < 8u; o++) roster_sync(o, o);
+    for (o = 0; o < roster_count() && o < CAMP_MAX_OFF; o++) roster_sync(o, o);
 }
 
-static void play_pages(const uint16_t (*pages)[2], uint8_t n)
+void play_pages(const uint16_t (*pages)[2], uint8_t n) BANKED
 {
     uint8_t i;
     for (i = 0; i < n && i < DQ_MAX; i++) { DQ->speaker[i] = (uint8_t)pages[i][0]; DQ->text[i] = pages[i][1]; }
@@ -417,73 +429,34 @@ static void play_pages(const uint16_t (*pages)[2], uint8_t n)
     play_queue();
 }
 
-/* T-RULE-02: the rules a player is most likely to misread, from the cover (B) */
-void show_help(void) BANKED
+/* the way on from the battle just won: the alt edge when its global flag is set (2.5 branch at 麦城) */
+static void route(uint8_t *camp, uint8_t *next)
 {
-    static const uint16_t help_pages[6][2] = {{0xFF, TXD_HELP_1}, {0xFF, TXD_HELP_2}, {0xFF, TXD_HELP_3},
-                                               {0xFF, TXD_HELP_4}, {0xFF, TXD_HELP_5}, {0xFF, TXD_HELP_6}};
-    play_pages(help_pages, 6);
-    show_title();
-}
-
-/* title cover (tools/gen_title.py): a 160x112 picture in BG tiles 0.. of VRAM bank 0 above the two HUD lines
- * with the menu. The main loop leaves the map alone while state == G_TITLE; every way out reloads the map
- * mode (map_mode_restore / the camp). title_opts: bit0 = a suspend save can be continued, bit1 = camp save. */
-uint8_t title_opts;
-void show_title(void) BANKED
-{
-    uint8_t row[TITLE_W], y, copy;
-    uint16_t pal[4 * TITLE_PALS];
-    uint32_t seq;
-    state = G_TITLE;
-    autosave_pending = 0;                      /* never overwrite a found save before the choice */
-    title_opts = (uint8_t)((save_probe(SAVE_SLOT_SUSPEND, &copy, &seq) == SAVE_OK ? 1u : 0u) | (camp_save_ok ? 2u : 0u));
-    DISPLAY_OFF;                               /* GBDK: waits for VBlank, no-op when already off */
-    HIDE_SPRITES;
-    rom_copy(TITLE_BANK, pal, title_pal, sizeof pal);
-    set_bkg_palette(0, TITLE_PALS, pal);       /* ink, 石绿, 朱砂, 赭石: per-tile palettes */
-    VBK_REG = VBK_TILES;
-    rom_set_bkg_data(TITLE_BANK, 0, 128, title_tiles);
-    if (TITLE_TILES > 128u) rom_set_bkg_data(TITLE_BANK, 128, (uint8_t)(TITLE_TILES - 128u), title_tiles + 128u * 16u);
-    for (y = 0; y < TITLE_H; y++) {
-        rom_copy(TITLE_BANK, row, title_map + (uint16_t)y * TITLE_W, TITLE_W);
-        VBK_REG = VBK_TILES; set_bkg_tiles(0, y, TITLE_W, 1, row);
-        rom_copy(TITLE_BANK, row, title_attr + (uint16_t)y * TITLE_W, TITLE_W);
-        VBK_REG = 1; set_bkg_tiles(0, y, TITLE_W, 1, row);      /* palette per tile, tile bank 0 */
-    }
-    VBK_REG = 1; set_bkg_data(HUD_BLANK, 1, blank16);
-    VBK_REG = VBK_TILES;
-    hud_init(HUD_BLANK);                       /* e.g. after the ending pages (dialogue mode) */
-    SCX_REG = 0; SCY_REG = 0;
-    hud_begin();
-    hud_tx(0, TX_TITLE_NEW, 0);
-    if (title_opts & 1u) { hud_space(0); hud_space(0); hud_tx(0, TX_TITLE_CONT, 0); }
-    if (title_opts & 2u) { hud_tx(1, TX_TITLE_LOAD, 0); hud_space(1); hud_space(1); }
-    hud_tx(1, TX_TITLE_HELP, 0);
-    hud_end();
-    if (audio_ready) music_play(&song_camp);
-    SHOW_BKG; SHOW_WIN;
-    DISPLAY_ON;
+    *camp = BD->camp; *next = BD->next;
+    if (BD->alt_flag != 0xFF && vm_flag_get(SCOPE_GLOBAL, BD->alt_flag)) { *camp = BD->alt_camp; *next = BD->alt_next; }
 }
 
 static void go_next(uint8_t next)
 {
-    if (next == 0xFF) {                        /* 2.5: the end of this campaign */
-        music_play(&song_end);
-        play_pages(ending_pages, N_ENDING_PAGES);
+    if (next == 0xFF) {                        /* 2.5: an ending; which one is the last battle's */
+        uint8_t e = BD->ending < N_ENDINGS ? BD->ending : 0u;
+        music_play_id(e == 0 ? MUS_SAD : MUS_END);
+        scroll_sel = (uint8_t)(SCROLL_END_A + e);   /* the ending's own landscape */
+        play_pages(ending_pages[e], ending_len[e]);
+        scroll_sel = 0xFF;
         new_game();
         show_title();
         return;
     }
     cur_bt = next;
-    music_play(&song_battle);
-    start_battle();
+    start_battle();                            /* plays the battle's own music */
     map_mode_restore();
 }
 
 void battle_won(void) BANKED
 {
-    uint8_t camp = BD->camp, next = BD->next;
+    uint8_t camp, next;
+    route(&camp, &next);
     sync_officers();                           /* 5.6 before anything else changes */
     carry_round = B.round;
     if (camp != 0xFF || prize_count()) {
@@ -509,9 +482,13 @@ void load_camp_and_go(void) BANKED
     DISPLAY_OFF;
     music_play(&song_camp);
     camp_prepare();
-    camp_run(&gold, &deploy, CAMP_FULL, BD->next, BD->camp == 0xFF ? 0u : BD->camp);
-    camp_finish();
-    go_next(BD->next);
+    {
+        uint8_t camp, next;
+        route(&camp, &next);
+        camp_run(&gold, &deploy, CAMP_FULL, next, camp == 0xFF ? 0u : camp);
+        camp_finish();
+        go_next(next);
+    }
 }
 
 /* T-FLOW-01: the battle (with a camp) that leads into the current one, or 0xFF */
@@ -519,7 +496,8 @@ uint8_t prev_camp_battle(void) BANKED
 {
     uint8_t p;
     for (p = 0; p < N_BATTLES; p++)
-        if (battle_defs[p].next == cur_bt && battle_defs[p].camp != 0xFF) return p;
+        if ((battle_defs[p].next == cur_bt && battle_defs[p].camp != 0xFF)
+            || (battle_defs[p].alt_flag != 0xFF && battle_defs[p].alt_next == cur_bt && battle_defs[p].alt_camp != 0xFF)) return p;
     return 0xFF;
 }
 
@@ -547,7 +525,7 @@ void retry_to_camp(void) BANKED
     camp_council_done = 1;
     music_play(&song_camp);
     camp_prepare();
-    camp_run(&gold, &deploy, CAMP_FULL, target, BD->camp);
+    camp_run(&gold, &deploy, CAMP_FULL, target, BD->next == target ? BD->camp : BD->alt_camp);
     camp_finish();
     go_next(target);
 }

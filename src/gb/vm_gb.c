@@ -12,6 +12,7 @@
 #include "../gen/campaign_data.h"
 #include "../gen/tech01_events.h"
 #include "rom.h"
+#include "audio.h"
 #include "wram.h"
 #include "dialogq.h"
 #include "eventram.h"
@@ -94,6 +95,8 @@ uint8_t treasure_def(uint8_t i, TreasureDef *t) PLATFORM_API
     t->flag = (uint16_t)(TECH01_TREASURE_FLAG0 + i);
     return 1;
 }
+
+void vm_bgm(uint8_t song) PLATFORM_API { cur_bgm = song; music_play_id(song); }
 
 /* OP_JOIN (2.4 JOIN): the join table and the work live in bank 14 (flow.c join_officer) */
 uint8_t vm_join(uint8_t j) PLATFORM_API { return join_officer(j); }

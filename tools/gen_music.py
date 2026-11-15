@@ -92,6 +92,7 @@ def main():
     import math
     smp = [round(7.5 + 7.5 * math.sin(2 * math.pi * i / 32)) for i in range(32)]
     c.append("const uint8_t mus_wave_soft[16] = {" + ", ".join(str((smp[2 * i] << 4) | smp[2 * i + 1]) for i in range(16)) + "};")
+    table = []
     cs = ["#pragma bank 17   /* song data: read by the audio ISR with bank 17 mapped (audio.c) */", '#include "music_data.h"']
     for k, sp in enumerate(songs):
         s = json.loads(sp.read_text(encoding="utf-8"))
@@ -111,7 +112,12 @@ def main():
         cs.append(f"const Song {s['id'].lower()} = {{{s['bpm']}, {{{', '.join(s['id'].lower() + '_' + ch for ch in streams)}}}, "
                  f"{L['duty']}, {L['volume']}, {L['env_down']}, {P['duty']}, {P['volume']}, {P['env_down']}, {B['volume']}, {D['noise']}, {D['env_down']}}};")
         h.append(f"extern const Song {s['id'].lower()};   /* {s['name']} */")
+        h.append(f"#define MUS_{s['id'][5:]} {k}u")
+        table.append(s["id"].lower())
         print(f"gen_music: {s['id']} {s['name']}: {bars[0]} bars, {sum(len(v) for v in streams.values())} bytes")
+    h.append(f"#define MUS_COUNT {len(table)}u")
+    h.append("extern const Song *const mus_songs[MUS_COUNT];   /* by MUS_* id (scripts, battle definitions) */")
+    c.append("const Song *const mus_songs[MUS_COUNT] = {" + ", ".join("&" + n for n in table) + "};")
     h.append("#endif")
     (ROOT / "src/gen/music_data.h").write_text("\n".join(h) + "\n", encoding="utf-8")
     (ROOT / "src/gen/music_data.c").write_text("\n".join(c) + "\n", encoding="utf-8")
