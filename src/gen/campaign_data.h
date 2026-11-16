@@ -28,6 +28,8 @@ typedef struct {
     uint8_t vic_kind, vic_unit, vic_round, protect;                  /* 6.6 objectives (VIC_*) */
     uint8_t vic_x0, vic_y0, vic_x1, vic_y1;                          /* VIC_REACH area */
     uint8_t bgm;                                                     /* MUS_* (music_data.h) */
+    uint8_t forbid;                                                  /* bit k: officer k stays out (story) */
+    uint16_t goal_tx, goal2_tx;                                      /* conditions page (start menu 战况) */
 } BattleDef;
 typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; uint8_t join; } CampDef;   /* join: joiner index or FF */
 typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd; uint16_t name_tx; uint8_t items[8]; } RosterInit;
@@ -43,7 +45,8 @@ extern const uint8_t tech01_levels[];
 #include <gb/gb.h>
 /* flow.c (bank 14) accessors for code in other banks */
 uint8_t bd_treasure(uint8_t i, uint8_t *xyi) BANKED;            /* current battle: x, y, item */
-void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced) BANKED;
+void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced, uint8_t *forbid) BANKED;
+void bd_goal(uint8_t bt, uint16_t *g1, uint16_t *g2) BANKED;
 uint16_t bd_title(uint8_t bt) BANKED;                           /* TX of the battle title, 0 = none */
 uint8_t join_officer(uint8_t joiner) BANKED;                    /* flow.c: OP_JOIN / camp join */
 uint16_t char_name_tx(uint16_t character) BANKED;               /* main.c: TX name or 0 */

@@ -1064,6 +1064,11 @@
      "TEXT",
      "NARRATOR",
      "TXD_B20_GOAL"
+    ],
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_B20_GOAL_2"
     ]
    ]
   },

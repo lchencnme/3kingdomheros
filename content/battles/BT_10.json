@@ -938,6 +938,11 @@
      "TEXT",
      "NARRATOR",
      "TXD_B10_GOAL"
+    ],
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_B10_GOAL_2"
     ]
    ]
   },

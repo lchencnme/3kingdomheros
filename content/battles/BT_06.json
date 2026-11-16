@@ -990,6 +990,11 @@
      "TEXT",
      "NARRATOR",
      "TXD_B06_GOAL"
+    ],
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_B06_GOAL_2"
     ]
    ]
   },

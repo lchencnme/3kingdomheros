@@ -413,6 +413,12 @@ for btn, n in (("down", 28), ("right", 28)):                # a 1-3 row / column
     ghost.append(view_mismatches(e))
     e.goto(5, 11)
 check(f"range erased completely while the camera scrolled ({ghost} stale tiles)", ghost == [0, 0] and e.state() == G_IDLE)
+# review D4: START -> SELECT shows the conditions pages and the round, then the map again
+p_st = e.r8("_dbg_dialog_pages"); r_st = e.r16("_dbg_round")
+e.press("start"); e.wait_state([G_ENDTURN], 30)
+e.press("select"); e.wait_state([G_IDLE], 900); e.frames(30)
+check(f"战况: conditions pages shown, nothing spent ({e.r8('_dbg_dialog_pages') - p_st} pages, round {e.r16('_dbg_round')})",
+      e.r8("_dbg_dialog_pages") == p_st + 2 and e.r16("_dbg_round") == r_st and view_mismatches(e) == 0)
 
 # scrolling to the far corner and back
 e.hold("right", 420)
@@ -1003,6 +1009,16 @@ fac4 = it.m[1, 0xD000 + 40 * 4 + 3]
 check(f"BT_02: 龚景 (unit 4) fights on our side as an ally ({fac4})", fac4 == 1 and it.hp(4) > 0)
 it.frames(60)
 check("BT_02 map consistent", view_mismatches(it) == 0)
+# review B2: 龚景 (protected, unit 4) falls -> defeat with 刘备 alive: no victory scene, no reward
+pages_b, gold_b2 = it.r8("_dbg_dialog_pages"), it.r16("_dbg_gold")
+a4 = 0xD000 + 40 * 4
+it.m[1, a4 + 10] = 0; it.m[1, a4 + 11] = 0; it.m[1, a4 + 34] = it.m[1, a4 + 34] | 0x08
+it.end_turn(); it.wait_state([G_OUTCOME], 1500); outcome_ready(it)
+check(f"BT_02: 龚景 falls -> defeat without the victory scene (outcome {it.r8('_dbg_outcome')}, pages {pages_b} -> {it.r8('_dbg_dialog_pages')}, gold {it.r16('_dbg_gold')})",
+      it.r8("_dbg_outcome") == 2 and it.r8("_dbg_dialog_pages") == pages_b and it.r16("_dbg_gold") == gold_b2)
+it.press("a", after=16)                                   # retry: BT_02 from its snapshot
+it.wait_state([G_IDLE], 3000); it.frames(60)
+check(f"BT_02 again after the retry, map whole ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 2 and view_mismatches(it) == 0)
 # the ally phase runs: end the turn and see the allies act (or at least the phase pass) without errors
 r0 = it.r16("_dbg_round")
 it.end_turn(); it.wait_state([G_IDLE], 4000)
@@ -1107,12 +1123,14 @@ check("BT_08 won (all of 曹操's vanguard)", it.state() == G_OUTCOME and it.r8(
 it.press("a", after=16)
 through_camp(it)
 check(f"BT_09 盱眙拒袁术 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 9 and it.state() == G_IDLE)
+check(f"BT_09: 张飞 stays in 徐州 (council), not deployed (hp {it.hp(2)})", it.hp(2) == 0)
 it.frames(60)
 check("BT_09 map consistent", view_mismatches(it) == 0)
 win_now(it, [4])                                          # 纪灵
 it.press("a", after=16)
 through_camp(it)
 check(f"BT_10 徐州夜袭 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 10 and it.state() == G_IDLE)
+check(f"BT_10: 张飞 back in the line-up (hp {it.hp(2)})", it.hp(2) > 0)
 it.frames(60)
 check("BT_10 map consistent", view_mismatches(it) == 0)
 it.m[1, 0xD000 + 40 * 0 + 10] = 120; it.m[1, 0xD000 + 40 * 0 + 11] = 0   # 刘备 wounded in the night raid
@@ -1487,7 +1505,7 @@ _goals = _json.load(open(ROM.resolve().parents[2] / "content/text/goals_zh.json"
 _bad = []
 for _bt in _CAMPAIGN["battles"][1:]:
     _bj = _json.load(open(ROM.resolve().parents[2] / f"content/battles/{_bt['id']}.json"))
-    _g = _goals[f"TXD_B{_bt['id'][3:]}_GOAL"]
+    _g = _goals[f"TXD_B{_bt['id'][3:]}_GOAL"] + _goals.get(f"TXD_B{_bt['id'][3:]}_GOAL_2", "")
     _ok = (f"第{_bj['victory']['round']}回合" in _g) if _bj["victory"]["kind"] == "SURVIVE" else (f"{_bj['turn_limit']}回合内" in _g)
     if not _ok or "败北条件" not in _g:
         _bad.append(_bt["id"])

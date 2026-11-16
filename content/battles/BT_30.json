@@ -927,6 +927,11 @@
      "TEXT",
      "NARRATOR",
      "TXD_B30_GOAL"
+    ],
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_B30_GOAL_2"
     ]
    ]
   },

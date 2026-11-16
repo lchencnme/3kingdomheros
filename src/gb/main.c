@@ -8,6 +8,7 @@ uint8_t xr_list[4], n_xr, xri, rslot;
 uint8_t danger_on, dz_i;                /* enemy danger view (8.4): shown / next unit to add */
 uint8_t mitems[6], isel, n_mitems, n_slist, ssel, aim_x, aim_y, aim_dirty, n_talk;
 uint8_t enemy_i, options, autosave_pending, pending_start, end_fired;   /* no initialised statics */
+static uint16_t end_gold0;
 uint8_t hud_dirty, last_hx, last_hy, hud_settle;
 uint16_t carry_round;                   /* 2.4 round_mode CARRY */
 uint8_t camp_save_ok;
@@ -146,12 +147,13 @@ static void hud_menu(void)
     uint8_t i;
     hud_begin();
     for (i = 0; i < n_mitems; i++) {
-        uint8_t ln = (uint8_t)(n_mitems > 4 && i >= 3 ? 1 : 0);     /* up to 3 per line when 5-6 items */
+        /* one item is 42 px: 3 fit a 144 px line, so 4..6 items go on two lines (review B8: 待命 was cut off) */
+        uint8_t ln = (uint8_t)(n_mitems > 3 && i >= (uint8_t)((n_mitems + 1u) >> 1) ? 1 : 0);
         if (i == menu) hud_tx(ln, TX_ARROW, 0); else { hud_space(ln); hud_space(ln); }
         hud_tx(ln, label[mitems[i]], 0);
         hud_space(ln);
     }
-    if (n_mitems <= 4) hud_tx(1, TX_MENU_HINT, 0);   /* T-UI-04: the hint of the current step only */
+    if (n_mitems <= 3) hud_tx(1, TX_MENU_HINT, 0);   /* T-UI-04: the hint of the current step only */
     hud_end();
     dbg_menu_item = mitems[menu];
 }
@@ -711,6 +713,62 @@ static void do_exchange(void)
 }
 
 static uint8_t end_next;                       /* T-UI-01: last unit shown by "next unacted" */
+/* the battle result page; returns J_A or J_SELECT (defeat: back to the camp) */
+static void hud_lose_reason(void);
+/* our officers that went into this battle (*out) and how many of them retreated; own frame (40 B record) */
+static uint8_t count_lost(uint8_t *out)
+{
+    uint8_t i, lost = 0;
+    ActiveUnit a;
+    *out = 0;
+    for (i = 0; i < B.n_units; i++) {
+        load(i, &a);
+        if (a.faction != FAC_PLAYER || (a.action_flags & AF_AWAY)) continue;
+        (*out)++;
+        if (a.action_flags & AF_RETREAT) lost++;
+    }
+    return lost;
+}
+
+static uint8_t result_page(void)
+{   /* landscape, 胜 / 败 seal, title, result, keys; 40-frame guard inside */
+    uint8_t win = B.outcome == OUT_WIN, sel_ok = !win && prev_camp_battle() != 0xFF, k;
+    result_open(win ? TX_RES_SEAL_WIN : TX_RES_SEAL_LOSE);
+    hud_begin();
+    hud_tx(2, bd_title(cur_bt), 0);
+    if (win) {                         /* review P1-6: graded by retreats, gold itemised */
+        uint8_t out, lost = count_lost(&out);
+        hud_tx(0, !lost ? TX_GRADE_0 : (uint8_t)(lost * 2u) >= out ? TX_GRADE_2 : TX_GRADE_1, 0);
+        hud_tx(0, TX_RES_ROUNDS, B.round);
+        if (lost) hud_tx(0, TX_RES_LOST, lost);
+        hud_tx(1, TX_RES_GOLD, WIN_GOLD);
+        if (gold > (uint16_t)(end_gold0 + WIN_GOLD)) hud_tx(1, TX_RES_BONUS, (uint16_t)(gold - end_gold0 - WIN_GOLD));
+        hud_tx(1, TX_RES_NEXT, 0);
+    }
+    else {                             /* T-FLOW-01: both ways restore the pre-battle snapshot */
+        hud_tx(0, TX_LOSE, 0); hud_lose_reason(); hud_tx(1, TX_LOSE_RETRY, 0);
+        if (sel_ok) { hud_space(1); hud_tx(1, TX_LOSE_CAMP, 0); }
+    }
+    k = result_wait(sel_ok);
+    return k;
+}
+
+/* START -> SELECT: the conditions pages over the chapter landscape, then the round on the HUD */
+static void status_page(void)
+{
+    uint16_t g[2];
+    DialogQ *q = DQ;
+    uint8_t k, n = 0;
+    bd_goal(cur_bt, &g[0], &g[1]);
+    for (k = 0; k < 2; k++) if (g[k]) { q->speaker[n] = 0xFF; q->text[n] = g[k]; n++; }
+    q->n = n;
+    play_queue();
+    map_mode_restore();
+    state = G_IDLE;
+    hud_begin(); hud_tx(0, TX_ST_ROUND, B.round); hud_tx(0, TX_ST_LIMIT, B.turn_limit); hud_end();
+    hud_settle = 120; hud_dirty = 1;
+}
+
 static void hud_end_ask(void)
 {
     uint8_t i, n = 0;
@@ -718,7 +776,7 @@ static void hud_end_ask(void)
     for (i = 0; i < B.n_units && i < MAX_SHOWN; i++)
         if (SNAP_ALIVE(i) && snap_fac[i] == FAC_PLAYER && !(snap_flags[i] & AF_ACTED)) n++;
     hud_begin();
-    hud_tx(0, TX_END_ASK, 0);
+    hud_tx(0, TX_END_ASK, 0); hud_space(0); hud_tx(0, TX_END_STATUS, 0);
     hud_tx(1, TX_END_KEYS, 0);
     if (n) { hud_space(1); hud_tx(1, TX_END_NEXT, 0); hud_num(1, n); }
     hud_end();
@@ -759,6 +817,7 @@ static void logic_player(void)
     case G_ENDTURN:
         if (in_pressed & J_A) { begin_enemy_phase(); }
         else if (in_pressed & J_B) { state = G_IDLE; hud_dirty = 1; }
+        else if (in_pressed & J_SELECT) status_page();   /* review D4: conditions and round, any time */
         else if (in_dx || in_dy) {              /* jump to the next unit that can still act */
             uint8_t k;
             for (k = 0; k < B.n_units; k++) {
@@ -800,11 +859,15 @@ static void logic_player(void)
             cur_x = a.x; cur_y = a.y;
             state = G_IDLE; mapview_highlight(0); hud_dirty = 1;
         } else if (in_pressed & J_A) {
-            uint8_t ok, o = SVBK_REG;
+            uint8_t ok, far, o = SVBK_REG;
             SVBK_REG = WB_SCRATCH;
             ok = path_endpoint_ok(W7_MR, cur_x, cur_y);
+            far = path_dist(W7_MR, cur_x, cur_y) == MR_INF;
             SVBK_REG = o;
-            if (!ok) sfx_play(SFX_ERROR);
+            if (!ok) {                          /* review B8: say why the endpoint is refused */
+                sfx_play(SFX_ERROR);
+                hud_begin(); hud_tx(0, TX_MOVE_HINT, 0); hud_tx(1, far ? TX_MV_FAR : TX_MV_OCC, 0); hud_end();
+            }
             if (ok) {
                 sfx_play(SFX_CONFIRM);
                 tent_x = cur_x; tent_y = cur_y;
@@ -977,7 +1040,10 @@ static void logic(void)
     }
     if (B.outcome && !end_fired && state != G_TITLE) {
         end_fired = 1;
-        fire(TR_BATTLE_END, B.phase, 0xFF, 0xFF, 0xFF);
+        /* BATTLE_END scripts are the victory scenes (dialogue, rewards, story flags): a defeat with 刘备 still
+         * on the field (a protected NPC fell, the rounds ran out) must not play them */
+        end_gold0 = gold;                      /* the result page shows what the victory scene gave */
+        if (B.outcome == OUT_WIN) fire(TR_BATTLE_END, B.phase, 0xFF, 0xFF, 0xFF);
     }
     if (B.outcome && state != G_OUTCOME && state != G_SHOW && state != G_TITLE && state != G_CAMP && state != G_SHOP) {
         state = G_OUTCOME;
@@ -986,18 +1052,9 @@ static void logic(void)
         music_play_id(B.outcome == OUT_WIN ? MUS_VICTORY : MUS_DEFEAT);
         publish_inv();
         dbg_outcome = B.outcome; dbg_gold = gold;
-        {   /* the result page (landscape, 胜 / 败 seal, title, result, keys); 40-frame guard inside */
-            uint8_t win = B.outcome == OUT_WIN, sel_ok = !win && prev_camp_battle() != 0xFF, k;
-            result_open(win ? TX_RES_SEAL_WIN : TX_RES_SEAL_LOSE);
-            hud_begin();
-            hud_tx(2, bd_title(cur_bt), 0);
-            if (win) { hud_tx(0, TX_RES_WIN, B.round); hud_tx(1, TX_RES_GOLD, WIN_GOLD); }
-            else {                             /* T-FLOW-01: both ways restore the pre-battle snapshot */
-                hud_tx(0, TX_LOSE, 0); hud_lose_reason(); hud_tx(1, TX_LOSE_RETRY, 0);
-                if (sel_ok) { hud_space(1); hud_tx(1, TX_LOSE_CAMP, 0); }
-            }
-            k = result_wait(sel_ok);
-            if (win) battle_won();
+        {   /* the result page has its own frame: its locals must not sit in logic()'s */
+            uint8_t k = result_page();
+            if (B.outcome == OUT_WIN) battle_won();
             else if (k == J_SELECT) retry_to_camp();
             else retry_battle();
         }

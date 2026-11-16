@@ -110,10 +110,16 @@ uint8_t bd_treasure(uint8_t i, uint8_t *xyi) BANKED
     return 1;
 }
 
-void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced) BANKED
+void bd_goal(uint8_t bt, uint16_t *g1, uint16_t *g2) BANKED
+{
+    *g1 = *g2 = 0;
+    if (bt < N_BATTLES) { *g1 = battle_defs[bt].goal_tx; *g2 = battle_defs[bt].goal2_tx; }
+}
+
+void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced, uint8_t *forbid) BANKED
 {
     if (bt >= N_BATTLES) return;
-    *max = battle_defs[bt].deploy_max; *forced = battle_defs[bt].forced;
+    *max = battle_defs[bt].deploy_max; *forced = battle_defs[bt].forced; *forbid = battle_defs[bt].forbid;
 }
 
 void start_battle(void) BANKED

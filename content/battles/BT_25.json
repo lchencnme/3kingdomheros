@@ -964,6 +964,11 @@
      "TEXT",
      "NARRATOR",
      "TXD_B25_GOAL"
+    ],
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_B25_GOAL_2"
     ]
    ]
   },

@@ -45,7 +45,7 @@ typedef struct {
     CampDeploy *dep;
     uint8_t screen, cur, off, slot, pick, pick_off, pick_slot, sell, top, main_cur, council, ask;
     uint16_t msg;                                       /* text id of the status line (0 = default hint) */
-    uint8_t n_off, mode, next, deploy_max, forced, camp;
+    uint8_t n_off, mode, next, deploy_max, forced, forbid, camp;
 } Camp;
 
 static Camp *C;                                         /* 2 B global: points into camp_run's frame */
@@ -104,13 +104,16 @@ static void compose(uint8_t k)
     case SC_MAIN:
         if (k == 0) {                                      /* T-SAVE-03: the battle ahead, the gold */
             uint16_t bt = bd_title(C->next);
-            hud_tx(0, bt ? bt : TX_CAMP_TITLE, 0); hud_space(0); hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold);
+            hud_tx(0, bt ? bt : TX_CAMP_TITLE, 0);    /* the gold is on the hint line: long titles cut it (B3) */
         }
         else if (k >= 1 && k <= N_CMD) {
             arrow(C->cur == k - 1u); hud_tx(0, cmd_tx[k - 1u], 0);
             if (k == 6) { hud_space(0); hud_num(0, prize_count()); }
             if (k == 1 && C->council) { hud_space(0); hud_tx(0, TX_DONE, 0); }
-        } else if (k == 8) hud_tx(0, C->msg ? C->msg : TX_CAMP_HINT, 0);
+        } else if (k == 8) {
+            if (C->msg) hud_tx(0, C->msg, 0);
+            else { hud_tx(0, TX_GOLD, 0); hud_num(0, *C->gold); hud_space(0); hud_space(0); hud_tx(0, TX_CAMP_HINT, 0); }
+        }
         break;
     case SC_EQUIP:
     case SC_EXCH:
@@ -428,6 +431,7 @@ static uint8_t step(uint8_t pressed)
                 C->dep->n--;
             } else {
                 if (!roster_available(C->cur)) { sfx_play(SFX_ERROR); say(TX_LEFT_MSG); break; }   /* 2.4 */
+                if (C->cur < 8u && ((C->forbid >> C->cur) & 1u)) { sfx_play(SFX_ERROR); say(TX_STAY_MSG); break; }
                 if (C->dep->n >= C->deploy_max) { sfx_play(SFX_ERROR); break; }
                 C->dep->order[C->dep->n++] = C->cur;
             }
@@ -459,13 +463,14 @@ void camp_run(uint16_t *gold, CampDeploy *dep, uint8_t mode, uint8_t next_bt, ui
     camp.n_off = roster_count() < CAMP_MAX_OFF ? roster_count() : CAMP_MAX_OFF;   /* the deployment list scrolls */
     camp.council = camp_council_done; camp_council_done = 0;   /* loaded save / back from a defeat */
     camp.deploy_max = 4; camp.forced = 1;                   /* no next battle (ending) */
-    bd_deploy_rule(next_bt, &camp.deploy_max, &camp.forced);   /* battle tables: bank 14 */
+    bd_deploy_rule(next_bt, &camp.deploy_max, &camp.forced, &camp.forbid);   /* battle tables: bank 14 */
     if (camp.deploy_max > CAMP_MAX_DEPLOY) camp.deploy_max = CAMP_MAX_DEPLOY;
     if (mode == CAMP_PRIZES_ONLY && !prize_count()) return;
     C = &camp;
-    if (!dep->n) {                                      /* first visit: everyone, in roster order */
+    {   /* first visit: everyone, in roster order; officers the story keeps behind leave the list */
         uint8_t k, n = 0;
-        for (k = 0; k < N_OFF && n < C->deploy_max; k++) if (roster_available(k)) dep->order[n++] = k;
+        if (!dep->n) { for (k = 0; k < N_OFF && n < C->deploy_max; k++) if (roster_available(k) && (k >= 8u || !((camp.forbid >> k) & 1u))) dep->order[n++] = k; }
+        else for (k = 0; k < dep->n; k++) if (dep->order[k] >= 8u || !((camp.forbid >> dep->order[k]) & 1u)) dep->order[n++] = dep->order[k];
         dep->n = n;
     }
     if (prize_count()) { camp.screen = SC_PRIZE; }        /* 7.4: the spoils come first */

@@ -377,6 +377,7 @@ BT09 = {
     "items": [(4, 2), (5, 0)], "treasures": [(3, 10, 0x1C)],
     "victory": ("DEFEAT", 4, 0), "protect": None,
     "turn_limit": 25, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 4, "forced": [0], "seed": 31,
+    "forbid": [2],   # 张飞 stays behind in 徐州 (council: 三弟留守徐州)
     "events": [
         {"id": 1, "trigger": "BATTLE_START", "param": None, "priority": 0, "once": True, "condition": None,
          "code": [["TEXT", "NARRATOR", "TXD_B09_OPEN_0"], ["TEXT", "P0002", "TXD_B09_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B09_GOAL"]]},
@@ -388,7 +389,7 @@ BT09 = {
 }
 # ---------------------------------------------------------------- BT_10 徐州夜袭 (回目 14, escape with the two ladies)
 BT10 = {
-    "id": "BT_10", "goal": ("护送甘夫人到西边出口", ""), "map": [
+    "id": "BT_10", "goal": ("护送甘夫人到西边出口", "第3回合吕布会率铁骑从东面追来。"), "map": [
         "00000000000000000088888888",
         "00222000000000000084444448",
         "02222200000000000084000048",
@@ -1355,7 +1356,7 @@ def battle_json(bt):
         "schema_version": 2, "id": bt["id"], "profile": "DEFAULT_D1", "source_ref": "ORIGINAL",
         "map": {"width": w, "height": h, "tileset": "TS_TECH01", "metatiles": terrain, "terrain": terrain},
         "deploy": {"slots": [list(s) for s in bt["slots"]], "max_count": bt["deploy_max"],
-                   "forced": [OFFICER_TAGS[k] for k in bt["forced"]], "forbidden": []},
+                   "forced": [OFFICER_TAGS[k] for k in bt["forced"]], "forbidden": [OFFICER_TAGS[k] for k in bt.get("forbid", [])]},
         "templates": [], "units": [{"template": None, "x": o["x"], "y": o["y"], "faction": o["fac"], "class": o["cls"],
                                     "character": o["ch"] or "ANON", "ai_group": o["ai"], "level": o["lv"], "hp": "max", "status": []}
                                    for o in bt["others"]],
@@ -1381,10 +1382,19 @@ CHAPTER_START = {"BT_06": 2, "BT_13": 3, "BT_21": 4, "BT_26": 5, "BT_37": 6, "BT
 
 
 def chapter_card(bid, events):
+    """the chapter's title card before its first battle; the conditions page continues on a second entry"""
     k = CHAPTER_START.get(bid)
-    if not k:
-        return events
     ev = [json.loads(json.dumps(e)) for e in events]
+    goal = f"TXD_B{bid[3:]}_GOAL"
+    for e in ev:
+        code = []
+        for op in e["code"]:
+            code.append(op)
+            if op[0] == "TEXT" and op[2] == goal:
+                code.append(["TEXT", op[1], goal + "_2"])
+        e["code"] = code
+    if not k:
+        return ev
     start = next(e for e in ev if e["trigger"] == "BATTLE_START")
     start["code"] = [["TEXT", "NARRATOR", f"TXD_CH{k}_CARD"]] + start["code"]
     return ev
@@ -1429,6 +1439,8 @@ def main():
         tbank = 15 if n <= 20 else 9
         (asset if tbank == 15 else asset_b).append(f"const uint8_t {p}_terrain[{w * h}] = {{" + ", ".join(map(str, terrain)) + "};")
         units = [(roster[k]["class"] if k < len(roster) else 0, 0, x, y, 0, 0) for k, (x, y) in enumerate(bt["slots"])]
+        if set(bt["forced"]) & set(bt.get("forbid", [])):
+            die(f"{bid}: an officer cannot be both forced and forbidden")
         if not 1 <= bt["deploy_max"] <= min(8, len(bt["slots"])):
             die(f"{bid}: deploy_max must be 1..min(8, slots)")
         if len(bt["slots"]) < len(roster):
@@ -1470,7 +1482,26 @@ def main():
                 die(f"{bid}: SURVIVE needs turn_limit == hold round ({vr}) and the round in the goal text")
         else:
             lose += f"，或{bt['turn_limit']}回合内未取胜"
-        goals[f"TXD_B{bid[3:]}_GOAL"] = f"胜利条件：{bt['goal'][0]}。败北条件：{lose}。{bt['goal'][1]}"
+        win, notes = bt["goal"][0], ""
+        # everything the rules or the scripts decide goes on the page (T-RULE-01, review B1/B5/B6):
+        for ev in bt["events"]:
+            for op in ev["code"]:
+                if op[0] == "OUTCOME":
+                    cond = ev.get("condition") or {}
+                    if op[1] != "WIN" or ev["trigger"] != "PHASE_START" or cond.get("leaf") != "turn_cmp" or cond.get("op") != "ge":
+                        die(f"{bid}: scripted outcome the conditions page cannot describe: {ev['trigger']} {cond} {op}")
+                    if vk != "SURVIVE" or cond["n"] != vr:
+                        win += f"，或坚守到第{cond['n']}回合"
+                if op[0] == "WEATHER" and op[1] == "RAIN":
+                    cond = ev.get("condition") or {}
+                    when = f"第{cond['n']}回合起" if ev["trigger"] == "PHASE_START" and cond.get("leaf") == "turn_cmp" else ""
+                    notes += f"{when}雨天：火攻无效，激流可用。"
+        if vk != "ALL":
+            win += "（全灭敌军亦胜）"                         # battle_check_outcome: no enemy left wins any battle
+        if bt["continuity"] == "NO_REPLENISH" and "连续战" not in bt["goal"][1]:
+            notes += "连续战：兵力不会恢复。"
+        goals[f"TXD_B{bid[3:]}_GOAL"] = f"胜利条件：{win}。"            # two entries: one TEXT holds <= 64 codes
+        goals[f"TXD_B{bid[3:]}_GOAL_2"] = f"败北条件：{lose}。{bt['goal'][1]}{notes}"
         rect = bt.get("area", (0, 0, 0, 0))
         if vk == "REACH" and not (0 <= rect[0] <= rect[2] < w and 0 <= rect[1] <= rect[3] < h):
             die(f"{bid}: bad REACH area {rect}")
@@ -1481,7 +1512,7 @@ def main():
             die(f"{bid}: unknown bgm {bgm}")
         rows[n] = (p, w, h, tbank, len(units), len(ei), len(bt["ai_groups"]), len(bt["treasures"]), bt["turn_limit"],
                    CONT[bt["continuity"]], ROUND[bt["round_mode"]], bt["deploy_max"], sum(1 << k for k in bt["forced"]),
-                   bt["seed"], VIC[vk], 0xFF if vu is None else vu, vr, 0xFF if bt["protect"] is None else bt["protect"]) + tuple(rect) + (MUS[bgm],)
+                   bt["seed"], VIC[vk], 0xFF if vu is None else vu, vr, 0xFF if bt["protect"] is None else bt["protect"]) + tuple(rect) + (MUS[bgm], sum(1 << k for k in bt.get("forbid", [])))
 
     (ROOT / "content/text/goals_zh.json").write_text(json.dumps(goals, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
@@ -1499,14 +1530,14 @@ def main():
     cp, nx, ti = node(0)
     defs.append("    {TECH01_W, TECH01_H, TECH01_BANK, tech01_terrain, TECH01_UNITS, tech01_units, tech01_levels, TECH01_START_ITEMS, "
                 "tech01_start_items, TECH01_AI_GROUPS, tech01_ai_groups, TECH01_TREASURES, tech01_treasures, 30, 0, 0, "
-                f"TECH01_DEPLOY_MAX, 1, 1, {cp}, {nx}, {ti}, 0, 0xFF, 0, 0xFF, 0, 0, 0, 0, {MUS['BATTLE']}}},")
+                f"TECH01_DEPLOY_MAX, 1, 1, {cp}, {nx}, {ti}, 0, 0xFF, 0, 0xFF, 0, 0, 0, 0, {MUS['BATTLE']}, 0, TXD_T01_GOAL, 0}},")
     defs[-1] = defs[-1].replace("TECH01_DEPLOY_MAX, 1, 1, " + f"{cp}, {nx}, {ti}", "TECH01_DEPLOY_MAX, 1, 1, " + f"{cp}, {nx}, {ti}")
     for n in range(1, len(ids)):
         r = rows[n]
         cp, nx, ti = node(n)
         defs.append(f"    {{{r[1]}, {r[2]}, {r[3]}, {r[0]}_terrain, {r[4]}, {r[0]}_units, {r[0]}_levels, {r[5]}, {r[0]}_items, {r[6]}, "
                     f"{r[0]}_ai, {r[7]}, {r[0]}_tre, {r[8]}, {r[9]}, {r[10]}, {r[11]}, {r[12]}, {r[13]}, {cp}, {nx}, {ti}, "
-                    f"{r[14]}, {r[15]}, {r[16]}, {r[17]}, {r[18]}, {r[19]}, {r[20]}, {r[21]}, {r[22]}}},")
+                    f"{r[14]}, {r[15]}, {r[16]}, {r[17]}, {r[18]}, {r[19]}, {r[20]}, {r[21]}, {r[22]}, {r[23]}, TXD_B{ids[n][3:]}_GOAL, TXD_B{ids[n][3:]}_GOAL_2}},")
     defs.append("};")
     bt_c += defs
     # camps (2.2, C.4): bank 10 with camp.c, their only reader
@@ -1572,6 +1603,8 @@ def main():
           "    uint8_t vic_kind, vic_unit, vic_round, protect;                  /* 6.6 objectives (VIC_*) */",
           "    uint8_t vic_x0, vic_y0, vic_x1, vic_y1;                          /* VIC_REACH area */",
           "    uint8_t bgm;                                                     /* MUS_* (music_data.h) */",
+          "    uint8_t forbid;                                                  /* bit k: officer k stays out (story) */",
+          "    uint16_t goal_tx, goal2_tx;                                      /* conditions page (start menu 战况) */",
           "} BattleDef;",
           "typedef struct { uint8_t n_shop; const uint8_t *shop; uint8_t n_council; const uint16_t (*council)[2]; uint8_t join; } CampDef;   /* join: joiner index or FF */",
           "typedef struct { uint16_t character; uint8_t cls, level, str, intl, cmd; uint16_t name_tx; uint8_t items[8]; } RosterInit;",
@@ -1584,7 +1617,8 @@ def main():
           "#include <gb/gb.h>",
           "/* flow.c (bank 14) accessors for code in other banks */",
           "uint8_t bd_treasure(uint8_t i, uint8_t *xyi) BANKED;            /* current battle: x, y, item */",
-          "void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced) BANKED;",
+          "void bd_deploy_rule(uint8_t bt, uint8_t *max, uint8_t *forced, uint8_t *forbid) BANKED;",
+          "void bd_goal(uint8_t bt, uint16_t *g1, uint16_t *g2) BANKED;",
           "uint16_t bd_title(uint8_t bt) BANKED;                           /* TX of the battle title, 0 = none */",
           "uint8_t join_officer(uint8_t joiner) BANKED;                    /* flow.c: OP_JOIN / camp join */",
           "uint16_t char_name_tx(uint16_t character) BANKED;               /* main.c: TX name or 0 */",

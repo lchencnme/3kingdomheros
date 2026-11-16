@@ -763,7 +763,9 @@
   "forced": [
    "CH_LIUBEI"
   ],
-  "forbidden": []
+  "forbidden": [
+   "CH_ZHANGFEI"
+  ]
  },
  "templates": [],
  "units": [
@@ -923,6 +925,11 @@
      "TEXT",
      "NARRATOR",
      "TXD_B09_GOAL"
+    ],
+    [
+     "TEXT",
+     "NARRATOR",
+     "TXD_B09_GOAL_2"
     ]
    ]
   },
