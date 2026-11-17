@@ -726,7 +726,7 @@
    "faction": "ENEMY",
    "class": 7,
    "character": 43,
-   "ai_group": 2,
+   "ai_group": 7,
    "level": 13,
    "hp": "max",
    "status": []
@@ -738,31 +738,7 @@
    "faction": "ENEMY",
    "class": 6,
    "character": "ANON",
-   "ai_group": 2,
-   "level": 12,
-   "hp": "max",
-   "status": []
-  },
-  {
-   "template": null,
-   "x": 14,
-   "y": 5,
-   "faction": "ENEMY",
-   "class": 1,
-   "character": "ANON",
-   "ai_group": 2,
-   "level": 12,
-   "hp": "max",
-   "status": []
-  },
-  {
-   "template": null,
-   "x": 14,
-   "y": 7,
-   "faction": "ENEMY",
-   "class": 1,
-   "character": "ANON",
-   "ai_group": 2,
+   "ai_group": 8,
    "level": 12,
    "hp": "max",
    "status": []
@@ -822,6 +798,24 @@
    "mode": "AGGRESSIVE",
    "target": 0,
    "leash": 3
+  },
+  {
+   "id": 7,
+   "mode": "GUARD_POINT",
+   "target": [
+    19,
+    3
+   ],
+   "leash": 1
+  },
+  {
+   "id": 8,
+   "mode": "GUARD_POINT",
+   "target": [
+    19,
+    9
+   ],
+   "leash": 1
   }
  ],
  "reinforcements": [],
@@ -904,6 +898,34 @@
     [
      "JOIN",
      44
+    ]
+   ]
+  },
+  {
+   "id": 4,
+   "trigger": "PHASE_START",
+   "param": "ENEMY",
+   "priority": 0,
+   "once": true,
+   "condition": {
+    "leaf": "turn_cmp",
+    "op": "ge",
+    "n": 3
+   },
+   "code": [
+    [
+     "SET_AI",
+     "G7",
+     "AGGRESSIVE",
+     null,
+     3
+    ],
+    [
+     "SET_AI",
+     "G8",
+     "AGGRESSIVE",
+     null,
+     3
     ]
    ]
   }

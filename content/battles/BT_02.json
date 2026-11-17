@@ -977,8 +977,8 @@
  "units": [
   {
    "template": null,
-   "x": 13,
-   "y": 6,
+   "x": 11,
+   "y": 5,
    "faction": "ALLY",
    "class": 9,
    "character": 12,
@@ -1117,9 +1117,12 @@
   },
   {
    "id": 2,
-   "mode": "HOLD",
-   "target": null,
-   "leash": 3
+   "mode": "GUARD_POINT",
+   "target": [
+    11,
+    5
+   ],
+   "leash": 0
   },
   {
    "id": 3,

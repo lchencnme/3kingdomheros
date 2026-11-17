@@ -774,7 +774,7 @@
    "faction": "ENEMY",
    "class": 7,
    "character": 27,
-   "ai_group": 0,
+   "ai_group": 7,
    "level": 15,
    "hp": "max",
    "status": []
@@ -786,7 +786,7 @@
    "faction": "ENEMY",
    "class": 7,
    "character": 26,
-   "ai_group": 0,
+   "ai_group": 8,
    "level": 13,
    "hp": "max",
    "status": []
@@ -798,7 +798,7 @@
    "faction": "ENEMY",
    "class": 8,
    "character": 48,
-   "ai_group": 0,
+   "ai_group": 9,
    "level": 14,
    "hp": "max",
    "status": []
@@ -810,7 +810,7 @@
    "faction": "ENEMY",
    "class": 6,
    "character": "ANON",
-   "ai_group": 0,
+   "ai_group": 10,
    "level": 12,
    "hp": "max",
    "status": []
@@ -900,6 +900,42 @@
    "mode": "HOLD",
    "target": null,
    "leash": 3
+  },
+  {
+   "id": 7,
+   "mode": "GUARD_POINT",
+   "target": [
+    25,
+    6
+   ],
+   "leash": 1
+  },
+  {
+   "id": 8,
+   "mode": "GUARD_POINT",
+   "target": [
+    24,
+    4
+   ],
+   "leash": 1
+  },
+  {
+   "id": 9,
+   "mode": "GUARD_POINT",
+   "target": [
+    24,
+    8
+   ],
+   "leash": 1
+  },
+  {
+   "id": 10,
+   "mode": "GUARD_POINT",
+   "target": [
+    13,
+    3
+   ],
+   "leash": 1
   }
  ],
  "reinforcements": [],
@@ -963,6 +999,48 @@
     [
      "LEAVE",
      2
+    ]
+   ]
+  },
+  {
+   "id": 3,
+   "trigger": "PHASE_START",
+   "param": "ENEMY",
+   "priority": 0,
+   "once": true,
+   "condition": {
+    "leaf": "turn_cmp",
+    "op": "ge",
+    "n": 2
+   },
+   "code": [
+    [
+     "SET_AI",
+     "G7",
+     "AGGRESSIVE",
+     null,
+     3
+    ],
+    [
+     "SET_AI",
+     "G8",
+     "AGGRESSIVE",
+     null,
+     3
+    ],
+    [
+     "SET_AI",
+     "G9",
+     "AGGRESSIVE",
+     null,
+     3
+    ],
+    [
+     "SET_AI",
+     "G10",
+     "AGGRESSIVE",
+     null,
+     3
     ]
    ]
   }

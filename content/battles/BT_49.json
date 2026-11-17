@@ -870,7 +870,7 @@
    "faction": "ENEMY",
    "class": 8,
    "character": "ANON",
-   "ai_group": 0,
+   "ai_group": 7,
    "level": 31,
    "hp": "max",
    "status": []
@@ -894,7 +894,7 @@
    "faction": "ENEMY",
    "class": 8,
    "character": "ANON",
-   "ai_group": 0,
+   "ai_group": 8,
    "level": 31,
    "hp": "max",
    "status": []
@@ -912,6 +912,24 @@
    "mode": "HOLD",
    "target": null,
    "leash": 3
+  },
+  {
+   "id": 7,
+   "mode": "GUARD_POINT",
+   "target": [
+    10,
+    5
+   ],
+   "leash": 1
+  },
+  {
+   "id": 8,
+   "mode": "GUARD_POINT",
+   "target": [
+    11,
+    6
+   ],
+   "leash": 1
   }
  ],
  "reinforcements": [],
@@ -974,6 +992,34 @@
     [
      "GIVE_ITEM",
      112
+    ]
+   ]
+  },
+  {
+   "id": 3,
+   "trigger": "PHASE_START",
+   "param": "ENEMY",
+   "priority": 0,
+   "once": true,
+   "condition": {
+    "leaf": "turn_cmp",
+    "op": "ge",
+    "n": 2
+   },
+   "code": [
+    [
+     "SET_AI",
+     "G7",
+     "AGGRESSIVE",
+     null,
+     3
+    ],
+    [
+     "SET_AI",
+     "G8",
+     "AGGRESSIVE",
+     null,
+     3
     ]
    ]
   }

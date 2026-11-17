@@ -10,7 +10,7 @@ static const uint8_t bt1_tre[][3] = {{20, 11, 1}};
 extern const uint8_t bt2_terrain[];
 extern const Tech01Unit bt2_units[]; extern const uint8_t bt2_levels[];
 static const uint8_t bt2_items[][2] = {{0xFF, 0xFF}};
-static const uint8_t bt2_ai[] = {0, 1, 255, 255, 3, 2, 0, 255, 255, 3, 3, 2, 195, 0, 2};
+static const uint8_t bt2_ai[] = {0, 1, 255, 255, 3, 2, 2, 141, 0, 0, 3, 2, 195, 0, 2};
 static const uint8_t bt2_tre[][3] = {{13, 14, 3}};
 extern const uint8_t bt3_terrain[];
 extern const Tech01Unit bt3_units[]; extern const uint8_t bt3_levels[];
@@ -75,7 +75,7 @@ static const uint8_t bt14_tre[][3] = {{6, 10, 30}};
 extern const uint8_t bt15_terrain[];
 extern const Tech01Unit bt15_units[]; extern const uint8_t bt15_levels[];
 static const uint8_t bt15_items[][2] = {{0xFF, 0xFF}};
-static const uint8_t bt15_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3};
+static const uint8_t bt15_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3, 7, 2, 181, 0, 1, 8, 2, 128, 0, 1, 9, 2, 232, 0, 1, 10, 2, 91, 0, 1};
 static const uint8_t bt15_tre[][3] = {{12, 10, 1}};
 extern const uint8_t bt16_terrain[];
 extern const Tech01Unit bt16_units[]; extern const uint8_t bt16_levels[];
@@ -95,7 +95,7 @@ static const uint8_t bt18_tre[][3] = {{3, 10, 82}};
 extern const uint8_t bt19_terrain[];
 extern const Tech01Unit bt19_units[]; extern const uint8_t bt19_levels[];
 static const uint8_t bt19_items[][2] = {{0xFF, 0xFF}};
-static const uint8_t bt19_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3, 2, 1, 0, 0, 3};
+static const uint8_t bt19_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3, 2, 1, 0, 0, 3, 7, 2, 91, 0, 1, 8, 2, 235, 0, 1};
 static const uint8_t bt19_tre[][3] = {{0, 0, 0}};
 extern const uint8_t bt20_terrain[];
 extern const Tech01Unit bt20_units[]; extern const uint8_t bt20_levels[];
@@ -120,7 +120,7 @@ static const uint8_t bt23_tre[][3] = {{13, 3, 2}};
 extern const uint8_t bt24_terrain[];
 extern const Tech01Unit bt24_units[]; extern const uint8_t bt24_levels[];
 static const uint8_t bt24_items[][2] = {{0xFF, 0xFF}};
-static const uint8_t bt24_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3, 3, 1, 0, 0, 3};
+static const uint8_t bt24_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3, 3, 1, 0, 0, 3, 7, 2, 157, 0, 1, 8, 2, 132, 0, 1, 9, 2, 184, 0, 1, 10, 2, 156, 0, 1};
 static const uint8_t bt24_tre[][3] = {{0, 0, 0}};
 extern const uint8_t bt25_terrain[];
 extern const Tech01Unit bt25_units[]; extern const uint8_t bt25_levels[];
@@ -245,7 +245,7 @@ static const uint8_t bt48_tre[][3] = {{0, 0, 0}};
 extern const uint8_t bt49_terrain[];
 extern const Tech01Unit bt49_units[]; extern const uint8_t bt49_levels[];
 static const uint8_t bt49_items[][2] = {{0xFF, 0xFF}};
-static const uint8_t bt49_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3};
+static const uint8_t bt49_ai[] = {0, 1, 255, 255, 3, 1, 0, 255, 255, 3, 7, 2, 140, 0, 1, 8, 2, 167, 0, 1};
 static const uint8_t bt49_tre[][3] = {{0, 0, 0}};
 extern const uint8_t bt50_terrain[];
 extern const Tech01Unit bt50_units[]; extern const uint8_t bt50_levels[];
@@ -273,16 +273,16 @@ const BattleDef battle_defs[N_BATTLES] = {
     {28, 16, 15, bt12_terrain, 15, bt12_units, bt12_levels, 1, bt12_items, 3, bt12_ai, 1, bt12_tre, 30, 0, 0, 4, 1, 43, 10, 13, TX_BT_TITLE_14, 0xFF, 0xFF, 0xFF, 0, 1, 4, 0, 255, 0, 0, 0, 0, 1, 0, TXD_B12_GOAL, TXD_B12_GOAL_2},
     {24, 14, 15, bt13_terrain, 13, bt13_units, bt13_levels, 1, bt13_items, 2, bt13_ai, 1, bt13_tre, 25, 0, 0, 4, 1, 47, 11, 14, TX_BT_TITLE_15, 0xFF, 0xFF, 0xFF, 0, 1, 4, 0, 255, 0, 0, 0, 0, 0, 0, TXD_B13_GOAL, TXD_B13_GOAL_2},
     {26, 14, 15, bt14_terrain, 13, bt14_units, bt14_levels, 2, bt14_items, 2, bt14_ai, 1, bt14_tre, 25, 0, 0, 4, 1, 53, 0xFF, 15, TX_BT_TITLE_16, 0xFF, 0xFF, 0xFF, 0, 0, 255, 0, 255, 0, 0, 0, 0, 0, 0, TXD_B14_GOAL, TXD_B14_GOAL_2},
-    {26, 14, 15, bt15_terrain, 14, bt15_units, bt15_levels, 0, bt15_items, 2, bt15_ai, 1, bt15_tre, 20, 1, 0, 4, 1, 59, 12, 16, TX_BT_TITLE_17, 0xFF, 0xFF, 0xFF, 0, 3, 0, 0, 255, 0, 0, 1, 2, 8, 0, TXD_B15_GOAL, TXD_B15_GOAL_2},
+    {26, 14, 15, bt15_terrain, 14, bt15_units, bt15_levels, 0, bt15_items, 6, bt15_ai, 1, bt15_tre, 20, 1, 0, 4, 1, 59, 12, 16, TX_BT_TITLE_17, 0xFF, 0xFF, 0xFF, 0, 3, 0, 0, 255, 0, 0, 1, 2, 8, 0, TXD_B15_GOAL, TXD_B15_GOAL_2},
     {26, 14, 15, bt16_terrain, 12, bt16_units, bt16_levels, 1, bt16_items, 4, bt16_ai, 1, bt16_tre, 25, 0, 0, 4, 1, 61, 13, 17, TX_BT_TITLE_18, 0xFF, 0xFF, 0xFF, 0, 1, 5, 0, 4, 0, 0, 0, 0, 0, 0, TXD_B16_GOAL, TXD_B16_GOAL_2},
     {26, 14, 15, bt17_terrain, 17, bt17_units, bt17_levels, 1, bt17_items, 3, bt17_ai, 1, bt17_tre, 6, 0, 0, 5, 1, 67, 14, 18, TX_BT_TITLE_19, 0xFF, 0xFF, 0xFF, 0, 2, 255, 6, 255, 0, 0, 0, 0, 8, 0, TXD_B17_GOAL, TXD_B17_GOAL_2},
     {26, 14, 15, bt18_terrain, 15, bt18_units, bt18_levels, 1, bt18_items, 3, bt18_ai, 1, bt18_tre, 25, 0, 0, 5, 1, 71, 0xFF, 19, TX_BT_TITLE_20, 0xFF, 0xFF, 0xFF, 0, 1, 6, 0, 255, 0, 0, 0, 0, 0, 0, TXD_B18_GOAL, TXD_B18_GOAL_2},
-    {24, 14, 15, bt19_terrain, 13, bt19_units, bt19_levels, 0, bt19_items, 3, bt19_ai, 0, bt19_tre, 15, 0, 0, 1, 1, 73, 15, 20, TX_BT_TITLE_21, 0xFF, 0xFF, 0xFF, 0, 3, 0, 0, 255, 0, 0, 2, 13, 8, 0, TXD_B19_GOAL, TXD_B19_GOAL_2},
+    {24, 14, 15, bt19_terrain, 11, bt19_units, bt19_levels, 0, bt19_items, 5, bt19_ai, 0, bt19_tre, 15, 0, 0, 1, 1, 73, 15, 20, TX_BT_TITLE_21, 0xFF, 0xFF, 0xFF, 0, 3, 0, 0, 255, 10, 5, 10, 7, 8, 0, TXD_B19_GOAL, TXD_B19_GOAL_2},
     {26, 16, 15, bt20_terrain, 17, bt20_units, bt20_levels, 1, bt20_items, 3, bt20_ai, 1, bt20_tre, 25, 0, 0, 6, 1, 79, 16, 21, TX_BT_TITLE_22, 0xFF, 0xFF, 0xFF, 0, 1, 6, 0, 255, 0, 0, 0, 0, 1, 0, TXD_B20_GOAL, TXD_B20_GOAL_2},
     {26, 14, 9, bt21_terrain, 17, bt21_units, bt21_levels, 1, bt21_items, 2, bt21_ai, 1, bt21_tre, 25, 0, 0, 6, 1, 83, 17, 22, TX_BT_TITLE_23, 0xFF, 0xFF, 0xFF, 0, 1, 7, 0, 255, 0, 0, 0, 0, 6, 0, TXD_B21_GOAL, TXD_B21_GOAL_2},
     {26, 15, 9, bt22_terrain, 16, bt22_units, bt22_levels, 1, bt22_items, 2, bt22_ai, 1, bt22_tre, 25, 0, 0, 6, 1, 89, 18, 23, TX_BT_TITLE_24, 0xFF, 0xFF, 0xFF, 0, 0, 255, 0, 255, 0, 0, 0, 0, 6, 0, TXD_B22_GOAL, TXD_B22_GOAL_2},
     {26, 14, 9, bt23_terrain, 16, bt23_units, bt23_levels, 1, bt23_items, 4, bt23_ai, 1, bt23_tre, 20, 0, 0, 6, 1, 97, 0xFF, 24, TX_BT_TITLE_25, 0xFF, 0xFF, 0xFF, 0, 3, 7, 0, 7, 23, 5, 25, 7, 8, 0, TXD_B23_GOAL, TXD_B23_GOAL_2},
-    {26, 14, 9, bt24_terrain, 16, bt24_units, bt24_levels, 0, bt24_items, 3, bt24_ai, 0, bt24_tre, 15, 1, 0, 6, 5, 101, 19, 25, TX_BT_TITLE_26, 0xFF, 0xFF, 0xFF, 0, 3, 0, 0, 255, 22, 5, 25, 7, 8, 0, TXD_B24_GOAL, TXD_B24_GOAL_2},
+    {26, 14, 9, bt24_terrain, 16, bt24_units, bt24_levels, 0, bt24_items, 7, bt24_ai, 0, bt24_tre, 15, 1, 0, 6, 5, 101, 19, 25, TX_BT_TITLE_26, 0xFF, 0xFF, 0xFF, 0, 3, 0, 0, 255, 22, 5, 25, 7, 8, 0, TXD_B24_GOAL, TXD_B24_GOAL_2},
     {26, 14, 9, bt25_terrain, 18, bt25_units, bt25_levels, 2, bt25_items, 3, bt25_ai, 1, bt25_tre, 25, 0, 0, 6, 1, 103, 20, 26, TX_BT_TITLE_27, 0xFF, 0xFF, 0xFF, 0, 1, 7, 0, 255, 0, 0, 0, 0, 1, 0, TXD_B25_GOAL, TXD_B25_GOAL_2},
     {26, 14, 9, bt26_terrain, 20, bt26_units, bt26_levels, 1, bt26_items, 2, bt26_ai, 1, bt26_tre, 25, 0, 0, 6, 1, 31, 21, 27, TX_BT_TITLE_28, 0xFF, 0xFF, 0xFF, 0, 3, 0, 0, 255, 18, 4, 21, 9, 8, 0, TXD_B26_GOAL, TXD_B26_GOAL_2},
     {26, 14, 9, bt27_terrain, 18, bt27_units, bt27_levels, 1, bt27_items, 2, bt27_ai, 1, bt27_tre, 25, 0, 0, 6, 1, 38, 22, 28, TX_BT_TITLE_29, 0xFF, 0xFF, 0xFF, 0, 1, 10, 0, 255, 0, 0, 0, 0, 6, 0, TXD_B27_GOAL, TXD_B27_GOAL_2},
@@ -307,7 +307,7 @@ const BattleDef battle_defs[N_BATTLES] = {
     {26, 14, 9, bt46_terrain, 19, bt46_units, bt46_levels, 1, bt46_items, 2, bt46_ai, 0, bt46_tre, 25, 0, 0, 7, 1, 171, 37, 47, TX_BT_TITLE_48, 0xFF, 0xFF, 0xFF, 0, 1, 10, 0, 255, 0, 0, 0, 0, 6, 0, TXD_B46_GOAL, TXD_B46_GOAL_2},
     {28, 16, 9, bt47_terrain, 19, bt47_units, bt47_levels, 2, bt47_items, 2, bt47_ai, 0, bt47_tre, 25, 0, 0, 7, 1, 178, 38, 48, TX_BT_TITLE_49, 0xFF, 0xFF, 0xFF, 0, 1, 10, 0, 255, 0, 0, 0, 0, 6, 0, TXD_B47_GOAL, TXD_B47_GOAL_2},
     {26, 14, 9, bt48_terrain, 19, bt48_units, bt48_levels, 1, bt48_items, 2, bt48_ai, 0, bt48_tre, 25, 0, 0, 7, 1, 185, 0xFF, 49, TX_BT_TITLE_50, 0xFF, 0xFF, 0xFF, 0, 1, 10, 0, 255, 0, 0, 0, 0, 6, 0, TXD_B48_GOAL, TXD_B48_GOAL_2},
-    {26, 14, 9, bt49_terrain, 19, bt49_units, bt49_levels, 0, bt49_items, 2, bt49_ai, 0, bt49_tre, 25, 1, 0, 7, 1, 192, 39, 50, TX_BT_TITLE_51, 0xFF, 0xFF, 0xFF, 0, 3, 0, 0, 255, 18, 5, 21, 8, 8, 0, TXD_B49_GOAL, TXD_B49_GOAL_2},
+    {26, 14, 9, bt49_terrain, 19, bt49_units, bt49_levels, 0, bt49_items, 4, bt49_ai, 0, bt49_tre, 25, 1, 0, 7, 1, 192, 39, 50, TX_BT_TITLE_51, 0xFF, 0xFF, 0xFF, 0, 3, 0, 0, 255, 18, 5, 21, 8, 8, 0, TXD_B49_GOAL, TXD_B49_GOAL_2},
     {28, 16, 9, bt50_terrain, 20, bt50_units, bt50_levels, 3, bt50_items, 2, bt50_ai, 0, bt50_tre, 30, 0, 0, 8, 1, 199, 0xFF, 51, TX_BT_TITLE_52, 0xFF, 0xFF, 0xFF, 0, 1, 10, 0, 255, 0, 0, 0, 0, 1, 0, TXD_B50_GOAL, TXD_B50_GOAL_2},
     {28, 16, 9, bt51_terrain, 20, bt51_units, bt51_levels, 2, bt51_items, 2, bt51_ai, 0, bt51_tre, 30, 1, 0, 8, 1, 206, 0xFF, 0xFF, TX_BT_TITLE_53, 0xFF, 0xFF, 0xFF, 1, 1, 10, 0, 255, 0, 0, 0, 0, 1, 0, TXD_B51_GOAL, TXD_B51_GOAL_2},
 };

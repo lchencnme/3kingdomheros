@@ -259,7 +259,9 @@ def act(em, u, ctx):
     for c in cells:
         dz = danger(c, foes)
         pen = kw * max(0.0, dz - (0.0 if leader else 0.3 * me.hp))
-        if leader and dz >= me.hp:
+        if leader and ctx["leader_goal"]:      # escape battles: run for the exit, take the hits on the way
+            pen = 0.3 * dz
+        elif leader and dz >= me.hp:
             pen += 3000
         elif dz >= 1.3 * me.hp:                # fighters commit; only near-certain death holds them back
             pen += 300
@@ -275,7 +277,7 @@ def act(em, u, ctx):
         move_sc += RNG.random() * JITTER
         if move_sc > best[0]:
             best = (move_sc, c, None)
-        if rmax <= 0:
+        if rmax <= 0 or (leader and ctx["leader_goal"]):   # escaping: 刘备 does not stop to fight
             continue
         for e in foes:
             dist = abs(e.x - c[0]) + abs(e.y - c[1])

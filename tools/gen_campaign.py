@@ -101,11 +101,13 @@ BT02 = {
         "00000000000000000000000000",
         "00000000000000000000000000"],
     "slots": [(1, 7), (2, 6), (2, 8), (0, 6)],
-    "others": [U(9, 13, 6, ai=2, lv=3, ch=12, fac="ALLY"),       # 4 龚景 (must survive), stays in the keep
+    "others": [U(9, 11, 5, ai=2, lv=3, ch=12, fac="ALLY"),       # 4 龚景 (must survive): on the keep's NW fort
                U(0, 12, 8, ai=3, lv=2, fac="ALLY"), U(0, 14, 8, ai=3, lv=2, fac="ALLY"),
                U(0, 6, 4), U(0, 6, 10), U(3, 20, 4), U(3, 20, 10), U(0, 22, 7), U(0, 19, 7),
                U(6, 24, 6, lv=2), U(6, 24, 8, lv=2)],
-    "ai_groups": [G(0, "AGGRESSIVE"), G(2, "HOLD"), G(3, "GUARD_POINT", [13, 7], 2)],
+    # 龚景 guards his post with leash 0: HOLD turns into an attack once threatened, and he walked out of the
+    # city to his death by round 3 (review, autoplay: lost under every play style)
+    "ai_groups": [G(0, "AGGRESSIVE"), G(2, "GUARD_POINT", [11, 5], 0), G(3, "GUARD_POINT", [13, 7], 2)],
     "items": [], "treasures": [(13, 14, 3)],
     "victory": ("ALL", None, 0), "protect": 4,
     "turn_limit": 25, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 4, "forced": [0], "seed": 5,
@@ -707,7 +709,7 @@ BT18 = {
 }
 # ---------------------------------------------------------------- BT_19 跃马檀溪 (回目 34, 刘备 alone; 徐庶 joins)
 BT19 = {
-    "id": "BT_19", "goal": ("刘备过檀溪，到达西岸", "本战只有刘备出阵。"), "map": [
+    "id": "BT_19", "goal": ("刘备冲到檀溪渡口", "本战只有刘备出阵。到了渡口，的卢自会跃过檀溪。"), "map": [
         "000000077700000000005555",
         "000000077700000000055555",
         "000000077700000222000555",
@@ -724,11 +726,15 @@ BT19 = {
         "000000077700000000000000"],
     "slots": [(22, 6), (21, 5), (21, 7), (23, 5), (23, 7), (20, 6)],
     "others": [U(7, 19, 3, ai=2, lv=13, ch=43),                     # 6 蔡瑁 springs the trap
-               U(6, 19, 9, ai=2, lv=12), U(1, 14, 5, ai=2, lv=12), U(1, 14, 7, ai=2, lv=12),
+               # 刘备 rides alone: archers along the way and 蔡瑁's cavalry behind him are the trap (two halberdiers
+               # on the road made it unwinnable: four blows in one enemy phase, autoplay)
+               U(6, 19, 9, ai=2, lv=12),
                U(3, 12, 2, lv=11), U(3, 12, 10, lv=11), U(3, 4, 11, ai=1, lv=11)],
     "ai_groups": [G(0, "AGGRESSIVE"), G(1, "HOLD"), G(2, "AGGRESSIVE", 0)],
     "items": [], "treasures": [],
-    "victory": ("REACH", 0, 0), "area": (0, 0, 2, 13), "protect": None,
+    # the goal is the ford's east bank: the victory scene is 的卢's leap (on foot to the west bank was 20 cells
+    # against cavalry with 7 moves; autoplay: lost on round 2-3 under every play style)
+    "victory": ("REACH", 0, 0), "area": (10, 5, 10, 7), "protect": None,
     "turn_limit": 15, "continuity": "NORMAL", "round_mode": "RESET", "deploy_max": 1, "forced": [0], "seed": 73,
     "events": [
         EV(1, "BATTLE_START", None, [["TEXT", "NARRATOR", "TXD_B19_OPEN_0"], ["TEXT", "P0001", "TXD_B19_OPEN_1"], ["TEXT", "NARRATOR", "TXD_B19_GOAL"]]),
@@ -1377,6 +1383,39 @@ def ai_recs(groups, w):
     return recs
 
 
+# escape battles (刘备 must reach an exit): enemy cavalry that could strike his start on round 1 hold their
+# ground for one round and give chase from round 2 (autoplay: every try ended on round 2 with 刘备 down)
+PURSUIT_DELAY = {"BT_15": 2, "BT_19": 3, "BT_24": 2, "BT_49": 2}   # round the cavalry give chase
+CAV_MOVE = {6: 6, 7: 6, 8: 7}
+PURSUIT_GROUP = 7
+
+
+def pursuit_delay(bt):
+    if bt["id"] not in PURSUIT_DELAY:
+        return bt
+    import copy
+    bt = copy.deepcopy(bt)                     # keep tuples (slots): a JSON round trip would turn them into lists
+    lx, ly = bt["slots"][0]
+    late = [o for o in bt["others"] if o["fac"] == "ENEMY" and o["cls"] in CAV_MOVE
+            and abs(o["x"] - lx) + abs(o["y"] - ly) <= CAV_MOVE[o["cls"]] + 2]
+    if not late:
+        die(f"{bt['id']}: PURSUIT_DELAY but no cavalry within reach of 刘备")
+    used = {g["id"] for g in bt["ai_groups"]}
+    code = []
+    for k, o in enumerate(late):                # one group each: its own post, leash 1
+        gid = PURSUIT_GROUP + k
+        if gid in used:
+            die(f"{bt['id']}: AI group {gid} already used")
+        o["ai"] = gid
+        bt["ai_groups"] = bt["ai_groups"] + [G(gid, "GUARD_POINT", [o["x"], o["y"]], 1)]
+        code.append(["SET_AI", f"G{gid}", "AGGRESSIVE", None, 3])
+    eid = max(e["id"] for e in bt["events"]) + 1
+    rnd = PURSUIT_DELAY[bt["id"]]
+    bt["events"] = bt["events"] + [EV(eid, "PHASE_START", "ENEMY", code, {"leaf": "turn_cmp", "op": "ge", "n": rnd})]
+    bt["goal"] = (bt["goal"][0], bt["goal"][1] + f"敌骑第{rnd}回合起追击。")
+    return bt
+
+
 # the first battle of each chapter opens on a title card (narration over the chapter's landscape)
 CHAPTER_START = {"BT_06": 2, "BT_13": 3, "BT_21": 4, "BT_26": 5, "BT_37": 6, "BT_42": 7}
 
@@ -1432,7 +1471,7 @@ def main():
             continue
         if bid not in extra:
             die(f"battle {bid} has no definition")
-        bt = extra[bid]
+        bt = pursuit_delay(extra[bid])
         js, terrain, w, h = battle_json(bt)
         (ROOT / f"content/battles/{bid}.json").write_text(json.dumps(js, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         p = f"bt{n}"

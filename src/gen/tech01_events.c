@@ -134,6 +134,7 @@ const VmTemplate bt14_templates[] = {
 const VmEvent bt15_events[] = {
     {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 21},
     {7, 255, 0, 0, 0x0001, 0x0015, 0x0017, 13},
+    {1, 2, 0, 0, 0x0002, 0x0024, 0x0028, 29},
 };
 const VmTemplate bt15_templates[] = {
     {0}
@@ -166,6 +167,7 @@ const VmEvent bt19_events[] = {
     {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 17},
     {1, 0, 0, 0, 0x0001, 0x0011, 0x0015, 5},
     {7, 255, 0, 0, 0x0002, 0x001A, 0x001C, 15},
+    {1, 2, 0, 0, 0x0003, 0x002B, 0x002F, 15},
 };
 const VmTemplate bt19_templates[] = {
     {0}
@@ -205,6 +207,7 @@ const VmEvent bt24_events[] = {
     {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 17},
     {1, 0, 0, 0, 0x0001, 0x0011, 0x0015, 9},
     {7, 255, 0, 0, 0x0002, 0x001E, 0x0020, 16},
+    {1, 2, 0, 0, 0x0003, 0x0030, 0x0034, 29},
 };
 const VmTemplate bt24_templates[] = {
     {0}
@@ -393,6 +396,7 @@ const VmTemplate bt48_templates[] = {
 const VmEvent bt49_events[] = {
     {0, 255, 0, 0, 0x0000, 0xFFFF, 0x0000, 17},
     {7, 255, 0, 0, 0x0001, 0x0011, 0x0013, 14},
+    {1, 2, 0, 0, 0x0002, 0x0021, 0x0025, 15},
 };
 const VmTemplate bt49_templates[] = {
     {0}
@@ -427,16 +431,16 @@ const BattleEv battle_ev[] = {
     {4, 0, bt12_events, bt12_templates, bt12_script},
     {3, 0, bt13_events, bt13_templates, bt13_script},
     {4, 0, bt14_events, bt14_templates, bt14_script},
-    {2, 0, bt15_events, bt15_templates, bt15_script},
+    {3, 0, bt15_events, bt15_templates, bt15_script},
     {3, 0, bt16_events, bt16_templates, bt16_script},
     {3, 0, bt17_events, bt17_templates, bt17_script},
     {3, 0, bt18_events, bt18_templates, bt18_script},
-    {3, 0, bt19_events, bt19_templates, bt19_script},
+    {4, 0, bt19_events, bt19_templates, bt19_script},
     {3, 0, bt20_events, bt20_templates, bt20_script},
     {3, 0, bt21_events, bt21_templates, bt21_script},
     {3, 0, bt22_events, bt22_templates, bt22_script},
     {2, 0, bt23_events, bt23_templates, bt23_script},
-    {3, 0, bt24_events, bt24_templates, bt24_script},
+    {4, 0, bt24_events, bt24_templates, bt24_script},
     {3, 0, bt25_events, bt25_templates, bt25_script},
     {2, 0, bt26_events, bt26_templates, bt26_script},
     {3, 0, bt27_events, bt27_templates, bt27_script},
@@ -461,7 +465,7 @@ const BattleEv battle_ev[] = {
     {2, 0, bt46_events, bt46_templates, bt46_script},
     {2, 0, bt47_events, bt47_templates, bt47_script},
     {2, 0, bt48_events, bt48_templates, bt48_script},
-    {2, 0, bt49_events, bt49_templates, bt49_script},
+    {3, 0, bt49_events, bt49_templates, bt49_script},
     {2, 0, bt50_events, bt50_templates, bt50_script},
     {2, 0, bt51_events, bt51_templates, bt51_script},
 };
