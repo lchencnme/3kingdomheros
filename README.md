@@ -23,7 +23,7 @@ tools/get_gbdk.sh
 tools/build_rom.sh
 ```
 
-产物是 `build/gb/sanguo_hjz.gbc`（8 MiB，CGB 专用，MBC5+RAM+电池，128 KiB SRAM），可在 SameBoy 等支持 CGB 的模拟器中运行。
+产物是 `build/gb/sanguo_hjz.gbc`（512 KiB，CGB 专用，MBC5+RAM+电池，32 KiB 存档），可在 SameBoy 等支持 CGB 的模拟器中运行，也可以烧进 32 KiB 存档的 MBC5 卡带在真机上玩。
 
 `build.sh` 依次执行：
 1. 数据生成：规则表、TECH01 地图与关卡、字库与文本（含对话分页）、曲谱、全屏演员、画像、事件脚本。
