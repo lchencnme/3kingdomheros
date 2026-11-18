@@ -3,6 +3,7 @@
 #ifndef CORE_AI_H
 #define CORE_AI_H
 #include <stdint.h>
+#include "sram_map.h"
 #include "platform.h"
 #include "battle.h"
 #include "path.h"
@@ -18,9 +19,9 @@
 
 /* 8.2: groups 96 x 5 B + instance overrides 96 x 5 B = 960 B in SRAM12 @6912 (runtime area, saved as tag 10) */
 typedef struct { uint8_t mode; uint16_t target; uint8_t leash, flags; } AiMode;
-#define AI_SRAM_BANK 12u
-#define AI_SRAM_GROUPS 6912u
-#define AI_SRAM_INST 7392u
+#define AI_SRAM_BANK RT_BANK
+#define AI_SRAM_GROUPS RT_AI_GROUPS
+#define AI_SRAM_INST RT_AI_INST
 /* groups: n records of {id, mode, target lo, target hi, leash}; undefined groups = HOLD/FFFF/3 */
 void ai_groups_init(const uint8_t *recs, uint8_t n) CORE_API;
 /* SET_AI (9.3): subject 0..95 = instance override, 0x8000|g = group; resets the alert bit */

@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 LCC=${GBDK_LCC:-tools/gbdk/bin/lcc}
 mkdir -p build/gb
 python3 -I tools/check_generated.py
-$LCC -Wa-l -Wl-m -Wl-j -Wm-yC -Wm-yt0x1B -Wm-yo32 -Wm-ya16 -Wm-ynSANGUOHJZ \
+$LCC -Wa-l -Wl-m -Wl-j -Wm-yC -Wm-yt0x1B -Wm-yo32 -Wm-ya4 -Wm-ynSANGUOHJZ \
      -Wl-g.STACK=0xD000 -Wl-b_DATA=0xC600 -o build/gb/sanguo_hjz.gbc \
      src/gb/*.c src/core/rng.c src/core/rules.c src/core/path.c src/core/battle.c src/core/ai.c src/core/save.c src/core/vm.c src/core/strategy.c src/core/item.c src/core/roster.c src/core/undo.c \
      src/gen/*.c > build/gb/lcc.log 2>&1 || { cat build/gb/lcc.log; echo "lcc FAILED"; exit 1; }

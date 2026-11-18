@@ -2,6 +2,7 @@
  * Battle flags live in the SRAM12 runtime area (design doc 11.5: offset 6400, 512 B);
  * global flags in WRAM bank1 DF00 (campaign area); the dialogue queue in the event region CC00. */
 #include <gb/gb.h>
+#include "../core/sram_map.h"
 #include <string.h>
 #include "../core/vm.h"
 #include "../core/save.h"
@@ -18,8 +19,8 @@
 #include "eventram.h"
 #include "duel.h"
 
-#define SRAM_RUNTIME_BANK 12u
-#define SRAM_BATTLE_FLAGS 6400u
+#define SRAM_RUNTIME_BANK RT_BANK
+#define SRAM_BATTLE_FLAGS RT_FLAGS_OFF
 #define W1_CAMPAIGN ((uint8_t *)0xDF00u)
 
 uint8_t cur_bt;                                 /* index into battle_defs / battle_ev (design doc 2.1) */

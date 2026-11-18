@@ -4,6 +4,7 @@
 #ifndef CORE_ITEM_H
 #define CORE_ITEM_H
 #include <stdint.h>
+#include "sram_map.h"
 #include "platform.h"
 #include "battle.h"
 #include "rules.h"
@@ -11,7 +12,7 @@
 
 #define INV_SLOTS 8u
 #define INV_REC 20u
-#define INV_SRAM_BANK 15u
+#define INV_SRAM_BANK RT_BANK
 #define ITEM_NONE 0xFFu
 
 #define IR_OK 0u
@@ -89,7 +90,7 @@ uint8_t treasure_take(uint8_t i, uint8_t receiver) CORE_API;
 uint8_t inv_first_free(const Battle *b, uint8_t faction) CORE_API;
 
 #define PRIZE_MAX 16u
-#define PRIZE_SRAM_OFF 7872u        /* SRAM12 runtime area (11.5 reserve): count + 16 item ids */
+#define PRIZE_SRAM_OFF RT_PRIZE_OFF   /* runtime area: count + 16 item ids */
 /* scripted rewards (GIVE_ITEM) wait here until distributed, sold or discarded after the battle */
 uint8_t prize_push(uint8_t item) CORE_API;            /* 0 = queue full (the script is told, never silent) */
 uint8_t prize_count(void) CORE_API;

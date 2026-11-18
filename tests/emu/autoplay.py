@@ -179,10 +179,10 @@ HEAL_ITEMS = (2, 1, 0)                        # 大军粮, 军粮, 干粮
 
 
 def heal_slot(em, u):
-    """bag slot of the best hp remedy the officer carries (inventory in SRAM bank 15, 20 B per unit)"""
+    """bag slot of the best hp remedy the officer carries (bags: cartridge RAM bank 3 @2560, 20 B per unit)"""
     best = None
     for s in range(8):
-        lo, hi = em.m[15, 0xA000 + u.i * 20 + s * 2], em.m[15, 0xA000 + u.i * 20 + s * 2 + 1]
+        lo, hi = em.m[3, 0xA000 + 2560 + u.i * 20 + s * 2], em.m[3, 0xA000 + 2560 + u.i * 20 + s * 2 + 1]
         if hi == 0 and lo in HEAL_ITEMS and (best is None or HEAL_ITEMS.index(lo) < HEAL_ITEMS.index(best[1])):
             best = (s, lo)
     return None if best is None else best[0]
@@ -499,18 +499,18 @@ for _k, _b in enumerate(json.load(open(ROOT / "content/campaign.json"))["battles
 
 def calibrate(em, next_bt, refill):
     """--calibrate: lift every roster officer to (average enemy level of the next battle - 2) before it starts
-    (SRAM12 roster, 48 B records, level at +4, hp at +10: 0 = full). Measures the battle design with an army
+    (roster in cartridge RAM bank 3, 48 B records, level at +4, hp at +10: 0 = full). Measures the battle design with an army
     of the expected strength instead of the bot's own (forced wins earn no experience)."""
-    n = em.m[12, 0xA000 + 7890]
+    n = em.m[3, 0xA000 + 2514]
     want = max(1, int(ENEMY_LV.get(next_bt, 1)) - 2)
-    for k in range(min(n, 128)):
+    for k in range(min(n, 16)):
         a = 0xA000 + k * 48
         if k < 24 and em.m[1, 0xD000 + 40 * k + 5] < want:   # the camp syncs these instances back into the roster
             em.m[1, 0xD000 + 40 * k + 5] = want
-        if em.m[12, a + 4] < want:
-            em.m[12, a + 4] = want
+        if em.m[3, a + 4] < want:
+            em.m[3, a + 4] = want
             if refill:
-                em.m[12, a + 10] = 0; em.m[12, a + 11] = 0; em.m[12, a + 12] = 0; em.m[12, a + 13] = 0
+                em.m[3, a + 10] = 0; em.m[3, a + 11] = 0; em.m[3, a + 12] = 0; em.m[3, a + 13] = 0
 
 
 def player_stats(em):

@@ -347,8 +347,8 @@ e = Emu()
 check("boot: main loop running", e.r8("_dbg_frame_lo") != 0)
 check("CGB double speed (KEY1 bit7)", e.m[0xFF4D] & 0x80, f"KEY1={e.m[0xFF4D]:02X}")
 hdr = ROM.read_bytes()
-check("header: CGB-only + MBC5+RAM+BATT + 512KiB/128KiB",
-      hdr[0x143] == 0xC0 and hdr[0x147] == 0x1B and hdr[0x148] == 0x04 and hdr[0x149] == 0x04)
+check("header: CGB-only + MBC5+RAM+BATT + 512KiB ROM / 32KiB RAM",
+      hdr[0x143] == 0xC0 and hdr[0x147] == 0x1B and hdr[0x148] == 0x04 and hdr[0x149] == 0x03)
 check(f"SM83 CRC32 self-test = CBF43926 ({e.r32('_dbg_crc_check'):08X})", e.r32("_dbg_crc_check") == 0xCBF43926)
 e.wait_state([G_IDLE])
 check("player phase idle, round 1", e.state() == G_IDLE and e.r16("_dbg_round") == 1)
@@ -1162,6 +1162,8 @@ check("BT_12 won by taking 吕布", it.state() == G_OUTCOME and it.r8("_dbg_outc
 it.press("a", after=16)
 
 # ------------------------------------------------------------------ Chapter 3 流离 (BT_13..BT_20)
+RT_BANK, RT_ROSTER_COUNT = 3, 2514           # cartridge RAM runtime area (src/core/sram_map.h)
+
 def sram(em, bank, off):
     return em.m[bank, 0xA000 + off]
 
@@ -1193,7 +1195,7 @@ put(it, 0, 1, 1)                                          # 刘备 breaks out to
 end_turn_outcome(it)
 check(f"BT_15: the leader reaching the corner wins (outcome {it.r8('_dbg_outcome')})", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
 it.press("a", after=16)
-check(f"PARTY_LEAVE: 关羽 (roster 1) has left (fate {sram(it, 12, 48 + 2)})", sram(it, 12, 48 + 2) == 2)
+check(f"PARTY_LEAVE: 关羽 (roster 1) has left (fate {sram(it, RT_BANK, 48 + 2)})", sram(it, RT_BANK, 48 + 2) == 2)
 through_camp(it)                                          # 河北: 关羽 cannot be deployed
 check(f"BT_16 古城会 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 16 and it.state() == G_IDLE)
 check(f"BT_16: 关羽 is not deployed from the roster, he rides in as an ally (unit 4: character {it.m[1, 0xD000 + 160]}, side {it.m[1, 0xD000 + 163]})",
@@ -1202,8 +1204,8 @@ it.frames(60)
 check("BT_16 map consistent", view_mismatches(it) == 0)
 win_now(it, [5])                                          # 蔡阳
 it.press("a", after=16)
-check(f"古城会: 关羽 returns and 赵云 joins (met_zhaoyun at 磐河; roster {sram(it, 12, 7890)}, 关羽 fate {sram(it, 12, 50)})",
-      sram(it, 12, 7890) == 5 and sram(it, 12, 50) == 1 and sram(it, 12, 4 * 48) == 17)
+check(f"古城会: 关羽 returns and 赵云 joins (met_zhaoyun at 磐河; roster {sram(it, RT_BANK, RT_ROSTER_COUNT)}, 关羽 fate {sram(it, RT_BANK, 50)})",
+      sram(it, RT_BANK, RT_ROSTER_COUNT) == 5 and sram(it, RT_BANK, 50) == 1 and sram(it, RT_BANK, 4 * 48) == 17)
 through_camp(it)
 check(f"BT_17 汝南之战 ({it.r8('_dbg_battle')})", it.r8("_dbg_battle") == 17 and it.state() == G_IDLE)
 check(f"BT_17: 关羽 and 赵云 deployed (unit 1 hp {it.hp(1)}, unit 4 character {it.m[1, 0xD000 + 160]})",
@@ -1233,7 +1235,7 @@ put(it, 0, 10, 6)                                         # the ford's east bank
 end_turn_outcome(it)
 check(f"BT_19: reaching the 檀溪 ford wins (outcome {it.r8('_dbg_outcome')})", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1)
 it.press("a", after=16)
-check(f"徐庶 joins after 檀溪 (roster {sram(it, 12, 7890)})", sram(it, 12, 7890) == 6 and sram(it, 12, 5 * 48) == 44)
+check(f"徐庶 joins after 檀溪 (roster {sram(it, RT_BANK, RT_ROSTER_COUNT)})", sram(it, RT_BANK, RT_ROSTER_COUNT) == 6 and sram(it, RT_BANK, 5 * 48) == 44)
 through_camp(it)
 check(f"BT_20 新野破曹仁 ({it.r8('_dbg_battle')}, 徐庶 unit 5 character {it.m[1, 0xD000 + 200]})",
       it.r8("_dbg_battle") == 20 and it.state() == G_IDLE and it.m[1, 0xD000 + 200] == 44)
@@ -1242,13 +1244,13 @@ check("BT_20 map consistent", view_mismatches(it) == 0)
 win_now(it, [6])                                          # the formation's eye
 check("BT_20: the formation eye alone decides the battle", it.state() == G_OUTCOME and it.r8("_dbg_outcome") == 1 and it.hp(15) > 0)
 it.press("a", after=16)
-check(f"徐庶 leaves after 新野 (fate {sram(it, 12, 5 * 48 + 2)})", sram(it, 12, 5 * 48 + 2) == 2)
+check(f"徐庶 leaves after 新野 (fate {sram(it, RT_BANK, 5 * 48 + 2)})", sram(it, RT_BANK, 5 * 48 + 2) == 2)
 for _ in range(300):                                      # 隆中 camp: 三顾茅庐, 诸葛亮 joins on entry
     if it.state() in (20, 25) and it.r8("_dbg_dialog_active") == 0:
         break
     it.frames(1)
-check(f"三顾茅庐: 诸葛亮 joins at the 隆中 camp (roster {sram(it, 12, 7890)}, character {sram(it, 12, 6 * 48)})",
-      sram(it, 12, 7890) == 7 and sram(it, 12, 6 * 48) == 47)
+check(f"三顾茅庐: 诸葛亮 joins at the 隆中 camp (roster {sram(it, RT_BANK, RT_ROSTER_COUNT)}, character {sram(it, RT_BANK, 6 * 48)})",
+      sram(it, RT_BANK, RT_ROSTER_COUNT) == 7 and sram(it, RT_BANK, 6 * 48) == 47)
 through_camp(it)                                          # depart for chapter 4
 
 # ------------------------------------------------------------------ Chapter 4 卧龙 (BT_21..BT_25)
@@ -1323,10 +1325,10 @@ check(f"BT_29: 巩志 changes sides (unit 11 side {it.m[1, 0xD000 + 40 * 11 + 3]
       it.m[1, 0xD000 + 40 * 11 + 3] == 1 and it.r8("_dbg_vm_err") == 0)
 win_now(it, [10]); it.press("a", after=16); through_camp(it)
 expect(it, 30, "长沙")
-n_ro = sram(it, 12, 7890)
+n_ro = sram(it, RT_BANK, RT_ROSTER_COUNT)
 win_now(it, [10]); it.press("a", after=16)
-check(f"长沙: 黄忠 and 魏延 join (roster {n_ro} -> {sram(it, 12, 7890)})",
-      sram(it, 12, 7890) == n_ro + 2 and sram(it, 12, n_ro * 48) == 65 and sram(it, 12, (n_ro + 1) * 48) == 66)
+check(f"长沙: 黄忠 and 魏延 join (roster {n_ro} -> {sram(it, RT_BANK, RT_ROSTER_COUNT)})",
+      sram(it, RT_BANK, RT_ROSTER_COUNT) == n_ro + 2 and sram(it, RT_BANK, n_ro * 48) == 65 and sram(it, RT_BANK, (n_ro + 1) * 48) == 66)
 through_camp(it)
 expect(it, 31, "涪关"); win_now(it, [10]); it.press("a", after=16); through_camp(it)
 expect(it, 32, "巴郡"); win_now(it, [10]); it.press("a", after=16); through_camp(it)
@@ -1341,8 +1343,8 @@ hold_to(it, 8)
 check(f"BT_35: held to round 8 (outcome {it.r8('_dbg_outcome')})", it.r8("_dbg_outcome") == 1)
 it.press("a", after=16)
 through_camp(it)
-check(f"葭萌关 camp: 马超 joined (roster {sram(it, 12, 7890)}, last character {sram(it, 12, (sram(it, 12, 7890) - 1) * 48)})",
-      sram(it, 12, (sram(it, 12, 7890) - 1) * 48) == 74)
+check(f"葭萌关 camp: 马超 joined (roster {sram(it, RT_BANK, RT_ROSTER_COUNT)}, last character {sram(it, RT_BANK, (sram(it, RT_BANK, RT_ROSTER_COUNT) - 1) * 48)})",
+      sram(it, RT_BANK, (sram(it, RT_BANK, RT_ROSTER_COUNT) - 1) * 48) == 74)
 expect(it, 36, "成都")
 put(it, 0, 20, 7)
 end_turn_outcome(it)
@@ -1365,7 +1367,7 @@ expect(it, 41, "阳平关"); win_now(it, [10]); it.press("a", after=16); through
 expect(it, 42, "水淹七军")
 check(f"BT_42: it rains (weather {it.m[SYMS['_B'] + 13]})", it.m[SYMS["_B"] + 13] == 1)
 win_now(it, [10]); it.press("a", after=16)
-check(f"after 襄樊 关羽 stays in 荆州 (fate {sram(it, 12, 48 + 2)})", sram(it, 12, 48 + 2) == 2)
+check(f"after 襄樊 关羽 stays in 荆州 (fate {sram(it, RT_BANK, 48 + 2)})", sram(it, RT_BANK, 48 + 2) == 2)
 through_camp(it)
 expect(it, 43, "麦城")
 check(f"BT_43: 关羽 holds 麦城 as an ally (unit 10 character {it.m[1, 0xD000 + 400]}, side {it.m[1, 0xD000 + 403]})",
@@ -1397,7 +1399,7 @@ hi.pb.stop(save=False)
 win_now(it, [11])
 check("麦城 with 关羽 alive: victory", it.r8("_dbg_outcome") == 1 and it.hp(10) > 0)
 it.press("a", after=16)
-check(f"关羽 returns to the party (fate {sram(it, 12, 48 + 2)})", sram(it, 12, 48 + 2) == 1)
+check(f"关羽 returns to the party (fate {sram(it, RT_BANK, 48 + 2)})", sram(it, RT_BANK, 48 + 2) == 1)
 through_camp(it)
 expect(it, 46, "宛城")
 check("route: 关羽 saved -> the northern campaign (BT_46, 关羽 deployed)", it.hp(1) > 0)

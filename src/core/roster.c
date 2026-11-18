@@ -2,6 +2,7 @@
 #pragma bank 13
 #endif
 #include <string.h>
+#include "sram_map.h"
 #include "roster.h"
 #include "item.h"
 #include "save.h"
@@ -109,7 +110,7 @@ void roster_deploy(Battle *b, uint8_t idx, uint8_t inst, uint8_t x, uint8_t y, u
     sram_read(ROSTER_SRAM_BANK, rec_off(idx), h, 14);
     sram_read(ROSTER_SRAM_BANK, (uint16_t)(rec_off(idx) + 45u), tail, 3);
     sram_read(ROSTER_SRAM_BANK, (uint16_t)(rec_off(idx) + 14u), buf, 19);                 /* items + equip */
-    sram_write(INV_SRAM_BANK, (uint16_t)((uint16_t)inst * INV_REC), buf, 19);
+    sram_write(INV_SRAM_BANK, (uint16_t)(RT_INV_OFF + (uint16_t)inst * INV_REC), buf, 19);
     battle_spawn(b, inst, (uint16_t)(h[0] | ((uint16_t)h[1] << 8)), h[3], FAC_PLAYER, h[4], x, y);
     unit_load(inst, &u);
     u.roster_offset = (uint16_t)idx * ROSTER_REC;       /* base stats now come from the record */
@@ -138,7 +139,7 @@ void roster_sync(uint8_t idx, uint8_t inst) CORE_API
     r.cls = u.class_id; r.level = u.level; r.xp = u.exp;
     r.hp = u.hp; r.mp = u.mp; r.morale = u.morale;
     r.reserved[0] = (u.action_flags & (AF_RETREAT | AF_DEAD)) || !u.hp ? ROSTER_RETREATED : 0u;
-    sram_read(INV_SRAM_BANK, (uint16_t)((uint16_t)inst * INV_REC), r.items, 16);
-    sram_read(INV_SRAM_BANK, (uint16_t)((uint16_t)inst * INV_REC + 16u), r.equip, 3);
+    sram_read(INV_SRAM_BANK, (uint16_t)(RT_INV_OFF + (uint16_t)inst * INV_REC), r.items, 16);
+    sram_read(INV_SRAM_BANK, (uint16_t)(RT_INV_OFF + (uint16_t)inst * INV_REC + 16u), r.equip, 3);
     roster_write(idx, &r);
 }

@@ -290,5 +290,7 @@
   "TX_RES_ROUNDS": " 历时{n}回合",
   "TX_RES_LOST": " 撤退{n}人",
   "TX_RES_BONUS": " 赏金{n}",
-  "TX_RES_NEXT": " A继续"
+  "TX_RES_NEXT": " A继续",
+  "TX_SRAM_SMALL": "卡带存档容量不足",
+  "TX_SRAM_NEED": "需要32KB存档的卡带"
 }

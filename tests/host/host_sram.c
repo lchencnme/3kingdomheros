@@ -1,8 +1,11 @@
 /* Host SRAM model with power-cut injection: after 'cut_after' byte writes all further writes are lost. */
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "../../src/core/save.h"
+#include "../../src/core/sram_map.h"
 
-uint8_t host_sram[16][8192];
+uint8_t host_sram[SRAM_BANKS][8192];   /* the cart: 32 KiB */
 long host_cut_after = -1;      /* -1 = never */
 long host_writes = 0;
 
@@ -17,13 +20,14 @@ __attribute__((weak)) uint8_t undo_overflowed(void) { return 0; }
 
 void sram_write(uint8_t bank, uint16_t off, const uint8_t *src, uint16_t n) PLATFORM_API
 {
-    if ((bank == 12u || (bank == 15u && off < 1920u)) && undo_active()) {
+    if (bank >= SRAM_BANKS || (uint32_t)off + n > 8192u) { fprintf(stderr, "sram_write out of the cart: bank %u off %u\n", bank, off); abort(); }
+    if (bank == RT_BANK && off < RT_UNDO_OFF && undo_active()) {
         uint8_t old[32];
         uint16_t k;
         for (k = 0; k < n; k += 32u) {
             uint8_t m = (uint8_t)((n - k) < 32u ? (n - k) : 32u);
             memcpy(old, &host_sram[bank][off + k], m);
-            if (!undo_log(bank == 12u ? US_SRAM12 : US_SRAM15, bank, (uint16_t)(off + k), m, old)) return;
+            if (!undo_log(off >= RT_INV_OFF ? US_SRAM15 : US_SRAM12, bank, (uint16_t)(off + k), m, old)) return;
         }
     }
     uint16_t i;
@@ -36,6 +40,7 @@ void sram_write(uint8_t bank, uint16_t off, const uint8_t *src, uint16_t n) PLAT
 
 void sram_read(uint8_t bank, uint16_t off, uint8_t *dst, uint16_t n) PLATFORM_API
 {
+    if (bank >= SRAM_BANKS || (uint32_t)off + n > 8192u) { fprintf(stderr, "sram_read out of the cart: bank %u off %u\n", bank, off); abort(); }
     memcpy(dst, &host_sram[bank][off], n);
 }
 

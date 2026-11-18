@@ -12,10 +12,10 @@
 #define SAVE_IMAGE_BYTES 16384u
 #define SAVE_MAX_BODY 16352u
 
-#define SAVE_SLOT_NORMAL0 0u   /* SRAM banks 0..3  */
-#define SAVE_SLOT_NORMAL1 1u   /* SRAM banks 4..7  */
-#define SAVE_SLOT_SUSPEND 2u   /* SRAM banks 8..11 */
-#define SAVE_SLOT_SNAPSHOT 3u  /* SRAM banks 13 / 14 (8 KiB copies): pre-battle snapshot (11.6) */
+#define SAVE_SLOT_NORMAL0 0u   /* camp save: bank 0, 2 x 2 KiB (sram_map.h) */
+#define SAVE_SLOT_NORMAL1 1u   /* never written: shares the camp area (32 KiB layout) */
+#define SAVE_SLOT_SUSPEND 2u   /* battle save: banks 1 / 2, 8 KiB copies */
+#define SAVE_SLOT_SNAPSHOT 3u  /* pre-battle snapshot (11.6): bank 0, 2 x 2 KiB */
 
 #define SAVE_OK 0u
 #define SAVE_ERR_NONE 1u        /* no valid copy */

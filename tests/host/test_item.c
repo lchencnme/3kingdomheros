@@ -14,7 +14,7 @@
 extern uint8_t host_terrain[4096], host_occ[4096];
 extern ActiveUnit host_units[MAX_UNITS];
 extern UnitBase host_base[MAX_UNITS];
-extern uint8_t host_sram[16][8192];
+extern uint8_t host_sram[4][8192];
 extern TreasureDef host_treasures[8];
 extern uint8_t host_n_treasures;
 extern uint8_t host_campaign[256];
@@ -53,10 +53,10 @@ int main(void)
     /* inventory: FFFF = empty, fill order, capacity 8 */
     reset();
     CHECK(inv_get(0, 0) == ITEM_NONE && inv_count(0) == 0, "cleared inventory is empty");
-    CHECK(host_sram[INV_SRAM_BANK][0] == 0xFF && host_sram[INV_SRAM_BANK][1] == 0xFF, "empty slot stored as FFFF");
+    CHECK(host_sram[INV_SRAM_BANK][RT_INV_OFF] == 0xFF && host_sram[INV_SRAM_BANK][RT_INV_OFF + 1] == 0xFF, "empty slot stored as FFFF");
     for (i = 0; i < INV_SLOTS; i++) CHECK(inv_add(0, 0) == i, "add to slot %u", i);
     CHECK(inv_add(0, 1) == ITEM_NONE && inv_count(0) == 8, "9th item refused, nothing swallowed");
-    CHECK(host_sram[INV_SRAM_BANK][2 * 7] == 0 && host_sram[INV_SRAM_BANK][2 * 7 + 1] == 0, "slot 7 = item 0x0000 LE");
+    CHECK(host_sram[INV_SRAM_BANK][RT_INV_OFF + 2 * 7] == 0 && host_sram[INV_SRAM_BANK][RT_INV_OFF + 2 * 7 + 1] == 0, "slot 7 = item 0x0000 LE");
 
     /* HP item on adjacent ally: restores min(power, deficit), consumes item + action, 0 draws */
     reset();
@@ -535,7 +535,7 @@ int main(void)
         CHECK(load_snapshot(&sb, &ui, out) == SAVE_OK && ui.battle_id == 1 && ui.gold == 77 && sb.round == 9,
               "snapshot: battle id, gold, starting round");
         CHECK(out[0] == 2 && out[1] == 1 && out[5] == 3 && roster_count() == 1, "snapshot: deployment and roster");
-        CHECK(host_sram[13][0] == 'Y' || host_sram[14][0] == 'Y', "lives in SRAM bank 13/14");
+        CHECK(host_sram[0][0x1000] == 'Y' || host_sram[0][0x1800] == 'Y', "lives in the snapshot copies (bank 0 @0x1000 / 0x1800)");
     }
 
     /* 6.6 objectives: defeat a named general, hold out, protect an NPC */

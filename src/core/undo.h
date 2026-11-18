@@ -1,16 +1,17 @@
 /* Undo log (design doc 11.6): while an event script runs, every write it makes is preceded by a log
  * entry with the old bytes. A failing script (BAD_SCRIPT, or the log is full: SCRIPT_UNDO_CAP) is
  * rolled back in reverse order; derived data (occupancy) is rebuilt afterwards.
- * Storage: SRAM15 @1920, 6144 B (the NPC item block 0..1919 sits before it).
+ * Storage: the runtime bank (sram_map.h) from RT_UNDO_OFF to its end.
  * Entry: space u8, bank u8, offset u16, length u8, old_bytes[length], entry_size u16 (7 B overhead). */
 #ifndef CORE_UNDO_H
 #define CORE_UNDO_H
 #include <stdint.h>
+#include "sram_map.h"
 #include "platform.h"
 
-#define UNDO_SRAM_BANK 15u
-#define UNDO_SRAM_OFF 1952u      /* 1920 + 32 B header area */
-#define UNDO_CAP 6144u
+#define UNDO_SRAM_BANK RT_BANK
+#define UNDO_SRAM_OFF RT_UNDO_OFF
+#define UNDO_CAP RT_UNDO_CAP
 
 #define US_UNITS 0u              /* WRAM1 active units: offset = byte offset in the unit array */
 #define US_CAMPAIGN 1u           /* WRAM1 DF00 campaign area */

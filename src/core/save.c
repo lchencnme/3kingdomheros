@@ -2,6 +2,7 @@
 #pragma bank 4
 #endif
 #include <string.h>
+#include "sram_map.h"
 #include "save.h"
 #include "grid.h"
 #include "../gen/rules_data.h"
@@ -122,24 +123,34 @@ uint32_t crc32_update(uint32_t crc, const uint8_t *p, uint16_t n) CORE_API
 #endif
 
 /* ---------------------------------------------------------------- image addressing */
-/* slots 0..2: 16 KiB copies in banks 0..11; slot 3 (pre-battle snapshot): 8 KiB copies in banks 13 / 14 */
-static uint8_t slot_bank(uint8_t slot, uint8_t copy) { return slot == SAVE_SLOT_SNAPSHOT ? (uint8_t)(13u + copy) : (uint8_t)(slot * 4u + copy * 2u); }
-
-static void img_write(uint8_t base, uint16_t off, const uint8_t *src, uint16_t n)
+/* sram_map.h: camp (slots 0/1 share it: slot 1 is never written) and snapshot copies 2 KiB each in bank 0,
+ * suspend copies 8 KiB in banks 1 and 2. An image is addressed by its 15-bit SRAM address. */
+static uint16_t slot_bank(uint8_t slot, uint8_t copy)
 {
+    if (slot == SAVE_SLOT_SNAPSHOT) return copy ? SRAM_SNAP_B : SRAM_SNAP_A;
+    if (slot == SAVE_SLOT_SUSPEND) return copy ? SRAM_SUSP_B : SRAM_SUSP_A;
+    return copy ? SRAM_CAMP_B : SRAM_CAMP_A;
+}
+/* bytes one copy may hold (header + body) */
+static uint16_t copy_cap(uint16_t base) { return base >= SRAM_SUSP_A ? SRAM_BIG_COPY : SRAM_SMALL_COPY; }
+
+static void img_write(uint16_t base, uint16_t off, const uint8_t *src, uint16_t n)
+{
+    uint16_t a = (uint16_t)(base + off);
     while (n) {
-        uint16_t room = (uint16_t)(0x2000u - (off & 0x1FFFu)), k = n < room ? n : room;
-        sram_write((uint8_t)(base + (off >> 13)), (uint16_t)(off & 0x1FFFu), src, k);
-        off += k; src += k; n -= k;
+        uint16_t room = (uint16_t)(0x2000u - (a & 0x1FFFu)), k = n < room ? n : room;
+        sram_write((uint8_t)(a >> 13), (uint16_t)(a & 0x1FFFu), src, k);
+        a += k; src += k; n -= k;
     }
 }
 
-static void img_read(uint8_t base, uint16_t off, uint8_t *dst, uint16_t n)
+static void img_read(uint16_t base, uint16_t off, uint8_t *dst, uint16_t n)
 {
+    uint16_t a = (uint16_t)(base + off);
     while (n) {
-        uint16_t room = (uint16_t)(0x2000u - (off & 0x1FFFu)), k = n < room ? n : room;
-        sram_read((uint8_t)(base + (off >> 13)), (uint16_t)(off & 0x1FFFu), dst, k);
-        off += k; dst += k; n -= k;
+        uint16_t room = (uint16_t)(0x2000u - (a & 0x1FFFu)), k = n < room ? n : room;
+        sram_read((uint8_t)(a >> 13), (uint16_t)(a & 0x1FFFu), dst, k);
+        a += k; dst += k; n -= k;
     }
 }
 
@@ -150,13 +161,16 @@ static uint32_t get32(const uint8_t *p) { return get16(p) | ((uint32_t)get16(p +
 
 /* ---------------------------------------------------------------- streaming writer */
 typedef struct {
-    uint8_t base;
+    uint16_t base;
     uint16_t pos;              /* body offset */
+    uint16_t cap;              /* body bytes this copy holds */
+    uint8_t over;              /* the body did not fit: the save fails, nothing past the copy is written */
     uint32_t crc;
 } Writer;
 
 static void w_bytes(Writer *w, const uint8_t *p, uint16_t n)
 {
+    if (w->over || (uint32_t)w->pos + n > w->cap) { w->over = 1; w->pos += n; return; }
     img_write(w->base, (uint16_t)(32u + w->pos), p, n);
     w->crc = crc32_update(w->crc, p, n);
     w->pos += n;
@@ -188,7 +202,7 @@ static const uint8_t camp_tags[4] = {1, 2, 3, 7};
 static const uint8_t snap_tags[5] = {1, 2, 3, 7, 8};
 static const uint8_t *snap_dep;           /* tag 8 source while a snapshot is written: n + n x 4 B */
 
-static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *kind);
+static uint8_t probe_copy(uint16_t base, uint32_t *seq, uint16_t *blen, uint8_t *kind);
 
 /* probe cache (design doc 11.6 performance): SRAM is only written by this program, so the result of
  * the last full probe / successful save of a slot stays true; save_battle uses it to pick the target
@@ -248,7 +262,7 @@ static void w_core(Writer *w, const Battle *b, const SaveUi *ui, uint8_t kind)
     c_u16(&c, 32, ui->cam_x); c_u16(&c, 34, ui->cam_y); c_u8(&c, 36, ui->cur_x); c_u8(&c, 37, ui->cur_y);
     c_u8(&c, 39, ui->presentation); c_u8(&c, 40, ui->text_speed); c_u8(&c, 42, ui->options);
     c_u8(&c, 43, kind); c_u32(&c, 44, ui->gold); c_u32(&c, 52, RULES_PROFILE_CRC);
-    sram_read(12, 7872u, pq, 17);                       /* prize queue (7.4): count @71, 16 x u16 @432 */
+    sram_read(RT_BANK, RT_PRIZE_OFF, pq, 17);                       /* prize queue (7.4): count @71, 16 x u16 @432 */
     if (pq[0] > 16u) pq[0] = 0;
     c_u8(&c, 71, pq[0]);
     c_u8(&c, 80, b->weather);
@@ -268,15 +282,16 @@ static uint8_t save_write(uint8_t slot, const Battle *b, const SaveUi *ui, uint8
     else if (save_probe(slot, &copy, &seq) == SAVE_OK) { target = (uint8_t)(copy ^ 1u); seq++; }
     else { target = 0; seq = 1; }
     pc_state[slot] = 0;                                 /* unknown until this save completes */
-    w.base = slot_bank(slot, target); w.pos = 0; w.crc = 0xFFFFFFFFul;
+    w.base = slot_bank(slot, target); w.pos = 0; w.crc = 0xFFFFFFFFul; w.over = 0;
+    w.cap = (uint16_t)(copy_cap(w.base) - 32u);
 
     img_write(w.base, 30, zero2, 2);                    /* 1. clear both markers of the target copy */
     /* 2. body (TLV, increasing tags) */
-    sram_read(12, 7890u, &nr, 1);                       /* roster (5.6 / B.2): count + records */
-    if (nr > 128u) nr = 0;
+    sram_read(RT_BANK, RT_ROSTER_COUNT, &nr, 1);                       /* roster (5.6 / B.2): count + records */
+    if (nr > RT_ROSTER_MAX) nr = 0;
     w_tlv(&w, 1, (uint16_t)(1u + (uint16_t)nr * 48u)); w_bytes(&w, &nr, 1);
-    w_sram(&w, 12, 0, (uint16_t)nr * 48u);
-    w_tlv(&w, 2, 256); w_sram(&w, 12, 6144u, 256);      /* named states */
+    w_sram(&w, RT_BANK, RT_ROSTER_OFF, (uint16_t)nr * 48u);
+    w_tlv(&w, 2, 256); w_sram(&w, RT_BANK, RT_NAMED_OFF, 256);      /* named states */
     w_tlv(&w, 3, 256); w_campaign(&w);                  /* campaign area (global flags) */
     if (kind == SAVE_KIND_BATTLE) {
         w_tlv(&w, 4, (uint16_t)(1u + (uint16_t)b->n_units * 40u));
@@ -286,7 +301,7 @@ static uint8_t save_write(uint8_t slot, const Battle *b, const SaveUi *ui, uint8
             memcpy(buf, &u, 40);
             w_bytes(&w, buf, 40);
         }
-        w_tlv(&w, 5, 512); w_sram(&w, 12, 6400u, 512);  /* battle flags: SRAM12 runtime area @6400 */
+        w_tlv(&w, 5, 512); w_sram(&w, RT_BANK, RT_FLAGS_OFF, 512);  /* battle flags */
         w_tlv(&w, 6, 2); w_fill(&w, 0, 2);              /* terrain diffs: count 0 */
     }
     w_core(&w, b, ui, kind);
@@ -295,9 +310,10 @@ static uint8_t save_write(uint8_t slot, const Battle *b, const SaveUi *ui, uint8
         w_bytes(&w, snap_dep, (uint16_t)(1u + (uint16_t)snap_dep[0] * 4u));
     }
     if (kind == SAVE_KIND_BATTLE) {
-        w_tlv(&w, 9, 1920); w_sram(&w, 15, 0, 1920);    /* unit items: SRAM15 runtime block (7.1) */
-        w_tlv(&w, 10, 960); w_sram(&w, 12, 6912u, 960); /* AI groups + overrides (8.2) */
+        w_tlv(&w, 9, RT_INV_UNITS * 20u); w_sram(&w, RT_BANK, RT_INV_OFF, RT_INV_UNITS * 20u);   /* unit items (7.1) */
+        w_tlv(&w, 10, 960); w_sram(&w, RT_BANK, RT_AI_GROUPS, 960); /* AI groups + overrides (8.2) */
     }
+    if (w.over) return SAVE_ERR_IO;                    /* too big for its copy: markers stay cleared, old copy valid */
     crc = w.crc ^ 0xFFFFFFFFul;
     /* bytes after body_len are not written (not covered by any CRC; readers never look at them) */
     /* 3. header 0..29 */
@@ -336,8 +352,8 @@ static uint8_t save_write(uint8_t slot, const Battle *b, const SaveUi *ui, uint8
 }
 
 uint8_t save_battle(uint8_t slot, const Battle *b, const SaveUi *ui) CORE_API { return save_write(slot, b, ui, SAVE_KIND_BATTLE); }
-static uint16_t tlv_find(uint8_t base, uint8_t tag);
-static void load_common(uint8_t base, Battle *b, SaveUi *ui);
+static uint16_t tlv_find(uint16_t base, uint8_t tag);
+static void load_common(uint16_t base, Battle *b, SaveUi *ui);
 
 uint8_t save_snapshot(const Battle *b, const SaveUi *ui, const uint8_t *dep) CORE_API
 {
@@ -350,7 +366,8 @@ uint8_t save_snapshot(const Battle *b, const SaveUi *ui, const uint8_t *dep) COR
 
 uint8_t load_snapshot(Battle *b, SaveUi *ui, uint8_t *dep) CORE_API
 {
-    uint8_t copy, base, n;
+    uint8_t copy, n;
+    uint16_t base;
     uint32_t seq;
     uint16_t at;
     uint8_t r = save_probe(SAVE_SLOT_SNAPSHOT, &copy, &seq);
@@ -374,7 +391,7 @@ uint8_t save_camp(uint8_t slot, const SaveUi *ui) CORE_API
 }
 
 /* full structural validation of one copy (header, CRCs, TLV set/lengths); no state is touched */
-static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *kind)
+static uint8_t probe_copy(uint16_t base, uint32_t *seq, uint16_t *blen, uint8_t *kind)
 {
     uint8_t seen[10];
     uint8_t hdr[32], t = 0;                  /* hdr doubles as the CRC buffer: the stack is 512 B */
@@ -388,7 +405,7 @@ static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *
     if (get16(hdr + 4) != SAVE_SCHEMA) return SAVE_ERR_SCHEMA;
     if (get32(hdr + 12) != RULES_PROFILE_CRC) return SAVE_ERR_PROFILE;
     len = get16(hdr + 6);
-    if (len > SAVE_MAX_BODY) return SAVE_ERR_NONE;
+    if (len > SAVE_MAX_BODY || len > (uint16_t)(copy_cap(base) - 32u)) return SAVE_ERR_NONE;
     body_crc = get32(hdr + 16); sq = get32(hdr + 8);
     while (off < len) {
         uint16_t k = (uint16_t)(len - off) < 32u ? (uint16_t)(len - off) : 32u;
@@ -414,7 +431,7 @@ static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *
         case 2: case 3: want = 256; break;
         case 5: case 7: want = 512; break;
         case 6: want = 2; break;
-        case 9: want = 1920; break;
+        case 9: want = RT_INV_UNITS * 20u; break;
         case 10: want = 960; break;
         default: return SAVE_ERR_NONE;
         }
@@ -432,7 +449,7 @@ static uint8_t probe_copy(uint8_t base, uint32_t *seq, uint16_t *blen, uint8_t *
 }
 
 /* body offset of a tag's payload (probe already validated the structure), or 0xFFFF */
-static uint16_t tlv_find(uint8_t base, uint8_t tag)
+static uint16_t tlv_find(uint16_t base, uint8_t tag)
 {
     uint8_t hdr[8], th[3];
     uint16_t off = 0, len;
@@ -446,21 +463,22 @@ static uint16_t tlv_find(uint8_t base, uint8_t tag)
     return 0xFFFFu;
 }
 
-static void r_sram(uint8_t base, uint16_t at, uint8_t bank, uint16_t off, uint16_t n)
+static void r_sram(uint16_t base, uint16_t at, uint8_t bank, uint16_t off, uint16_t n)
 {
     uint8_t fb[32];
     while (n) { uint16_t k = n < 32u ? n : 32u; img_read(base, at, fb, k); sram_write(bank, off, fb, (uint8_t)k); at += k; off += k; n -= k; }
 }
 
 /* tags shared by every save kind: roster, named states, campaign area, core */
-static void load_common(uint8_t base, Battle *b, SaveUi *ui)
+static void load_common(uint16_t base, Battle *b, SaveUi *ui)
 {
     uint8_t core[48], n, fb[32];
     uint16_t at = tlv_find(base, 1), k;
     img_read(base, at, &n, 1);
-    sram_write(12, 7890u, &n, 1);
-    r_sram(base, (uint16_t)(at + 1u), 12, 0, (uint16_t)n * 48u);
-    r_sram(base, tlv_find(base, 2), 12, 6144u, 256);
+    if (n > RT_ROSTER_MAX) n = 0;
+    sram_write(RT_BANK, RT_ROSTER_COUNT, &n, 1);
+    r_sram(base, (uint16_t)(at + 1u), RT_BANK, RT_ROSTER_OFF, (uint16_t)n * 48u);
+    r_sram(base, tlv_find(base, 2), RT_BANK, RT_NAMED_OFF, 256);
     at = tlv_find(base, 3);
     for (k = 0; k < 256u; k += 32u) { img_read(base, (uint16_t)(at + k), fb, 32); campaign_write((uint8_t)k, fb, 32); }
     at = tlv_find(base, 7);
@@ -478,13 +496,14 @@ static void load_common(uint8_t base, Battle *b, SaveUi *ui)
         img_read(base, (uint16_t)(at + 432u), raw, 32);
         if (pq[0] > 16u) pq[0] = 0;
         for (k = 0; k < 16u; k++) pq[1 + k] = raw[2 * k];
-        sram_write(12, 7872u, pq, 17);
+        sram_write(RT_BANK, RT_PRIZE_OFF, pq, 17);
     }
 }
 
 uint8_t load_battle(uint8_t slot, Battle *b, SaveUi *ui) CORE_API
 {
-    uint8_t copy, base, n, i;
+    uint8_t copy, n, i;
+    uint16_t base;
     uint32_t seq;
     uint16_t at;
     ActiveUnit u;
@@ -501,9 +520,9 @@ uint8_t load_battle(uint8_t slot, Battle *b, SaveUi *ui) CORE_API
         if (unit_alive(&u)) grid_occ_set(u.x, u.y, faction_side(u.faction));
     }
     b->n_units = n;
-    r_sram(base, tlv_find(base, 5), 12, 6400u, 512);     /* battle flags */
-    r_sram(base, tlv_find(base, 9), 15, 0, 1920);        /* unit items */
-    r_sram(base, tlv_find(base, 10), 12, 6912u, 960);    /* AI groups + overrides */
+    r_sram(base, tlv_find(base, 5), RT_BANK, RT_FLAGS_OFF, 512);     /* battle flags */
+    r_sram(base, tlv_find(base, 9), RT_BANK, RT_INV_OFF, RT_INV_UNITS * 20u);   /* unit items */
+    r_sram(base, tlv_find(base, 10), RT_BANK, RT_AI_GROUPS, 960);    /* AI groups + overrides */
     return SAVE_OK;
 }
 

@@ -2,6 +2,7 @@
 #pragma bank 13
 #endif
 #include <string.h>
+#include "sram_map.h"
 #include "item.h"
 #include "grid.h"
 #include "path.h"
@@ -16,15 +17,15 @@ static uint8_t manhattan(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
     return (uint8_t)(dx + dy);
 }
 
-static uint16_t rec_off(uint8_t unit, uint8_t slot) { return (uint16_t)((uint16_t)unit * INV_REC + (uint16_t)slot * 2u); }
-static uint16_t eq_off(uint8_t unit, uint8_t cat) { return (uint16_t)((uint16_t)unit * INV_REC + EQ_OFF + cat); }
+static uint16_t rec_off(uint8_t unit, uint8_t slot) { return (uint16_t)(RT_INV_OFF + (uint16_t)unit * INV_REC + (uint16_t)slot * 2u); }
+static uint16_t eq_off(uint8_t unit, uint8_t cat) { return (uint16_t)(RT_INV_OFF + (uint16_t)unit * INV_REC + EQ_OFF + cat); }
 
 static uint8_t item_known(uint8_t it) { return it < NUM_ITEMS && item_defs[it].kind != IK_NONE; }
 
 uint8_t inv_get(uint8_t unit, uint8_t slot) CORE_API
 {
     uint8_t v[2];
-    if (unit >= MAX_UNITS || slot >= INV_SLOTS) return ITEM_NONE;
+    if (unit >= RT_INV_UNITS || slot >= INV_SLOTS) return ITEM_NONE;
     sram_read(INV_SRAM_BANK, rec_off(unit, slot), v, 2);
     if (v[1] != 0 || !item_known(v[0])) return ITEM_NONE;          /* FFFF (or unknown id) = empty */
     return v[0];
@@ -33,7 +34,7 @@ uint8_t inv_get(uint8_t unit, uint8_t slot) CORE_API
 uint8_t inv_equipped(uint8_t unit, uint8_t cat) CORE_API
 {
     uint8_t s;
-    if (unit >= MAX_UNITS || cat > EQ_MOUNT) return ITEM_NONE;
+    if (unit >= RT_INV_UNITS || cat > EQ_MOUNT) return ITEM_NONE;
     sram_read(INV_SRAM_BANK, eq_off(unit, cat), &s, 1);
     return s < INV_SLOTS ? s : ITEM_NONE;
 }
@@ -50,7 +51,7 @@ uint8_t inv_slot_equipped(uint8_t unit, uint8_t slot) CORE_API
 void inv_set(uint8_t unit, uint8_t slot, uint8_t item) CORE_API
 {
     uint8_t v[2], c;
-    if (unit >= MAX_UNITS || slot >= INV_SLOTS) return;
+    if (unit >= RT_INV_UNITS || slot >= INV_SLOTS) return;
     for (c = 0; c <= EQ_MOUNT; c++)                                   /* the slot's content changes: */
         if (inv_equipped(unit, c) == slot) eq_write(unit, c, 0xFF);   /* it is no longer equipped */
     if (item == ITEM_NONE) { v[0] = 0xFF; v[1] = 0xFF; } else { v[0] = item; v[1] = 0; }
@@ -77,7 +78,7 @@ void inv_clear_all(void) CORE_API
     uint8_t ff[32];
     uint16_t k;
     memset(ff, 0xFF, sizeof ff);
-    for (k = 0; k < (uint16_t)MAX_UNITS * INV_REC; k += 32u) sram_write(INV_SRAM_BANK, k, ff, 32);
+    for (k = 0; k < (uint16_t)RT_INV_UNITS * INV_REC; k += 32u) sram_write(INV_SRAM_BANK, (uint16_t)(RT_INV_OFF + k), ff, 32);
 }
 
 void item_def(uint8_t item, ItemDef *out) CORE_API
@@ -371,8 +372,8 @@ uint8_t inv_first_free(const Battle *b, uint8_t faction) CORE_API
 }
 
 /* ---------------------------------------------------------------- prize queue (7.4) */
-static uint8_t pq_n(void) { uint8_t n; sram_read(12, PRIZE_SRAM_OFF, &n, 1); return n <= PRIZE_MAX ? n : 0u; }
-static void pq_set_n(uint8_t n) { sram_write(12, PRIZE_SRAM_OFF, &n, 1); }
+static uint8_t pq_n(void) { uint8_t n; sram_read(RT_BANK, PRIZE_SRAM_OFF, &n, 1); return n <= PRIZE_MAX ? n : 0u; }
+static void pq_set_n(uint8_t n) { sram_write(RT_BANK, PRIZE_SRAM_OFF, &n, 1); }
 
 uint8_t prize_count(void) CORE_API { return pq_n(); }
 
@@ -380,7 +381,7 @@ uint8_t prize_get(uint8_t i) CORE_API
 {
     uint8_t v;
     if (i >= pq_n()) return ITEM_NONE;
-    sram_read(12, (uint16_t)(PRIZE_SRAM_OFF + 1u + i), &v, 1);
+    sram_read(RT_BANK, (uint16_t)(PRIZE_SRAM_OFF + 1u + i), &v, 1);
     return v;
 }
 
@@ -388,7 +389,7 @@ uint8_t prize_push(uint8_t item) CORE_API
 {
     uint8_t n = pq_n();
     if (n >= PRIZE_MAX || !item_known(item)) return 0;
-    sram_write(12, (uint16_t)(PRIZE_SRAM_OFF + 1u + n), &item, 1);
+    sram_write(RT_BANK, (uint16_t)(PRIZE_SRAM_OFF + 1u + n), &item, 1);
     pq_set_n((uint8_t)(n + 1u));
     return 1;
 }
@@ -398,8 +399,8 @@ void prize_remove(uint8_t i) CORE_API
     uint8_t n = pq_n(), k, v;
     if (i >= n) return;
     for (k = i; k + 1u < n; k++) {
-        sram_read(12, (uint16_t)(PRIZE_SRAM_OFF + 2u + k), &v, 1);
-        sram_write(12, (uint16_t)(PRIZE_SRAM_OFF + 1u + k), &v, 1);
+        sram_read(RT_BANK, (uint16_t)(PRIZE_SRAM_OFF + 2u + k), &v, 1);
+        sram_write(RT_BANK, (uint16_t)(PRIZE_SRAM_OFF + 1u + k), &v, 1);
     }
     pq_set_n((uint8_t)(n - 1u));
 }

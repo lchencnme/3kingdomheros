@@ -1,6 +1,7 @@
 #pragma bank 5   /* game logic, HUD and map view: code bank 5 (design doc 11.3) */
 #include "game.h"
 #include "dialog.h"
+extern uint8_t sram_small;   /* title.c: cartridge RAM smaller than the save design needs */
 
 Battle B;
 uint8_t state, sel, cur_x, cur_y, tent_x, tent_y, menu, ntarget, tsel, timer, next_state;
@@ -1095,6 +1096,7 @@ static void logic(void)
         else if ((in_pressed & J_SELECT) && B.outcome == OUT_LOSE && prev_camp_battle() != 0xFF) retry_to_camp();
         break;
     case G_TITLE:                              /* the cover: every way out reloads the map mode */
+        if (sram_small && !(in_pressed & J_B)) break;   /* cartridge RAM < 32 KiB: no game can be played safely */
         if ((in_pressed & J_SELECT) && (title_opts & 2u)) load_camp_and_go();
         else if ((in_pressed & J_START) && (title_opts & 1u)) {
             if (do_suspend_load() == SAVE_OK) {

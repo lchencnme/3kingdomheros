@@ -1,6 +1,7 @@
 #pragma bank 1
 /* title cover and the rules pages (moved out of flow.c: bank 14 holds the battle tables of all 52 battles) */
 #include "game.h"
+#include "../core/save.h"
 #include "../gen/title_data.h"
 #include "../gen/music_data.h"
 void play_pages(const uint16_t (*pages)[2], uint8_t n) BANKED;   /* flow.c */
@@ -23,6 +24,24 @@ void show_help(void) BANKED
  * with the menu. The main loop leaves the map alone while state == G_TITLE; every way out reloads the map
  * mode (map_mode_restore / the camp). title_opts: bit0 = a suspend save can be continued, bit1 = camp save. */
 uint8_t title_opts;
+/* the save design needs 32 KiB of cartridge RAM (4 banks, sram_map.h). A smaller cart mirrors the bank
+ * number (8 KiB: bank 3 = bank 0, 16 KiB: bank 3 = bank 1), so the runtime area would overwrite the saves and
+ * show other officers' names: probe once, and refuse to start a game. */
+uint8_t sram_small;
+static uint8_t sram_probe_done;
+static uint8_t sram_mirrors(void)
+{
+    uint8_t a0, a1, b, t, r0, r1;
+    const uint16_t off = 0x1FF0u;              /* the far end of every bank: restored below */
+    sram_read(0, off, &a0, 1); sram_read(1, off, &a1, 1); sram_read(3, off, &b, 1);
+    t = (uint8_t)(a0 ^ a1 ^ 0x5Au); if (t == a0 || t == a1) t ^= 0xA5u;
+    sram_write(3, off, &t, 1);
+    sram_read(0, off, &r0, 1); sram_read(1, off, &r1, 1);
+    sram_write(3, off, &b, 1);                 /* restore all three bytes */
+    sram_write(1, off, &a1, 1); sram_write(0, off, &a0, 1);
+    return (uint8_t)(r0 != a0 || r1 != a1);
+}
+
 void show_title(void) BANKED
 {
     uint8_t row[TITLE_W], y, copy;
@@ -48,7 +67,15 @@ void show_title(void) BANKED
     VBK_REG = VBK_TILES;
     hud_init(HUD_BLANK);                       /* e.g. after the ending pages (dialogue mode) */
     SCX_REG = 0; SCY_REG = 0;
+    if (!sram_probe_done) { sram_probe_done = 1; sram_small = sram_mirrors(); }
     hud_begin();
+    if (sram_small) {
+        hud_tx(0, TX_SRAM_SMALL, 0); hud_tx(1, TX_SRAM_NEED, 0); hud_end();
+        if (audio_ready) music_play(&song_title);
+        SHOW_BKG; SHOW_WIN;
+        DISPLAY_ON;
+        return;
+    }
     hud_tx(0, TX_TITLE_NEW, 0);
     if (title_opts & 1u) { hud_space(0); hud_space(0); hud_tx(0, TX_TITLE_CONT, 0); }
     if (title_opts & 2u) { hud_tx(1, TX_TITLE_LOAD, 0); hud_space(1); hud_space(1); }

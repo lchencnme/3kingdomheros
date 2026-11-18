@@ -1,19 +1,20 @@
 /* Roster (design doc 5.6, 11.5, 11.6, 附录B.2): persistent officers between battles.
- * SRAM12 runtime area: records 128 x 48 B @0, named states 1024 x 2 bit @6144, roster count @7890.
+ * Runtime area (sram_map.h, bank 3): records 16 x 48 B, named states 1024 x 2 bit, roster count.
  * Record: charID u16, fate, class, L, XP, STR, INT, CMD, morale, hp u16, mp u16 (14 B);
  * items 8 x u16 (16 B); equip 3 x u8; permanent mods 6 x i16 (12 B); reserved 3 B (0). */
 #ifndef CORE_ROSTER_H
 #define CORE_ROSTER_H
 #include <stdint.h>
+#include "sram_map.h"
 #include "platform.h"
 #include "battle.h"
 
-#define ROSTER_MAX 128u
+#define ROSTER_MAX RT_ROSTER_MAX
 #define ROSTER_REC 48u
-#define ROSTER_SRAM_BANK 12u
-#define ROSTER_SRAM_OFF 0u
-#define NAMED_SRAM_OFF 6144u
-#define ROSTER_COUNT_OFF 7890u
+#define ROSTER_SRAM_BANK RT_BANK
+#define ROSTER_SRAM_OFF RT_ROSTER_OFF
+#define NAMED_SRAM_OFF RT_NAMED_OFF
+#define ROSTER_COUNT_OFF RT_ROSTER_COUNT
 
 #define ROSTER_RETREATED 0x01u   /* reserved[0] bit0 (v2): retreated in the last battle (NO_REPLENISH, 2.4) */
 #define FATE_NONE 0u      /* named states (11.6): not joined / owned / left / dead */
